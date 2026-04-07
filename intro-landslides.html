@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>An Introduction to Landslides in Western North Carolina</title>
+  <meta name="description" content="Learn about landslide types, causes, anatomy, and hazard mapping in Western North Carolina from the NC Geological Survey." />
+
+  <link rel="icon" type="image/png" href="assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="assets/images/shared/ncgs-seal.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --clr-bg:#122518; --clr-primary:#C04C00; --clr-accent:#3E8452;
+      --clr-text:#FFFFFF; --clr-text-muted:#D4E8D8; --clr-surface:#1C3521;
+      --clr-surface-2:#243D29; --clr-border:#2E5438; --clr-focus:#FFD166;
+      --font-main:'Source Sans 3','Source Sans Pro',Arial,sans-serif;
+      --toc-w:240px; --content-max:820px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{background:var(--clr-bg);color:var(--clr-text);font-family:var(--font-main);font-size:1.05rem;line-height:1.75;min-height:100vh;}
+
+    .skip-nav{position:absolute;top:-100%;left:0;background:var(--clr-focus);color:#000;font-weight:700;padding:0.75rem 1.5rem;z-index:9999;text-decoration:none;border-radius:0 0 4px 0;transition:top 0.2s;}
+    .skip-nav:focus{top:0;}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+    :focus-visible{outline:3px solid var(--clr-focus);outline-offset:3px;}
+    :focus:not(:focus-visible){outline:none;}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;transition-duration:0.01ms !important;}.fade-in{opacity:1 !important;transform:none !important;}}
+
+    .site-header{position:sticky;top:0;z-index:200;background:var(--clr-surface);border-bottom:2px solid var(--clr-primary);display:flex;align-items:center;gap:1rem;padding:0.6rem 1.5rem;}
+    .site-header__logo{width:36px;height:36px;border-radius:50%;overflow:hidden;border:1px solid var(--clr-accent);flex-shrink:0;}
+    .site-header__logo img{width:100%;height:100%;object-fit:contain;}
+    .site-header__back{font-size:0.85rem;font-weight:700;color:var(--clr-text-muted);text-decoration:none;display:flex;align-items:center;gap:0.4rem;transition:color 0.2s;}
+    .site-header__back:hover{color:var(--clr-text);}
+    .site-header__title{font-size:0.9rem;font-weight:700;color:var(--clr-text-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+    .story-cover{position:relative;height:100vh;min-height:500px;display:flex;align-items:flex-end;overflow:hidden;}
+    .story-cover__bg{position:absolute;inset:0;background-image:url('assets/images/intro-landslides/story-cover-blue-ridge.jpeg');background-size:cover;background-position:center 40%;}
+    .story-cover__bg::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(18,37,24,0.1) 0%,rgba(18,37,24,0.2) 40%,rgba(18,37,24,0.75) 70%,rgba(18,37,24,0.95) 100%);}
+    .story-cover__content{position:relative;z-index:1;padding:3rem 3rem 4rem;max-width:900px;}
+    .story-cover__eyebrow{display:flex;align-items:center;gap:0.6rem;font-size:0.8rem;font-weight:700;color:var(--clr-accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.85rem;}
+    .story-cover__eyebrow::before{content:"";display:block;width:24px;height:2px;background:var(--clr-accent);}
+    .story-cover__title{font-size:clamp(2rem,6vw,3.75rem);font-weight:700;color:var(--clr-text);line-height:1.15;text-shadow:0 2px 12px rgba(0,0,0,0.5);margin-bottom:1rem;}
+    .story-cover__org{display:flex;align-items:center;gap:0.75rem;font-size:0.9rem;color:var(--clr-text-muted);}
+    .story-cover__org img{width:40px;height:40px;border-radius:50%;object-fit:contain;background:var(--clr-surface);border:1px solid var(--clr-border);}
+    .scroll-hint{position:absolute;bottom:1.5rem;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:0.4rem;color:var(--clr-text-muted);font-size:0.75rem;animation:bounce 2s ease-in-out infinite;}
+    @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(6px);}}
+
+    .story-body{display:flex;align-items:flex-start;max-width:1280px;margin:0 auto;padding:0 1.5rem;gap:3rem;}
+
+    .toc{width:var(--toc-w);flex-shrink:0;position:sticky;top:56px;max-height:calc(100vh - 70px);overflow-y:auto;padding:2rem 0;scrollbar-width:thin;scrollbar-color:var(--clr-border) transparent;}
+    .toc__heading{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--clr-accent);margin-bottom:0.85rem;padding-left:1rem;}
+    .toc__list{list-style:none;}
+    .toc__item a{display:block;padding:0.5rem 1rem;font-size:0.85rem;font-weight:600;color:var(--clr-text-muted);text-decoration:none;border-left:3px solid transparent;line-height:1.4;transition:color 0.2s,border-color 0.2s,background 0.2s;}
+    .toc__item a:hover{color:var(--clr-text);border-left-color:var(--clr-accent);background:rgba(62,132,82,0.08);}
+    .toc__item a.active{color:var(--clr-text);border-left-color:var(--clr-primary);background:rgba(192,76,0,0.1);font-weight:700;}
+
+    .story-main{flex:1;min-width:0;padding:3rem 0 6rem;max-width:var(--content-max);}
+    .story-section{margin-bottom:5rem;scroll-margin-top:72px;}
+    .story-section:last-child{margin-bottom:0;}
+
+    .section-title{font-size:clamp(1.5rem,3vw,2rem);font-weight:700;color:var(--clr-text);margin-bottom:1.25rem;padding-bottom:0.6rem;border-bottom:2px solid var(--clr-border);position:relative;}
+    .section-title::before{content:"";position:absolute;left:0;bottom:-2px;width:48px;height:2px;background:var(--clr-primary);}
+
+    .story-section p{color:var(--clr-text-muted);margin-bottom:1.1rem;font-size:1rem;line-height:1.8;}
+    .story-section p:last-child{margin-bottom:0;}
+    .story-section p a{color:var(--clr-accent);text-decoration:underline;}
+    .story-section p a:hover{color:var(--clr-text);}
+
+    .pull-quote{border-left:4px solid var(--clr-primary);padding:1rem 1.5rem;margin:1.5rem 0;background:var(--clr-surface);border-radius:0 6px 6px 0;}
+    .pull-quote p{font-size:1.05rem !important;font-style:italic;color:var(--clr-text) !important;}
+
+    .key-messages{list-style:none;display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.5rem;}
+    .key-messages li{display:flex;align-items:flex-start;gap:0.75rem;padding:0.75rem 1rem;background:var(--clr-surface);border-left:4px solid var(--clr-accent);border-radius:0 4px 4px 0;color:var(--clr-text-muted);font-size:0.975rem;}
+    .key-messages li::before{content:"";display:block;width:8px;height:8px;min-width:8px;border-radius:50%;background:var(--clr-accent);margin-top:0.45rem;}
+
+    .story-img{margin:1.75rem 0;border-radius:6px;overflow:hidden;border:1px solid var(--clr-border);}
+    .story-img img{width:100%;display:block;object-fit:cover;max-height:480px;}
+    .story-img figcaption{padding:0.6rem 0.9rem;font-size:0.82rem;color:var(--clr-text-muted);background:var(--clr-surface);border-top:1px solid var(--clr-border);font-style:italic;line-height:1.5;}
+
+    .img-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.75rem 0;}
+    .img-row .story-img{margin:0;}
+
+    .type-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin:1.5rem 0;}
+    .type-card{background:var(--clr-surface);border:1px solid var(--clr-border);border-top:3px solid var(--clr-primary);border-radius:0 0 6px 6px;padding:1.1rem 1.25rem;}
+    .type-card__name{font-weight:700;font-size:0.95rem;color:var(--clr-text);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.05em;}
+    .type-card p{font-size:0.9rem !important;margin-bottom:0 !important;}
+
+    .callout{background:var(--clr-surface);border:1px solid var(--clr-border);border-left:4px solid var(--clr-accent);border-radius:0 6px 6px 0;padding:1.1rem 1.35rem;margin:1.5rem 0;}
+    .callout p{margin-bottom:0.5rem !important;font-size:0.95rem !important;}
+    .callout p:last-child{margin-bottom:0 !important;}
+
+    .stat-row{display:flex;flex-wrap:wrap;gap:1rem;margin:1.5rem 0;}
+    .stat-badge{background:var(--clr-surface-2);border:1px solid var(--clr-border);border-radius:6px;padding:0.9rem 1.25rem;text-align:center;min-width:140px;flex:1;}
+    .stat-badge__num{font-size:1.75rem;font-weight:700;color:var(--clr-primary);line-height:1.1;}
+    .stat-badge__label{font-size:0.8rem;color:var(--clr-text-muted);margin-top:0.25rem;line-height:1.4;}
+
+    .causes-list{list-style:none;display:flex;flex-direction:column;gap:0.5rem;margin:1rem 0 1.5rem;}
+    .causes-list li{display:flex;gap:0.6rem;align-items:flex-start;padding:0.5rem 0.75rem;background:var(--clr-surface-2);border-radius:4px;font-size:0.93rem;color:var(--clr-text-muted);line-height:1.5;}
+    .causes-list li::before{content:"▸";color:var(--clr-primary);font-size:0.8rem;margin-top:0.2rem;flex-shrink:0;}
+
+    .map-panels{display:flex;flex-direction:column;gap:2rem;margin-top:1.5rem;}
+    .map-panel{background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:6px;overflow:hidden;}
+    .map-panel__img{width:100%;max-height:400px;object-fit:cover;display:block;background:var(--clr-surface-2);}
+    .map-panel__body{padding:1.1rem 1.35rem;}
+    .map-panel__title{font-size:1.05rem;font-weight:700;color:var(--clr-text);margin-bottom:0.5rem;}
+    .map-panel__title span{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:0.5rem;vertical-align:middle;border:1px solid rgba(255,255,255,0.3);}
+    .map-panel p{font-size:0.93rem !important;margin-bottom:0 !important;}
+
+    .link-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-top:1.25rem;}
+    .link-card{display:flex;flex-direction:column;gap:0.4rem;padding:1rem 1.25rem;background:var(--clr-surface);border:1px solid var(--clr-border);border-left:4px solid var(--clr-accent);border-radius:0 6px 6px 0;text-decoration:none;color:var(--clr-text-muted);transition:border-left-color 0.2s,background 0.2s;}
+    .link-card:hover,.link-card:focus-visible{border-left-color:var(--clr-primary);background:var(--clr-surface-2);color:var(--clr-text);}
+    .link-card__title{font-weight:700;font-size:0.95rem;color:var(--clr-text);}
+    .link-card__desc{font-size:0.85rem;line-height:1.5;}
+
+    .credits-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem;}
+    .credit-card{background:var(--clr-surface);border:1px solid var(--clr-border);border-left:4px solid var(--clr-accent);border-radius:0 6px 6px 0;padding:1rem 1.25rem;}
+    .credit-card__org{font-weight:700;font-size:0.95rem;color:var(--clr-text);margin-bottom:0.5rem;}
+    .credit-card__names{font-size:0.88rem;color:var(--clr-text-muted);line-height:1.65;}
+
+    .references-list{list-style:none;display:flex;flex-direction:column;gap:0.6rem;}
+    .references-list li{font-size:0.88rem;color:var(--clr-text-muted);line-height:1.6;padding:0.5rem 0.75rem;border-left:2px solid var(--clr-border);}
+    .references-list li a{color:var(--clr-accent);text-decoration:underline;}
+
+    .fade-in{opacity:0;transform:translateY(22px);transition:opacity 0.55s ease,transform 0.55s ease;}
+    .fade-in.visible{opacity:1;transform:translateY(0);}
+
+    .site-footer{background:var(--clr-surface);border-top:3px solid var(--clr-primary);padding:1.75rem 2rem;}
+    .site-footer__inner{max-width:1280px;margin:0 auto;}
+    .site-footer__org{font-size:1rem;font-weight:700;color:var(--clr-accent);}
+    .site-footer__detail{font-size:0.9rem;color:var(--clr-text-muted);margin-top:0.25rem;}
+    .site-footer__detail a{color:var(--clr-text-muted);text-decoration:underline;}
+
+    @media(max-width:900px){
+      .story-body{flex-direction:column;gap:0;padding:0;}
+      .toc{position:static;width:100%;border-bottom:1px solid var(--clr-border);padding:1rem 1.5rem;max-height:none;overflow:visible;background:var(--clr-surface);}
+      .toc__list{display:flex;flex-wrap:wrap;gap:0.25rem;}
+      .toc__item a{border-left:none;border-bottom:2px solid transparent;padding:0.4rem 0.75rem;font-size:0.8rem;white-space:nowrap;}
+      .toc__item a.active{border-bottom-color:var(--clr-primary);border-left:none;}
+      .story-main{padding:2rem 1.5rem 4rem;}
+      .img-row{grid-template-columns:1fr;}
+      .credits-grid{grid-template-columns:1fr;}
+      .story-cover__content{padding:2rem 1.5rem 3rem;}
+    }
+    @media(max-width:600px){
+      .stat-row{gap:0.6rem;}
+      .type-cards{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-nav" href="#main-content">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="site-header__logo" aria-hidden="true">
+      <img src="assets/images/shared/ncgs-seal.png" alt="" />
+    </div>
+    <a class="site-header__back" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" focusable="false"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Back to Site
+    </a>
+    <div class="site-header__title" aria-hidden="true">An Introduction to Landslides in Western North Carolina</div>
+  </header>
+
+  <section class="story-cover" aria-label="Story cover">
+    <div class="story-cover__bg" role="img" aria-label="Aerial view of the Blue Ridge Mountains in Western North Carolina at sunset, showing forested ridgelines and a winding road"></div>
+    <div class="story-cover__content">
+      <div class="story-cover__eyebrow" aria-hidden="true">NC Geological Survey</div>
+      <h1 class="story-cover__title">An Introduction to Landslides in Western North Carolina</h1>
+      <div class="story-cover__org">
+        <img src="assets/images/shared/ncgs-seal.png" alt="" aria-hidden="true" />
+        <span>North Carolina Geological Survey &amp; UNC Asheville NEMAC</span>
+      </div>
+    </div>
+    <div class="scroll-hint" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M5 12l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Scroll to explore
+    </div>
+  </section>
+
+  <div class="story-body">
+    <nav class="toc" aria-label="Table of contents">
+      <div class="toc__heading">Contents</div>
+      <ul class="toc__list" role="list">
+        <li class="toc__item"><a href="#introduction">Introduction</a></li>
+        <li class="toc__item"><a href="#what-is-a-landslide">What is a Landslide?</a></li>
+        <li class="toc__item"><a href="#anatomy">Anatomy of a Landslide</a></li>
+        <li class="toc__item"><a href="#common-types">Common Landslide Types</a></li>
+        <li class="toc__item"><a href="#where">Where Do Landslides Occur?</a></li>
+        <li class="toc__item"><a href="#causes">What Causes Landslides?</a></li>
+        <li class="toc__item"><a href="#hazard-maps">Landslide Hazard Maps</a></li>
+        <li class="toc__item"><a href="#learn-more">Learn More</a></li>
+        <li class="toc__item"><a href="#acknowledgments">Acknowledgments</a></li>
+        <li class="toc__item"><a href="#references">References</a></li>
+      </ul>
+    </nav>
+
+    <main id="main-content" class="story-main">
+
+      <section id="introduction" class="story-section" aria-labelledby="h-introduction">
+        <h2 class="section-title" id="h-introduction">Introduction</h2>
+        <ul class="key-messages fade-in" aria-label="Key messages about landslide risk">
+          <li>Landslides pose significant risks to public health and safety, local economies, and home and business owners.</li>
+          <li>Extreme weather patterns—such as periods of above-normal rainfall or drought—are associated with a changing climate. They are already impacting people in western North Carolina.</li>
+          <li>These extreme weather patterns are also linked to landslide events.</li>
+          <li>Landslides and debris flows usually occur in areas where they've happened before.</li>
+          <li>Mapping where landslides have occurred in the past helps identify areas where they could happen again.</li>
+          <li>Landslide mapping and other resilience planning allow emergency responders, planners, and city and county staff to be better prepared to help protect people and assets from losses associated with landslide events.</li>
+        </ul>
+        <div class="fade-in">
+          <p>A landslide is the movement of a mass of rock, debris, or earth down a slope. Landslides are one type of what geologists call "mass wasting"—any movement of soil and rock down a slope that moves as a mostly unified mass under the influence of gravity.</p>
+        </div>
+        <div class="stat-row fade-in" aria-label="NCGS landslide response statistics">
+          <div class="stat-badge"><div class="stat-badge__num">175+</div><div class="stat-badge__label">Requests for assistance responded to by NCGS (1990–2016)</div></div>
+          <div class="stat-badge"><div class="stat-badge__num">200+</div><div class="stat-badge__label">Landslides investigated in the Blue Ridge Mountains</div></div>
+          <div class="stat-badge"><div class="stat-badge__num">5</div><div class="stat-badge__label">Deaths resulting from investigated landslides at time of publication</div></div>
+          <div class="stat-badge"><div class="stat-badge__num">25+</div><div class="stat-badge__label">Homes destroyed; 40+ others damaged</div></div>
+        </div>
+        <div class="fade-in">
+          <p>NCGS geologists have investigated over 200 landslides in the Blue Ridge Mountains of western North Carolina. These landslides have resulted in five deaths, destroyed more than 25 homes and damaged at least 40 others, and impaired nearly 80 roads.</p>
+          <p>Read on to learn more about the types of landslides, what causes them, and explore maps developed by NCGS to learn where landslides have occurred in the past and the potential for future risk.</p>
+          <p>To explore historical landslides in the region, please visit <a href="https://storymaps.arcgis.com/stories/4bc6f7d4c1094f5c925a74ccf606be00" target="_blank" rel="noopener noreferrer" aria-label="Historical Landslides in Western North Carolina StoryMap — opens in a new tab">Historical Landslides in Western North Carolina</a>.</p>
+        </div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-intro-rockslide-i40.jpeg" alt="A rockslide along a North Carolina highway, showing debris covering road lanes with rocky cliffs above" loading="lazy" />
+          <figcaption>Rockslide near Mile Marker 7 on I-40. Photo: NCDOT Communications, CC BY-NC 2.0, via Flickr</figcaption>
+        </figure>
+      </section>
+
+      <section id="what-is-a-landslide" class="story-section" aria-labelledby="h-what">
+        <h2 class="section-title" id="h-what">What is a Landslide?</h2>
+        <div class="fade-in"><p>A landslide is the movement of a mass of rock, debris, or earth down a slope. The word "landslide" encompasses five types of slope movement: falls, topples, slides, spreads, and flows.</p></div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-landslide-types-diagram.png" alt="Diagram illustrating the five types of landslide movement: slides (rotational and translational), falls, topples, flows, and spreads, labeled A through J" loading="lazy" />
+          <figcaption>Figure 3 — Landslide Types and Processes. Source: U.S. Geological Survey Fact Sheet 2004-3072</figcaption>
+        </figure>
+        <div class="type-cards fade-in">
+          <div class="type-card"><div class="type-card__name">Slide (A, B, C)</div><p>A soil or rock mass moves downslope on a surface of rupture. Slides can be rotational (curved surface) or translational (planar surface). Both can be caused by intense rainfall or rises in groundwater.</p></div>
+          <div class="type-card"><div class="type-card__name">Fall (D)</div><p>Rock or soil detaches from a steep slope and descends rapidly by falling, bouncing, or rolling. Triggered by undercutting of slopes, weathering, human activity, or earthquakes.</p></div>
+          <div class="type-card"><div class="type-card__name">Topple (E)</div><p>A mass of soil or rock rotates forward out of a slope. Can be triggered by water or ice in cracks, vibration, undercutting, differential weathering, and stream erosion.</p></div>
+          <div class="type-card"><div class="type-card__name">Flow (F, G, H, I)</div><p>A continuous movement of material down a slope resembling a fluid. Includes debris flows, debris avalanches, earthflows, and creeps. The most common type in western NC.</p></div>
+          <div class="type-card"><div class="type-card__name">Spread (J)</div><p>A mass of soil or rock expands as the fractured mass sinks into soft underlying material. Includes block spreads, liquefaction spreads, and lateral spreads.</p></div>
+        </div>
+        <div class="fade-in"><p>These slope movements are further subdivided by the type of geologic material involved: bedrock, debris, or earth. The type of movement and material determines the potential speed, distance traveled, volume of displaced material, and possible impacts.</p></div>
+        <div class="pull-quote fade-in"><p>"Every landslide, or slope movement, is unique and often unpredictable. Landslide events are best evaluated on a case-by-case basis."</p></div>
+        <div class="img-row fade-in">
+          <figure class="story-img">
+            <img src="assets/images/intro-landslides/story-nc28-graham-slide.jpeg" alt="Oblique aerial view of a forested slope in western North Carolina showing a large landslide scar and debris trail" loading="lazy" />
+            <figcaption>NC28 Graham County slide. Photo: NCDOT Communications, CC BY-NC 2.0, via Flickr</figcaption>
+          </figure>
+          <figure class="story-img">
+            <img src="assets/images/intro-landslides/story-mountain-panorama.jpeg" alt="Wide mountain panorama in western North Carolina showing rolling green forested ridges under a cloudy sky" loading="lazy" />
+            <figcaption>Photo: Dallas Krentzel, CC BY 2.0, via Flickr</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="anatomy" class="story-section" aria-labelledby="h-anatomy">
+        <h2 class="section-title" id="h-anatomy">Anatomy of a Landslide</h2>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-anatomy-debris-flow-diagram.png" alt="Diagram showing the anatomy of a debris flow landslide, including the initiation zone, scarp, rupture surface, deposit zone, and cross-section of a rock slide" loading="lazy" />
+          <figcaption>Anatomy of a debris flow and cross-section of a rock slide. Source: NC Geological Survey / NEMAC</figcaption>
+        </figure>
+        <div class="fade-in">
+          <p>Multiple debris flows can happen in the same location, creating features called "composites." Debris flows can become inactive, and older debris flows can reactivate.</p>
+          <p>A <strong>scarp</strong> is the edge of a steep slope of a debris flow, and an <strong>initiation zone</strong> (or process point) is where a debris flow initiates. Ground rupture lines appear at the upper edge of the vertical offset along the scarp.</p>
+        </div>
+        <div class="callout fade-in" role="note">
+          <p><strong>Key term:</strong> The <em>initiation zone</em> is where a debris flow starts — typically in depressions, hollows, the headwaters of mountain streams, or where bedrock is overlaid with a thin layer of soil no more than six feet deep.</p>
+        </div>
+      </section>
+
+      <section id="common-types" class="story-section" aria-labelledby="h-types">
+        <h2 class="section-title" id="h-types">Common Landslide Types</h2>
+        <div class="fade-in"><p>Common landslide types in western North Carolina include debris flows, debris and earth slides, and rock slides.</p></div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-common-types-debris-source.jpeg" alt="Illustration showing debris flow source areas in orange and deposit areas at the base of a mountain slope in green, with labeled zones" loading="lazy" />
+          <figcaption>Debris source and deposit areas. Source: NC Geological Survey</figcaption>
+        </figure>
+        <div class="fade-in">
+          <h3 style="font-size:1.1rem;font-weight:700;color:var(--clr-primary);margin:1.5rem 0 0.6rem;text-transform:uppercase;letter-spacing:0.04em;">Debris Flows</h3>
+          <p>Debris flows are rapidly flowing mixtures of soil, rock particles, and water — often called "mudslides." This is the most common type of the 3,290 landslides that occurred before June 30, 2011, in western North Carolina. Debris flows typically begin with a mass of rocky silt-sand with low clay content, allowing the soil mass to "liquefy" in heavy rains and move at speeds approaching 30 miles per hour.</p>
+          <p>Debris flows often begin in depressions, hollows, the headwaters of mountain streams, and in areas where bedrock is overlaid with a thin layer of soil at most six feet deep.</p>
+        </div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-hwy194-debris-slide.jpeg" alt="A large debris slide that has damaged North Carolina Highway 194 north of Newland in Avery County, showing displaced soil and rocks across the road" loading="lazy" />
+          <figcaption>This slide damaged NC Highway 194 north of Newland, Avery County, July 2013. Photo: NCDOT Communications, CC BY 2.0, via Flickr</figcaption>
+        </figure>
+        <div class="fade-in">
+          <h3 style="font-size:1.1rem;font-weight:700;color:var(--clr-primary);margin:1.5rem 0 0.6rem;text-transform:uppercase;letter-spacing:0.04em;">Debris and Earth Slides</h3>
+          <p>Debris (soil-rock mixture) or earth (clay-silt soil) slides move at a slower rate than debris flows because the water content is too low for the mass to liquefy. High clay content causes more cohesive material that typically moves at several inches or feet per day.</p>
+          <p>After initial movement opens tension cracks and scarps, water can infiltrate deeper into the slide mass. In wet conditions, movement can become self-perpetuating as additional water further destabilizes the material.</p>
+        </div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-i40-rockslide.jpeg" alt="A rockslide that occurred on February 3, 2012 on U.S. Interstate Highway 40 West at Mile Marker 7 in North Carolina near the Tennessee border, showing large boulders and debris on the road" loading="lazy" />
+          <figcaption>Rockslide on I-40 West at Mile Marker 7, NC, February 3, 2012. Photo: NCDOT Communications, CC BY 2.0, via Flickr</figcaption>
+        </figure>
+        <div class="fade-in">
+          <h3 style="font-size:1.1rem;font-weight:700;color:var(--clr-primary);margin:1.5rem 0 0.6rem;text-transform:uppercase;letter-spacing:0.04em;">Rockslides and Rockfalls</h3>
+          <p>Rockslides and rockfalls usually occur along roadways, but can occur on any modified or natural rock slope. They occur on steep, exposed faces made of bedrock or boulder-rich rock deposits and are common along major transportation routes in western North Carolina.</p>
+        </div>
+      </section>
+
+      <section id="where" class="story-section" aria-labelledby="h-where">
+        <h2 class="section-title" id="h-where">Where Do Landslides Occur?</h2>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-polk-county-hwy176.jpeg" alt="Damage from a landslide that covered U.S. Highway 176 and neighboring properties in Polk County, showing debris across a road and surrounding land" loading="lazy" />
+          <figcaption>Damage from a landslide that covered U.S. Highway 176 and neighboring properties in Polk County on the night of May 18, 2018. Photo: NCDOT Communications, CC BY 2.0, via Flickr</figcaption>
+        </figure>
+        <div class="fade-in">
+          <p>Landslides can take place almost anywhere in the world in a variety of landscapes — including cultivated lands, slopes, and forests — and do not necessarily happen on steep slopes. However, certain types of landslides are associated with hilly and mountainous terrain.</p>
+          <p>Natural patterns like climate, wildfire, and the courses of streams and rivers also influence where landslides occur, as do human activities such as clearing trees and vegetation and construction on slopes.</p>
+          <p>Some types of landslide only occur in specific terrains or in the presence of particular geologic materials. Debris torrents take place in channels and ravines; rockfalls occur on steep, exposed faces of bedrock or boulder-rich deposits.</p>
+        </div>
+      </section>
+
+      <section id="causes" class="story-section" aria-labelledby="h-causes">
+        <h2 class="section-title" id="h-causes">What Causes Landslides?</h2>
+        <div class="fade-in"><p>Landslides are triggered primarily by natural occurrences—including rain, melting snow, changes in water level, stream erosion, changes in groundwater, earthquakes, and volcanoes—and by human activity. Factors such as soil type, landform, and geology also influence landslide events.</p></div>
+        <div class="callout fade-in" role="note" aria-label="Rainfall trigger thresholds">
+          <p><strong>Rainfall triggers in Western NC:</strong></p>
+          <p>Heavy rainfall and the subsequent increase in groundwater is the most common trigger for landslides in western NC. Widespread occurrence typically occurs when <strong>10+ inches of rain falls within 24 hours</strong>. Localized landslides typically occur when <strong>at least 5 inches falls within a 24-hour period</strong>.</p>
+          <p>Widespread development of landslides coincides with major rainfall events, particularly those that occur as the remnants of tropical storms pass into the mountains.</p>
+        </div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-rainfall-landslide-chart.png" alt="Chart combining data on rainfall amounts (blue lines, lower graph) and number of landslides (black lines, upper graph) in western North Carolina between 1876 and 2010, showing correlation between major rainfall events and landslide occurrences" loading="lazy" />
+          <figcaption>Chart combining data on dates and amount of rainfall (blue lines, lower graph) and dates and number of landslides (black lines, upper graph) in western North Carolina, 1876–2010.</figcaption>
+        </figure>
+        <div class="fade-in">
+          <h3 style="font-size:1.05rem;font-weight:700;color:var(--clr-text);margin:1.5rem 0 0.75rem;">Human Activities That Contribute to Landslides</h3>
+          <ul class="causes-list" aria-label="Human activities contributing to landslide risk">
+            <li>Altering drainage patterns, clearing vegetation, and destabilizing slopes by undercutting a slope bottom and/or loading the top beyond its bearing strength</li>
+            <li>Irrigation, draining or creating reservoirs, and improper slope excavation</li>
+            <li>Lack of compaction during construction, inadequate ground surface preparation, large woody debris, and incorporation of untreated acid-producing rock into embankments</li>
+          </ul>
+          <p>Field investigations have determined that many debris flows and landslides have occurred where slope modification by humans was a contributing factor. The majority were fill failures that mobilized into damaging debris flows and debris slides.</p>
+        </div>
+        <div class="pull-quote fade-in"><p>"In western North Carolina, debris flows can be triggered by rainfall events with lower rates and durations on slopes modified by human activity — landslides have been triggered by as little as three inches of rainfall in a 24-hour period on modified slopes with pre-existing signs of instability."</p></div>
+        <div class="fade-in"><p>From January to July 2013, multiple above-normal rainfall events caused significant landslides in the Asheville area. Six storm events triggered slope failures in western North Carolina during this long period of above-normal rainfall.</p></div>
+        <figure class="story-img fade-in">
+          <img src="assets/images/intro-landslides/story-blackcamp-road-mudslide.jpeg" alt="A mudslide on Black Camp Road in Haywood County, showing brown debris flow material covering a roadway and surrounding vegetation" loading="lazy" />
+          <figcaption>Black Camp Road, Haywood County. Photo: NCDOT Communications, CC BY 2.0, via Flickr</figcaption>
+        </figure>
+      </section>
+
+      <section id="hazard-maps" class="story-section" aria-labelledby="h-maps">
+        <h2 class="section-title" id="h-maps">Landslide Hazard Maps</h2>
+        <div class="fade-in">
+          <p>The landslide hazard mapping program is intended to provide the public, local government, and state emergency agencies with a planning tool indicating areas where landslides have occurred in the past and those areas vulnerable to future slope movements.</p>
+          <p>The data produced by the landslide hazard mapping program are described below. Browse the data to learn landslide terminology and how they contribute to understanding landslide events in western North Carolina.</p>
+        </div>
+        <div class="callout fade-in" role="note">
+          <p><strong>Note:</strong> The maps below are static. You can interactively explore the data in the <a href="data-tour.html">WNC Landslide Hazard Data Viewer</a>, which allows you to click on each element to learn additional information.</p>
+        </div>
+        <div class="map-panels fade-in">
+          <div class="map-panel">
+            <img class="map-panel__img" src="assets/images/intro-landslides/story-map-landslide-points.jpeg" alt="Static map of western North Carolina showing landslide point locations as small red dots scattered across the mountain counties, indicating initiation source areas of slope movements" loading="lazy" />
+            <div class="map-panel__body">
+              <div class="map-panel__title"><span style="background:#E8001C;" aria-hidden="true"></span>Landslide Points</div>
+              <p>Landslide points identify the initiation (source) of slope movements. Attributes include descriptions of slope movement type, location, dimensions, movement dates, and geomorphic, hydrologic, and other site data for individual slope movements, where known.</p>
+            </div>
+          </div>
+          <div class="map-panel">
+            <img class="map-panel__img" src="assets/images/intro-landslides/story-map-landslide-outlines.jpeg" alt="Static map showing landslide outline polygons in western North Carolina as orange outlined shapes over a topographic basemap" loading="lazy" />
+            <div class="map-panel__body">
+              <div class="map-panel__title"><span style="background:#FF7300;border-radius:2px;" aria-hidden="true"></span>Landslide Outlines</div>
+              <p>Landslide outlines show the approximate areal extents of relatively recent, individual slope movements where their initiation (source) areas are known. Outlines were determined from field investigations, aerial photography (1940–current), and digital maps derived from LiDAR digital elevation models.</p>
+            </div>
+          </div>
+          <div class="map-panel">
+            <img class="map-panel__img" src="assets/images/intro-landslides/story-map-landslide-deposits.jpeg" alt="Static map showing landslide deposit polygons in western North Carolina as brown shaded areas in valleys" loading="lazy" />
+            <div class="map-panel__body">
+              <div class="map-panel__title"><span style="background:#A87000;border-radius:2px;" aria-hidden="true"></span>Landslide Deposits</div>
+              <p>Landslide deposits represent the areal extents of significant volumes of earth, debris, and rock fragments that have accumulated primarily as a result of past debris flows and debris slides. These deposits indicate areas that can be affected by future landslides. Debris flow deposits mainly occur in valleys and can transition upslope into debris slide, rock fall, and rock slide deposits nearer steep source areas.</p>
+            </div>
+          </div>
+          <div class="map-panel">
+            <img class="map-panel__img" src="assets/images/intro-landslides/story-map-debris-flow-pathways.jpeg" alt="Static map showing potential debris flow pathways as blue lines and polygons in western North Carolina mountain drainages" loading="lazy" />
+            <div class="map-panel__body">
+              <div class="map-panel__title"><span style="background:#0070FF;border-radius:2px;" aria-hidden="true"></span>Potential Debris Flow Pathways</div>
+              <p>The Potential Debris Flow Pathways layer shows where landslides have gone in the past and where they might go in the future, delineating areas likely to be in the path of potential slope movements. While areas outside the pathway areas are unlikely to be damaged by landslide activity, modification of slopes could result in slope movements outside the marked areas.</p>
+            </div>
+          </div>
+          <div class="map-panel">
+            <img class="map-panel__img" src="assets/images/intro-landslides/story-map-probability-sliding.jpeg" alt="Static map showing probability of sliding susceptibility across western North Carolina, with high probability areas in dark purple and moderate probability in lighter purple" loading="lazy" />
+            <div class="map-panel__body">
+              <div class="map-panel__title"><span style="background:#9B2C9B;border-radius:2px;" aria-hidden="true"></span>Probability of Sliding Map</div>
+              <p>The Probability of Sliding map is a susceptibility map indicating where landslides may initiate. The predicted relative hazard rankings (High and Moderate) indicate susceptibility of shallow, translational slope movements in response to a rain event of approximately 5–6 inches or more within a 24-hour period. This data forecasts where slope movements are more likely to initiate — it does not predict that they will occur.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="learn-more" class="story-section" aria-labelledby="h-learn-more">
+        <h2 class="section-title" id="h-learn-more">Learn More</h2>
+        <div class="fade-in"><p>Explore historical landslide events and more in StoryMaps, access digital copies of printed educational materials, and access tools and resources on the project website.</p></div>
+        <div class="link-cards fade-in">
+          <a class="link-card" href="https://storymaps.arcgis.com/stories/4bc6f7d4c1094f5c925a74ccf606be00" target="_blank" rel="noopener noreferrer" aria-label="Historical Landslides in WNC StoryMap — opens in a new tab">
+            <div class="link-card__title">Historical Landslides in WNC</div>
+            <div class="link-card__desc">Explore selected historical landslide events from across the region</div>
+          </a>
+          <a class="link-card" href="data-tour.html">
+            <div class="link-card__title">WNC Landslide Hazard Data Viewer</div>
+            <div class="link-card__desc">Interactively explore landslide data for all mapped counties in western NC</div>
+          </a>
+          <a class="link-card" href="learn-more.html">
+            <div class="link-card__title">Landslide Resources</div>
+            <div class="link-card__desc">Access educational materials, downloads, and additional StoryMaps</div>
+          </a>
+          <a class="link-card" href="downloads.html">
+            <div class="link-card__title">Downloads</div>
+            <div class="link-card__desc">Access landslide hazard data downloads and printed PDF resources</div>
+          </a>
+        </div>
+      </section>
+
+      <section id="acknowledgments" class="story-section" aria-labelledby="h-acknowledgments">
+        <h2 class="section-title" id="h-acknowledgments">Acknowledgments</h2>
+        <div class="credits-grid fade-in">
+          <div class="credit-card">
+            <div class="credit-card__org">North Carolina Geological Survey</div>
+            <div class="credit-card__names">Rick Wooten, Corey Scheip, Jesse Hill, Tommy Douglas, David Korte</div>
+          </div>
+          <div class="credit-card">
+            <div class="credit-card__org">UNC Asheville's NEMAC</div>
+            <div class="credit-card__names">Karin Rogers, Greg Dobson, Jim Fox, Nina Hall, Ian Johnson, Dave Michelson, Kim Rhodes, Mary Spivey, Matthew Geiger, Katie Caruso and Kelsey Hall (undergraduate interns)</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="references" class="story-section" aria-labelledby="h-references">
+        <h2 class="section-title" id="h-references">References</h2>
+        <div class="fade-in"><p style="font-size:0.88rem;color:var(--clr-text-muted);margin-bottom:1rem;">Unless otherwise noted, all images and maps were provided or created by the North Carolina Geological Survey or UNC Asheville's NEMAC. Image credits listed in order of appearance.</p></div>
+        <ul class="references-list fade-in" aria-label="Image and content references">
+          <li><a href="https://pubs.usgs.gov/circ/1325/" target="_blank" rel="noopener noreferrer">The Landslide Handbook—A Guide to Understanding Landslides (PDF)</a> — U.S. Department of the Interior | U.S. Geological Survey, Circular 1325</li>
+          <li><a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey/geologic-hazards/landslides" target="_blank" rel="noopener noreferrer">Landslide Types and Causes | Recognizing Landslides</a> — NC Department of Environmental Quality | NC Geological Survey</li>
+          <li>Landslides and Landslide Hazards — NC Mountain Resources Commission | Western North Carolina Vitality Index</li>
+          <li>Buncombe County Hazards Maps — NC Department of Environmental Quality | NC Geological Survey</li>
+          <li>Hero image: <a href="https://www.flickr.com/photos/dbuchhofer/albums" target="_blank" rel="noopener noreferrer">"Wintergreen - Blue Ridge Mountains"</a> by Dave Buchhofer, CC BY-NC-ND 2.0, via Flickr</li>
+          <li>Rockslide image: "Rockslide near Mile Marker 7 on I-40" by NCDOT Communications, CC BY-NC 2.0, via Flickr</li>
+          <li>Landslide types diagram: "Figure 3," in Landslide Types and Processes Fact Sheet 2004-3072, U.S. Geological Survey</li>
+          <li>Slide on NC 194: "Slide Area" by NCDOT Communications, CC BY 2.0, via Flickr</li>
+          <li>Rockslide on I-40: "Rockslide near Mile Marker 7 on I-40" by NCDOT Communications, CC BY 2.0, via Flickr</li>
+          <li>Polk County slide: "IMG_5620" by NCDOT Communications, CC BY 2.0, via Flickr</li>
+          <li>Mountain panorama: "Roan Mountain (Round Bald) panorama with rain" by Dallas Krentzel, CC BY 2.0, via Flickr</li>
+          <li>Mudslide: "Black Camp Road, Haywood County" by NCDOT Communications, CC BY 2.0, via Flickr</li>
+        </ul>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="site-footer__inner">
+      <div class="site-footer__org"><a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;" aria-label="North Carolina Geological Survey — opens in a new tab">North Carolina Geological Survey</a></div>
+      <div class="site-footer__detail">Asheville Regional Office</div>
+      <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
+    </div>
+  </footer>
+
+  <script>
+    const sections = document.querySelectorAll('.story-section[id]');
+    const tocLinks = document.querySelectorAll('.toc__item a');
+    const spyObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          tocLinks.forEach(link => { link.classList.toggle('active', link.getAttribute('href') === `#${id}`); });
+        }
+      });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    sections.forEach(s => spyObserver.observe(s));
+
+    const fadeEls = document.querySelectorAll('.fade-in');
+    const fadeObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); fadeObserver.unobserve(entry.target); } });
+    }, { threshold: 0.08 });
+    fadeEls.forEach(el => fadeObserver.observe(el));
+
+    tocLinks.forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const heading = target.querySelector('h2');
+          if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus(); }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

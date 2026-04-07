@@ -6,9 +6,8 @@
   <title>Landslides in Western North Carolina</title>
   <meta name="description" content="Explore current and historical information about landslides across Western North Carolina, and access resources to help you plan for and build resilience to landslide hazards." />
 
-  <!-- Favicon — NCGS seal -->
-  <link rel="icon" type="image/png" href="assets/images/ncgs-seal.png" />
-  <link rel="apple-touch-icon" href="assets/images/ncgs-seal.png" />
+  <link rel="icon" type="image/png" href="assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="assets/images/shared/ncgs-seal.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,20 +29,15 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      background-color: var(--clr-bg);
-      color: var(--clr-text);
-      font-family: var(--font-main);
-      font-weight: 400;
-      font-size: 1rem;
-      line-height: 1.6;
-      min-height: 100vh;
+      background-color: var(--clr-bg); color: var(--clr-text);
+      font-family: var(--font-main); font-weight: 400;
+      font-size: 1rem; line-height: 1.6; min-height: 100vh;
     }
 
     .skip-nav {
       position: absolute; top: -100%; left: 0;
-      background: var(--clr-focus); color: #000;
-      font-weight: 700; padding: 0.75rem 1.5rem;
-      z-index: 9999; text-decoration: none;
+      background: var(--clr-focus); color: #000; font-weight: 700;
+      padding: 0.75rem 1.5rem; z-index: 9999; text-decoration: none;
       border-radius: 0 0 4px 0; transition: top 0.2s;
     }
     .skip-nav:focus { top: 0; }
@@ -57,17 +51,14 @@
     :focus-visible { outline: 3px solid var(--clr-focus); outline-offset: 3px; }
     :focus:not(:focus-visible) { outline: none; }
 
-    /* ── HEADER ── */
     .site-header {
-      background-color: var(--clr-bg);
-      padding: 1.25rem 2rem;
+      background-color: var(--clr-bg); padding: 1.25rem 2rem;
       display: flex; align-items: center; gap: 1.25rem;
       border-bottom: 3px solid var(--clr-accent);
     }
     .site-header__logo {
       width: 90px; height: 90px; flex-shrink: 0;
-      border-radius: 50%; overflow: hidden;
-      border: 2px solid var(--clr-accent);
+      border-radius: 50%; overflow: hidden; border: 2px solid var(--clr-accent);
     }
     .site-header__logo img { width: 100%; height: 100%; object-fit: contain; }
     .site-header__text h1 {
@@ -79,16 +70,13 @@
       color: var(--clr-text-muted); max-width: 65ch; margin-top: 0.35rem;
     }
 
-    /* ── NAV ── */
     .site-nav {
-      background-color: var(--clr-surface);
-      border-bottom: 1px solid var(--clr-border);
+      background-color: var(--clr-surface); border-bottom: 1px solid var(--clr-border);
       position: sticky; top: 0; z-index: 100;
     }
     .site-nav__list {
       list-style: none; display: flex; flex-wrap: wrap;
-      gap: 0; padding: 0 1rem;
-      max-width: 1200px; margin: 0 auto;
+      padding: 0 1rem; max-width: 1200px; margin: 0 auto;
     }
     .site-nav__item a {
       display: block; padding: 1rem 1.5rem;
@@ -100,19 +88,15 @@
     .site-nav__item a:hover { color: var(--clr-text); border-bottom-color: var(--clr-accent); }
     .site-nav__item a[aria-current="page"] { color: var(--clr-text); border-bottom-color: var(--clr-primary); }
 
-    /* ── MAIN ── */
     .main-content { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
 
-    /* ── NAV CARDS ── */
     .card-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1rem; }
 
     .nav-card {
       display: grid; grid-template-columns: 1fr auto; align-items: center;
-      background-color: var(--clr-surface);
-      border: 1px solid var(--clr-border);
-      border-left: 5px solid var(--clr-accent);
-      border-radius: 4px; padding: 1.5rem 1.75rem;
-      text-decoration: none; color: var(--clr-text);
+      background-color: var(--clr-surface); border: 1px solid var(--clr-border);
+      border-left: 5px solid var(--clr-accent); border-radius: 4px;
+      padding: 1.5rem 1.75rem; text-decoration: none; color: var(--clr-text);
       transition: border-left-color 0.2s, background-color 0.2s, transform 0.15s;
       min-height: 110px; position: relative; overflow: hidden;
     }
@@ -121,11 +105,8 @@
       background-size: cover; background-position: center;
       opacity: 1; pointer-events: none;
     }
-
-    /* Gradient overlay: dark left (text zone) → clear right (image zone) */
     .nav-card::after {
-      content: "";
-      position: absolute; inset: 0;
+      content: ""; position: absolute; inset: 0;
       background: linear-gradient(
         to right,
         rgba(10, 22, 12, 0.92) 0%,
@@ -133,32 +114,27 @@
         rgba(10, 22, 12, 0.10) 60%,
         rgba(10, 22, 12, 0.00) 75%
       );
-      pointer-events: none;
-      z-index: 0;
-      transition: opacity 0.3s;
+      pointer-events: none; z-index: 0; transition: opacity 0.3s;
     }
     .nav-card:hover::after,
     .nav-card:focus-visible::after { opacity: 0.8; }
     .nav-card__content { position: relative; z-index: 1; }
-    .nav-card:hover,
-    .nav-card:focus-visible {
+    .nav-card:hover, .nav-card:focus-visible {
       border-left-color: var(--clr-primary);
       background-color: #1f3d27; transform: translateX(3px);
     }
     .nav-card__title { font-size: 1.3rem; font-weight: 700; color: var(--clr-text); line-height: 1.25; }
     .nav-card__desc  { font-size: 0.95rem; color: var(--clr-text-muted); margin-top: 0.35rem; }
     .nav-card__arrow {
-      position: relative; z-index: 1;
-      color: var(--clr-accent); font-size: 1.75rem; font-weight: 700;
-      margin-left: 1rem; transition: color 0.2s, transform 0.2s;
+      position: relative; z-index: 1; color: var(--clr-accent);
+      font-size: 1.75rem; font-weight: 700; margin-left: 1rem;
+      transition: color 0.2s, transform 0.2s;
     }
     .nav-card:hover .nav-card__arrow,
     .nav-card:focus-visible .nav-card__arrow { color: var(--clr-primary); transform: translateX(4px); }
 
-    /* ── FOOTER ── */
     .site-footer {
-      background-color: var(--clr-surface);
-      border-top: 3px solid var(--clr-primary);
+      background-color: var(--clr-surface); border-top: 3px solid var(--clr-primary);
       padding: 1.75rem 2rem; margin-top: 3rem;
     }
     .site-footer__inner { max-width: 1200px; margin: 0 auto; }
@@ -181,7 +157,7 @@
 
   <header class="site-header" role="banner">
     <div class="site-header__logo" aria-hidden="true">
-      <img src="assets/images/ncgs-seal.png" alt="" />
+      <img src="assets/images/shared/ncgs-seal.png" alt="" />
     </div>
     <div class="site-header__text">
       <h1>Landslides in Western North Carolina</h1>
@@ -204,7 +180,7 @@
     <nav class="card-grid" aria-label="Site sections">
 
       <a class="nav-card" href="learn-more.html#reducing-risk">
-        <div class="nav-card__bg" style="background-image:url('assets/images/reducing_landslide_risk_banner_3.png');" aria-hidden="true"></div>
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/reducing_landslide_risk_banner_3.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
           <div class="nav-card__title">Reducing Landslide Risk</div>
           <div class="nav-card__desc">What can you do to reduce landslide risk?</div>
@@ -213,7 +189,7 @@
       </a>
 
       <a class="nav-card" href="map-viewer.html">
-        <div class="nav-card__bg" style="background-image:url('assets/images/mapviewer_banner.png');" aria-hidden="true"></div>
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/mapviewer_banner.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
           <div class="nav-card__title">Explore Data in a Map Viewer</div>
           <div class="nav-card__desc">Interact with landslide data in an online viewer</div>
@@ -222,7 +198,7 @@
       </a>
 
       <a class="nav-card" href="data-tour.html">
-        <div class="nav-card__bg" style="background-image:url('assets/images/datatour_banner.png');" aria-hidden="true"></div>
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/datatour_banner.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
           <div class="nav-card__title">Data Tour Guide</div>
           <div class="nav-card__desc">Learn about the data</div>
@@ -231,7 +207,7 @@
       </a>
 
       <a class="nav-card" href="learn-more.html">
-        <div class="nav-card__bg" style="background-image:url('assets/images/learn_more_banner.png');" aria-hidden="true"></div>
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/learn_more_banner.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
           <div class="nav-card__title">Learn More</div>
           <div class="nav-card__desc">Learn about landslide hazards, historical events, and more</div>
