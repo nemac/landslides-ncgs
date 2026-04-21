@@ -487,20 +487,32 @@
     require([
       "esri/WebMap",
       "esri/views/MapView",
-      "esri/config"
-    ], function(WebMap, MapView, esriConfig) {
+      "esri/config",
+      "esri/layers/MapImageLayer"
+    ], function(WebMap, MapView, esriConfig, MapImageLayer) {
 
       // Point to the UNCA portal where the webmap lives
       esriConfig.portalUrl = "https://unca.maps.arcgis.com";
 
-      // Layer IDs from the webmap, matched to each tab
-      const LAYER_MAP = {
+      // Webmap layer IDs for the three layers served from the UNCA portal
+      const WEBMAP_LAYER_IDS = {
         points:  "NCGS_Landslide_Read_Vector_113",
         outlines:"NCGS_Landslide_Read_Vector_3620",
-        deposits:"NCGS_Landslide_Read_Vector_1485",
-        debris:  "NCGS_Landslide_Read_Vector_6486",
-        sliding: "Landslide_Susceptibility_3421"
+        deposits:"NCGS_Landslide_Read_Vector_1485"
       };
+
+      // External DEQ MapServer layers (loaded directly, not from webmap)
+      const debrisLayer = new MapImageLayer({
+        url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Susceptibility_Model/MapServer",
+        visible: false,
+        title: "Potential Debris Flow Pathways"
+      });
+
+      const slidingLayer = new MapImageLayer({
+        url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/Landslide_Susceptibility/MapServer",
+        visible: false,
+        title: "Probability of Sliding"
+      });
 
       const LAYER_LABELS = {
         points:  "Landslide Points",
@@ -510,10 +522,12 @@
         sliding: "Probability of Sliding"
       };
 
-      // Load the webmap
+      // Load the webmap and add the two external layers to it
       const webmap = new WebMap({
         portalItem: { id: "60c6dfb22ac24f90bf716b293b8ba09a" }
       });
+      webmap.add(debrisLayer);
+      webmap.add(slidingLayer);
 
       const view = new MapView({
         container: "tourMap",
@@ -558,9 +572,17 @@
 
       function setActiveLayer(key) {
         activeLayer = key;
+
+        // Toggle the two external DEQ layers
+        debrisLayer.visible  = (key === "debris");
+        slidingLayer.visible = (key === "sliding");
+
+        // Toggle the three webmap layers (hide all external ones first)
         webmap.layers.forEach(layer => {
-          layer.visible = (layer.id === LAYER_MAP[key]);
+          if (layer === debrisLayer || layer === slidingLayer) return; // handled above
+          layer.visible = (WEBMAP_LAYER_IDS[key] && layer.id === WEBMAP_LAYER_IDS[key]);
         });
+
         document.getElementById("currentLayerName").textContent = LAYER_LABELS[key];
       }
 
