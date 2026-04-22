@@ -122,7 +122,7 @@
     .page-wrapper { max-width: 1400px; margin: 0 auto; padding: 1.5rem; flex: 1; }
     .page-intro { margin-bottom: 1.25rem; }
     .page-intro h2 { font-size: 1.6rem; font-weight: 700; color: var(--clr-text); margin-bottom: 0.5rem; }
-    .page-intro p { color: var(--clr-text-muted); max-width: 75ch; font-size: 0.95rem; }
+    .page-intro p { color: var(--clr-text-muted); font-size: 0.95rem; }
 
     /* Two-column layout */
     .tour-layout {
@@ -502,13 +502,16 @@
       };
 
       // External DEQ MapServer layers (loaded directly, not from webmap)
+      // Explicit IDs are used for reliable identification during layer toggling
       const debrisLayer = new MapImageLayer({
+        id: "ext-debris",
         url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Susceptibility_Model/MapServer",
         visible: false,
         title: "Potential Debris Flow Pathways"
       });
 
       const slidingLayer = new MapImageLayer({
+        id: "ext-sliding",
         url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/Landslide_Susceptibility/MapServer",
         visible: false,
         title: "Probability of Sliding"
@@ -577,9 +580,9 @@
         debrisLayer.visible  = (key === "debris");
         slidingLayer.visible = (key === "sliding");
 
-        // Toggle the three webmap layers (hide all external ones first)
+        // Toggle the three webmap layers — skip our two external layers by ID
         webmap.layers.forEach(layer => {
-          if (layer === debrisLayer || layer === slidingLayer) return; // handled above
+          if (layer.id === "ext-debris" || layer.id === "ext-sliding") return;
           layer.visible = (WEBMAP_LAYER_IDS[key] && layer.id === WEBMAP_LAYER_IDS[key]);
         });
 
