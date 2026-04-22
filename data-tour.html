@@ -485,37 +485,42 @@
   ============================================================ -->
   <script>
     require([
-      "esri/WebMap",
+      "esri/Map",
       "esri/views/MapView",
-      "esri/config",
+      "esri/layers/FeatureLayer",
       "esri/layers/MapImageLayer"
-    ], function(WebMap, MapView, esriConfig, MapImageLayer) {
+    ], function(Map, MapView, FeatureLayer, MapImageLayer) {
 
-      // Point to the UNCA portal where the webmap lives
-      esriConfig.portalUrl = "https://unca.maps.arcgis.com";
+      const BASE_URL = "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/NCGS_Landslide_Read_Vector/FeatureServer";
 
-      // Webmap layer IDs for the three layers served from the UNCA portal
-      const WEBMAP_LAYER_IDS = {
-        points:  "NCGS_Landslide_Read_Vector_113",
-        outlines:"NCGS_Landslide_Read_Vector_3620",
-        deposits:"NCGS_Landslide_Read_Vector_1485"
+      // All 5 layers loaded explicitly — full visibility control, no ID guesswork
+      const layers = {
+        points: new FeatureLayer({
+          url: BASE_URL + "/0",
+          visible: true,
+          title: "Landslide Points"
+        }),
+        outlines: new FeatureLayer({
+          url: BASE_URL + "/1",
+          visible: false,
+          title: "Landslide Outlines"
+        }),
+        deposits: new FeatureLayer({
+          url: BASE_URL + "/2",
+          visible: false,
+          title: "Landslide Deposits"
+        }),
+        debris: new MapImageLayer({
+          url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Susceptibility_Model/MapServer",
+          visible: false,
+          title: "Potential Debris Flow Pathways"
+        }),
+        sliding: new MapImageLayer({
+          url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/Landslide_Susceptibility/MapServer",
+          visible: false,
+          title: "Probability of Sliding"
+        })
       };
-
-      // External DEQ MapServer layers (loaded directly, not from webmap)
-      // Explicit IDs are used for reliable identification during layer toggling
-      const debrisLayer = new MapImageLayer({
-        id: "ext-debris",
-        url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Susceptibility_Model/MapServer",
-        visible: false,
-        title: "Potential Debris Flow Pathways"
-      });
-
-      const slidingLayer = new MapImageLayer({
-        id: "ext-sliding",
-        url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/Landslide_Susceptibility/MapServer",
-        visible: false,
-        title: "Probability of Sliding"
-      });
 
       const LAYER_LABELS = {
         points:  "Landslide Points",
@@ -525,16 +530,14 @@
         sliding: "Probability of Sliding"
       };
 
-      // Load the webmap and add the two external layers to it
-      const webmap = new WebMap({
-        portalItem: { id: "60c6dfb22ac24f90bf716b293b8ba09a" }
+      const map = new Map({
+        basemap: "topo-vector",
+        layers: Object.values(layers)
       });
-      webmap.add(debrisLayer);
-      webmap.add(slidingLayer);
 
       const view = new MapView({
         container: "tourMap",
-        map: webmap,
+        map: map,
         center: [-82.17, 35.58],
         zoom: 8,
         ui: { components: ["zoom", "attribution"] }
@@ -544,7 +547,6 @@
 
       view.when(() => {
         document.getElementById("mapLoading").classList.add("hidden");
-        setActiveLayer("points");
 
         // Keyboard pan/zoom support
         const mapDiv = document.getElementById("tourMap");
@@ -575,17 +577,10 @@
 
       function setActiveLayer(key) {
         activeLayer = key;
-
-        // Toggle the two external DEQ layers
-        debrisLayer.visible  = (key === "debris");
-        slidingLayer.visible = (key === "sliding");
-
-        // Toggle the three webmap layers — skip our two external layers by ID
-        webmap.layers.forEach(layer => {
-          if (layer.id === "ext-debris" || layer.id === "ext-sliding") return;
-          layer.visible = (WEBMAP_LAYER_IDS[key] && layer.id === WEBMAP_LAYER_IDS[key]);
+        // Show only the selected layer, hide all others — direct object references
+        Object.entries(layers).forEach(([k, layer]) => {
+          layer.visible = (k === key);
         });
-
         document.getElementById("currentLayerName").textContent = LAYER_LABELS[key];
       }
 
