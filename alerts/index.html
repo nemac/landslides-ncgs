@@ -108,7 +108,7 @@
       <h2 class="sidebar-heading">Settings</h2>
 
       <!-- Detection mode (NDFD forecast vs MRMS observed) -->
-      <fieldset class="control-group">
+      <fieldset class="control-group" aria-describedby="mode-kbd-hint">
         <legend>Detect alerts from</legend>
         <div class="radio-row">
           <input type="radio" id="mode-ndfd" name="detection-mode"
@@ -120,6 +120,10 @@
                  value="mrms" />
           <label for="mode-mrms">Current radar (MRMS 1-hour)</label>
         </div>
+        <p class="control-help kbd-hint" id="mode-kbd-hint">
+          Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> arrow keys to switch
+          between options.
+        </p>
       </fieldset>
 
       <!-- Threshold slider -->
