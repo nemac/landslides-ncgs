@@ -309,5 +309,30 @@
     </p>
   </footer>
 
+  <!-- ====================================================================
+       SCRIPTS (Phase 2)
+       Third-party libraries first, then our modules in dependency order:
+       config -> mock-data -> map -> alerts -> app (which boots everything)
+       ==================================================================== -->
+
+  <!-- Leaflet (map engine) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+
+  <!-- esri-leaflet (NCGS AGOL FeatureServer client) -->
+  <script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"
+          crossorigin=""></script>
+
+  <!-- Turf.js (client-side geo intersection) -->
+  <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+
+  <!-- Our modules -->
+  <script src="js/config.js"></script>
+  <script src="js/mock-data.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/alerts.js"></script>
+  <script src="js/app.js"></script>
+
 </body>
 </html>
