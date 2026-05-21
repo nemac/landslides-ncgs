@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accessibility Statement | DEFNS | NC Geological Survey</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Minor overrides for a content-only page */
+    .doc-body { max-width: 70ch; margin: 0 auto; padding: 2rem 1.5rem; }
+    .doc-body h2 { font-size: 1.3rem; margin-top: 2rem; }
+    .doc-body h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+    .doc-body ul { padding-left: 1.5rem; }
+    .doc-body li { margin-bottom: 0.4rem; }
+  </style>
+</head>
+<body>
+
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <header class="app-header" role="banner">
+    <div class="header-row">
+      <div class="logo">
+        <img src="https://landslidesncgs.com/assets/images/shared/ncgs-seal.png"
+             alt="North Carolina Geological Survey seal" />
+      </div>
+      <div class="header-text">
+        <a href="index.html" class="parent-link">&larr; Back to DEFNS dashboard</a>
+        <h1>Accessibility Statement</h1>
+        <p class="subtitle">
+          Our commitment to making the Debris Flow Early Notification System
+          usable for everyone.
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <main class="doc-body" id="main" role="main">
+
+    <h2>Standard we target</h2>
+    <p>
+      The DEFNS dashboard targets <strong>WCAG 2.1 Level AA</strong>
+      conformance, the standard most commonly referenced for compliance
+      with the Americans with Disabilities Act (ADA) and Section 508 of the
+      U.S. Rehabilitation Act.
+    </p>
+
+    <h2>What we&rsquo;ve done</h2>
+
+    <h3>Perceivable</h3>
+    <ul>
+      <li>All text has a contrast ratio of at least 4.5:1 against its
+          background (large text 3:1).</li>
+      <li>Precipitation categories are encoded with both color and text
+          labels, so the dashboard remains usable for users with any form
+          of color vision deficiency.</li>
+      <li>The interactive map is supplemented by an accessible HTML table
+          (&ldquo;Flagged debris flow zones&rdquo;), which carries the same
+          information in a screen-reader-readable form.</li>
+      <li>All images have meaningful alternative text.</li>
+    </ul>
+
+    <h3>Operable</h3>
+    <ul>
+      <li>All interactive controls (sliders, radio buttons, checkboxes,
+          buttons) are reachable and operable with a keyboard alone.</li>
+      <li>A &ldquo;Skip to alerts table&rdquo; link is available at the top
+          of every page for keyboard users.</li>
+      <li>Focus is always visible: a high-contrast gold outline indicates
+          the currently focused element.</li>
+      <li>Auto-refresh can be paused via the &ldquo;Auto-refresh&rdquo;
+          checkbox in the sidebar.</li>
+      <li>Interactive targets meet the 44&times;44 pixel minimum size for
+          comfortable use on touch devices.</li>
+    </ul>
+
+    <h3>Understandable</h3>
+    <ul>
+      <li>Each control has a clear label, and additional help text
+          explains technical terms like &ldquo;NDFD category.&rdquo;</li>
+      <li>The page language is declared as English; consistent navigation
+          and headings are used across pages.</li>
+    </ul>
+
+    <h3>Robust</h3>
+    <ul>
+      <li>The dashboard uses valid, semantic HTML5 (proper heading
+          hierarchy, table headers, form labels) so assistive technologies
+          can interpret it reliably.</li>
+      <li>Dynamic updates (e.g., alert counts changing after a refresh)
+          use ARIA live regions to be announced by screen readers without
+          interrupting the user.</li>
+    </ul>
+
+    <h2>Known limitations</h2>
+    <ul>
+      <li>The Leaflet map itself is a visual aid. Although the map
+          container has descriptive labels, screen-reader users should
+          rely on the alerts table for canonical data about which zones
+          are flagged.</li>
+      <li>The NC Geological Survey debris flow reference layer is loaded
+          from an external ArcGIS Online service; if that service is slow,
+          some data may take time to appear. The alert detection itself
+          does not depend on this layer rendering.</li>
+    </ul>
+
+    <h2>Report an accessibility issue</h2>
+    <p>
+      If you encounter an accessibility barrier on this site, please
+      contact the NC Geological Survey landslides team
+      (<a href="https://landslidesncgs.com/">landslidesncgs.com</a>) and
+      describe the problem so we can address it. We aim to respond to
+      accessibility reports within 10 business days.
+    </p>
+
+    <h2>Last reviewed</h2>
+    <p>
+      This statement reflects the dashboard&rsquo;s status as of its
+      initial launch. It will be updated when significant changes are
+      made to the site.
+    </p>
+
+  </main>
+
+  <footer class="app-footer" role="contentinfo">
+    <p>
+      <a href="index.html">&larr; Back to DEFNS dashboard</a> &middot;
+      <a href="https://landslidesncgs.com/">NCGS landslides home</a>
+    </p>
+  </footer>
+
+</body>
+</html>

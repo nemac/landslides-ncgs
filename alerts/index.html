@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DEFNS: Debris Flow Early Notification System | NC Geological Survey</title>
+  <meta name="description"
+        content="Real-time debris flow alerts for Western North Carolina,
+                 cross-referencing NWS precipitation forecasts and observed
+                 radar with the NC Geological Survey channelized debris flow model." />
+
+  <!-- Source Sans 3, matching landslidesncgs.com -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+
+  <!-- Leaflet (Phase 2 will wire this up; loading in Phase 1 only so the
+       map container has its baseline styles ready) -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <!-- Skip link: first interactive element on tab, lets keyboard and
+       screen-reader users jump past the header straight to the canonical
+       alerts data. Required for WCAG 2.4.1 (Bypass Blocks). -->
+  <a href="#alerts-table" class="skip-link">Skip to alerts table</a>
+
+  <!-- ====================================================================
+       HEADER
+       ==================================================================== -->
+  <header class="app-header" role="banner">
+    <div class="header-row">
+      <div class="logo">
+        <img src="https://landslidesncgs.com/assets/images/shared/ncgs-seal.png"
+             alt="North Carolina Geological Survey seal" />
+      </div>
+      <div class="header-text">
+        <a href="https://landslidesncgs.com/" class="parent-link">
+          &larr; Landslides in Western North Carolina
+        </a>
+        <h1>DEFNS: Debris Flow Early Notification System</h1>
+        <p class="subtitle" id="mode-subtitle">
+          Real-time precipitation forecast cross-referenced with the NC
+          Geological Survey channelized debris flow model. Alert raised when
+          any debris flow polygon falls inside a precipitation polygon at or
+          above the configured rainfall threshold.
+        </p>
+      </div>
+    </div>
+
+    <!-- Metrics row. Each metric is a <dl> for semantic key/value pairing.
+         The "Zones Flagged" metric uses aria-live so screen readers
+         announce changes (e.g. when refresh produces a different count). -->
+    <div class="metrics" role="region" aria-label="Current status metrics">
+
+      <dl class="metric" aria-labelledby="m1-label">
+        <dt class="label" id="m1-label">Forecast Issued</dt>
+        <dd>
+          <span class="value" id="metric-issued-time">--:-- UTC</span>
+          <span class="sub" id="metric-issued-date">awaiting data</span>
+        </dd>
+      </dl>
+
+      <dl class="metric" aria-labelledby="m2-label">
+        <dt class="label" id="m2-label">Window</dt>
+        <dd>
+          <span class="value" id="metric-window">-- hr</span>
+          <span class="sub" id="metric-window-sub">awaiting data</span>
+        </dd>
+      </dl>
+
+      <dl class="metric" aria-labelledby="m3-label">
+        <dt class="label" id="m3-label">Threshold</dt>
+        <dd>
+          <span class="value" id="metric-threshold">&ge; --</span>
+          <span class="sub" id="metric-threshold-sub">NDFD category --</span>
+        </dd>
+      </dl>
+
+      <dl class="metric" id="metric-flagged-card" aria-labelledby="m4-label">
+        <dt class="label" id="m4-label">Zones Flagged</dt>
+        <dd>
+          <span class="value" id="metric-flagged"
+                aria-live="polite" aria-atomic="true">--</span>
+          <span class="sub" id="metric-flagged-sub">awaiting data</span>
+        </dd>
+      </dl>
+
+    </div>
+  </header>
+
+  <!-- ====================================================================
+       MAIN LAYOUT: sidebar + content
+       ==================================================================== -->
+  <div class="app-body">
+
+    <!-- ================================================================
+         SIDEBAR
+         ================================================================ -->
+    <aside class="sidebar" role="complementary" aria-label="Dashboard settings">
+
+      <h2 class="sidebar-heading">Settings</h2>
+
+      <!-- Detection mode (NDFD forecast vs MRMS observed) -->
+      <fieldset class="control-group">
+        <legend>Detect alerts from</legend>
+        <div class="radio-row">
+          <input type="radio" id="mode-ndfd" name="detection-mode"
+                 value="ndfd" checked />
+          <label for="mode-ndfd">NWS forecast (NDFD)</label>
+        </div>
+        <div class="radio-row">
+          <input type="radio" id="mode-mrms" name="detection-mode"
+                 value="mrms" />
+          <label for="mode-mrms">Current radar (MRMS 1-hour)</label>
+        </div>
+      </fieldset>
+
+      <!-- Threshold slider -->
+      <div class="control-group">
+        <label for="threshold-slider" class="control-label">
+          Alert threshold (NDFD category)
+        </label>
+        <input type="range" id="threshold-slider"
+               min="0" max="19" step="1" value="11"
+               aria-describedby="threshold-help threshold-readout" />
+        <div class="threshold-readout" id="threshold-readout">
+          &rarr; alert when accumulation &ge;
+          <strong id="threshold-readout-label">5&ndash;6&Prime;</strong>
+        </div>
+        <p class="control-help" id="threshold-help">
+          NDFD bins precipitation into 20 categories (0 = trace,
+          19 = &gt; 20&Prime;). Alert is raised when any debris flow polygon
+          intersects a precipitation polygon at or above this category.
+        </p>
+      </div>
+
+      <!-- Window selector (only relevant in NDFD mode) -->
+      <div class="control-group" id="window-control-group">
+        <label for="window-select" class="control-label">Forecast window</label>
+        <select id="window-select">
+          <option value="6">6 hours</option>
+          <option value="12" selected>12 hours</option>
+          <option value="18">18 hours</option>
+          <option value="24">24 hours</option>
+          <option value="48">48 hours</option>
+          <option value="72">72 hours</option>
+        </select>
+      </div>
+      <p class="control-help mode-only-mrms" id="mrms-window-note" hidden>
+        MRMS mode uses a fixed 1-hour observed accumulation.
+      </p>
+
+      <hr class="sidebar-divider" />
+
+      <!-- Map layer toggles -->
+      <h3 class="sidebar-subheading">Map Layers</h3>
+      <fieldset class="control-group">
+        <legend class="sr-only">Map layer visibility</legend>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="layer-precip" checked />
+          <label for="layer-precip">
+            <span id="layer-precip-label">Forecast precipitation</span>
+          </label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="layer-radar" />
+          <label for="layer-radar">NEXRAD radar (current)</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="layer-alerts" checked />
+          <label for="layer-alerts">Flagged debris flow zones</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="layer-reference" />
+          <label for="layer-reference">
+            NCGS debris flow reference layer
+            <span class="control-help-inline">(loads slowly when zoomed out)</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <hr class="sidebar-divider" />
+
+      <!-- Precipitation legend (collapsed by default) -->
+      <details class="legend-details">
+        <summary>Precipitation legend (NDFD categories)</summary>
+        <ol class="legend-list" id="legend-list">
+          <!-- populated by JS in Phase 2; static placeholder for Phase 1 -->
+          <li><span class="legend-swatch" style="background:#7E22CE"
+                aria-hidden="true"></span>cat 0 &middot; 0.01&ndash;0.10&Prime;</li>
+          <li><span class="legend-swatch" style="background:#A855F7"
+                aria-hidden="true"></span>cat 5 &middot; 1&ndash;1.5&Prime;</li>
+          <li><span class="legend-swatch" style="background:#EAB308"
+                aria-hidden="true"></span>cat 11 &middot; 5&ndash;6&Prime;</li>
+          <li><span class="legend-swatch" style="background:#C04C00"
+                aria-hidden="true"></span>cat 19 &middot; &gt; 20&Prime;</li>
+        </ol>
+      </details>
+
+      <hr class="sidebar-divider" />
+
+      <!-- Refresh control -->
+      <div class="control-group">
+        <button type="button" id="manual-refresh" class="btn-primary">
+          Refresh now
+        </button>
+        <p class="control-help">
+          Data refreshes automatically every 15 minutes.
+          <span id="last-updated" aria-live="polite">Last updated: --</span>
+        </p>
+        <div class="checkbox-row">
+          <input type="checkbox" id="auto-refresh-toggle" checked />
+          <label for="auto-refresh-toggle">Auto-refresh</label>
+        </div>
+      </div>
+
+      <!-- Footer links -->
+      <hr class="sidebar-divider" />
+      <p class="sidebar-footer-links">
+        <a href="accessibility.html">Accessibility statement</a><br />
+        <a href="https://landslidesncgs.com/" target="_blank" rel="noopener">
+          NCGS landslides home &nearr;
+        </a>
+      </p>
+
+    </aside>
+
+    <!-- ================================================================
+         MAIN CONTENT (map + alerts table)
+         ================================================================ -->
+    <main class="content" role="main" id="main-content">
+
+      <!-- Map. aria-hidden because the map is a visual aid; canonical
+           data lives in the alerts table below, which IS accessible. -->
+      <section class="map-section" aria-label="Interactive map">
+        <div id="map" role="img"
+             aria-label="Map of Western North Carolina showing precipitation
+                        polygons and debris flow zones"></div>
+      </section>
+
+      <!-- Alerts table - the canonical, accessible representation of
+           "what's flagged." Even if the map renders nothing for a user
+           (e.g. screen reader, low vision), this table conveys all info. -->
+      <section class="alerts-section" aria-labelledby="alerts-heading">
+        <div class="alerts-section-header">
+          <h2 id="alerts-heading">Flagged debris flow zones</h2>
+          <p id="alerts-summary" class="alerts-summary"
+             aria-live="polite" aria-atomic="true">
+            Awaiting data&hellip;
+          </p>
+        </div>
+
+        <div class="table-wrapper" tabindex="0"
+             aria-label="Scrollable alerts table">
+          <table id="alerts-table">
+            <caption class="sr-only">
+              Debris flow polygons intersecting precipitation polygons at or
+              above the configured threshold. Sortable by clicking column
+              headers.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col" id="col-id">Polygon ID</th>
+                <th scope="col" id="col-county">County</th>
+                <th scope="col" id="col-cat">Precip category</th>
+                <th scope="col" id="col-rain">Forecast / observed</th>
+                <th scope="col" id="col-area">Area (acres)</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-tbody">
+              <tr>
+                <td colspan="5" class="empty-row">
+                  Phase 1 layout preview. Live data wired in Phase 3.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Site footer -->
+  <footer class="app-footer" role="contentinfo">
+    <p>
+      Data sources: NOAA NDFD precipitation forecast &middot;
+      NOAA MRMS multi-radar QPE via Iowa Environmental Mesonet &middot;
+      NC Geological Survey channelized debris flow model.
+    </p>
+    <p>
+      Built by NC Geological Survey staff for landslide hazard awareness.
+      Not a substitute for official NWS warnings.
+    </p>
+  </footer>
+
+</body>
+</html>
