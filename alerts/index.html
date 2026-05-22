@@ -254,44 +254,48 @@
       </section>
 
       <!-- Alerts table - the canonical, accessible representation of
-           "what's flagged." Even if the map renders nothing for a user
-           (e.g. screen reader, low vision), this table conveys all info. -->
-      <section class="alerts-section" aria-labelledby="alerts-heading">
-        <div class="alerts-section-header">
+           "what's flagged." Wrapped in <details> so users can collapse it
+           and reclaim screen real estate for the map; the summary bar
+           keeps the alert count visible even when collapsed. -->
+      <details class="alerts-section" id="alerts-disclosure" open>
+        <summary aria-controls="alerts-body">
+          <span class="alerts-disclosure-icon" aria-hidden="true"></span>
           <h2 id="alerts-heading">Flagged debris flow zones</h2>
           <p id="alerts-summary" class="alerts-summary"
              aria-live="polite" aria-atomic="true">
             Awaiting data&hellip;
           </p>
-        </div>
+        </summary>
 
-        <div class="table-wrapper" tabindex="0"
-             aria-label="Scrollable alerts table">
-          <table id="alerts-table">
-            <caption class="sr-only">
-              Debris flow polygons intersecting precipitation polygons at or
-              above the configured threshold. Sortable by clicking column
-              headers.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col" id="col-id">Polygon ID</th>
-                <th scope="col" id="col-county">County</th>
-                <th scope="col" id="col-cat">Precip category</th>
-                <th scope="col" id="col-rain">Forecast / observed</th>
-                <th scope="col" id="col-area">Area (acres)</th>
-              </tr>
-            </thead>
-            <tbody id="alerts-tbody">
-              <tr>
-                <td colspan="5" class="empty-row">
-                  Phase 1 layout preview. Live data wired in Phase 3.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="alerts-body" id="alerts-body">
+          <div class="table-wrapper" tabindex="0"
+               aria-label="Scrollable alerts table">
+            <table id="alerts-table">
+              <caption class="sr-only">
+                Debris flow polygons intersecting precipitation polygons at or
+                above the configured threshold. Sorted by precipitation
+                category, highest first.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" id="col-id">Polygon ID</th>
+                  <th scope="col" id="col-county">County</th>
+                  <th scope="col" id="col-cat">Precip category</th>
+                  <th scope="col" id="col-rain">Forecast / observed</th>
+                  <th scope="col" id="col-area">Area (acres)</th>
+                </tr>
+              </thead>
+              <tbody id="alerts-tbody">
+                <tr>
+                  <td colspan="5" class="empty-row">
+                    Loading data&hellip;
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </section>
+      </details>
 
     </main>
   </div>

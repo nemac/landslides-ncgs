@@ -74,8 +74,55 @@
     MAP.init();
     _wireEvents();
     _syncControlsFromState();
-    refresh();                       // initial render with current state
+
+    // Phase 3a: try to fetch live data files. If they're missing (e.g.
+    // refresh.py hasn't been run yet) or fail to load, fall back to the
+    // mock fixtures so the page is always functional.
+    _loadLiveData().then(refresh);
+
     _startAutoRefresh();
+  }
+
+  // =====================================================================
+  // LIVE DATA FETCH (Phase 3a)
+  // =====================================================================
+  // Replaces what was hardcoded in mock-data.js. We mutate MOCK in place
+  // because everything downstream (refresh(), _currentDataset()) reads
+  // from MOCK.NDFD_FORECAST and MOCK.MRMS_OBSERVED - so a successful fetch
+  // transparently upgrades the dashboard from mock to live data.
+  // =====================================================================
+  function _loadLiveData() {
+    return Promise.allSettled([
+      _fetchInto('data/forecast.geojson', 'NDFD_FORECAST'),
+      _fetchInto('data/observed.geojson', 'MRMS_OBSERVED')
+    ]).then(function (results) {
+      const ndfdOK = results[0].status === 'fulfilled' && results[0].value;
+      const mrmsOK = results[1].status === 'fulfilled' && results[1].value;
+      if (ndfdOK && mrmsOK) {
+        console.log('[DEFNS] Live data loaded (NDFD + MRMS).');
+      } else if (ndfdOK || mrmsOK) {
+        const which = ndfdOK ? 'MRMS' : 'NDFD';
+        console.warn(`[DEFNS] ${which} fetch failed; using mock for that source.`);
+      } else {
+        console.warn('[DEFNS] No live data; using mock fixtures for both sources.');
+      }
+    });
+  }
+
+  function _fetchInto(url, mockKey) {
+    return fetch(url, { cache: 'no-cache' }).then(function (resp) {
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+      return resp.json();
+    }).then(function (geojson) {
+      if (!geojson || !geojson.type || geojson.type !== 'FeatureCollection') {
+        throw new Error(`${url}: not a FeatureCollection`);
+      }
+      MOCK[mockKey] = geojson;        // upgrade the dataset in place
+      return true;
+    }).catch(function (err) {
+      console.warn(`[DEFNS] ${url} fetch failed: ${err.message}`);
+      return false;
+    });
   }
 
   // =====================================================================
@@ -117,11 +164,25 @@
     });
 
     // Refresh
-    els.manualRefresh.addEventListener('click', refresh);
+    els.manualRefresh.addEventListener('click', _autoRefreshTick);
     els.autoRefreshToggle.addEventListener('change', function () {
       if (this.checked) _startAutoRefresh();
       else              _stopAutoRefresh();
     });
+
+    // When the alerts disclosure opens/closes, Leaflet's view of its
+    // container dimensions becomes stale. invalidateSize() forces it to
+    // re-measure and redraw tiles cleanly. Use the native 'toggle' event.
+    const disclosure = document.getElementById('alerts-disclosure');
+    if (disclosure) {
+      disclosure.addEventListener('toggle', function () {
+        const map = MAP._internalMap && MAP._internalMap();
+        if (map) {
+          // Wait one frame for CSS to settle before measuring
+          requestAnimationFrame(function () { map.invalidateSize(); });
+        }
+      });
+    }
   }
 
   function _syncControlsFromState() {
@@ -258,9 +319,15 @@
   // =====================================================================
   // AUTO-REFRESH
   // =====================================================================
+  // On the auto-refresh tick (or when the user clicks "Refresh now"), we
+  // re-fetch the live data files. The frontend cache-busts via `cache: 'no-cache'`
+  // in _fetchInto, so we always see the latest cron output.
+  function _autoRefreshTick() {
+    _loadLiveData().then(refresh);
+  }
   function _startAutoRefresh() {
     _stopAutoRefresh();
-    state.autoRefreshTimer = setInterval(refresh, CFG.AUTO_REFRESH_MS);
+    state.autoRefreshTimer = setInterval(_autoRefreshTick, CFG.AUTO_REFRESH_MS);
   }
   function _stopAutoRefresh() {
     if (state.autoRefreshTimer) {
