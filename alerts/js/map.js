@@ -2,23 +2,21 @@
  * map.js — Leaflet map module
  *
  * Public surface (exported on window.DEFNS_MAP):
- *   init()                    -> create the map, panes, basemap selector
- *   setPrecip(geojson, label) -> render NDFD or MRMS polygons
- *   clearPrecip()
- *   setAlerts(geojson)        -> render flagged debris flow polygons
- *   clearAlerts()
- *   setRadarVisible(bool)     -> toggle the NEXRAD overlay
- *   setReferenceVisible(bool) -> toggle the NCGS debris flow reference layer
- *   setPrecipVisible(bool)
+ *   init()                       -> create the map, panes, basemap selector
+ *   setForecast(geojson)         -> render NDFD forecast polygons
+ *   setObserved(geojson)         -> render MRMS observed polygons
+ *   setForecastVisible(bool)
+ *   setObservedVisible(bool)
+ *   setAlerts(geojson)
  *   setAlertsVisible(bool)
+ *   setRadarVisible(bool)
+ *   setReferenceVisible(bool)
  *
  * Lessons encoded here from the Streamlit version:
  *   - Each non-basemap layer goes in its own pane with explicit zIndex.
- *     Sharing tilePane with basemaps caused invisible radar tiles under
- *     the Satellite basemap. See PANE_ZINDEX in config.js.
+ *     See PANE_ZINDEX in config.js.
  *   - Radar uses retry-until-sized + ResizeObserver to survive iframe-style
- *     zero-dimension initial states. (Less critical here without iframe,
- *     but cheap insurance.)
+ *     zero-dimension initial states.
  * ========================================================================= */
 
 window.DEFNS_MAP = (function () {
@@ -29,7 +27,8 @@ window.DEFNS_MAP = (function () {
   let map = null;
   let panes = {};
   let layers = {
-    precip:    null,
+    forecast:  null,
+    observed:  null,
     radar:     null,
     alerts:    null,
     reference: null
@@ -40,8 +39,6 @@ window.DEFNS_MAP = (function () {
     map = L.map('map', {
       center: CFG.MAP_CENTER,
       zoom:   CFG.MAP_ZOOM,
-      // Keyboard nav (arrow keys pan, +/- zoom) is on by default in Leaflet.
-      // We also set keyboardPanDelta explicitly so it's consistent.
       keyboard:        true,
       keyboardPanDelta: 80,
       zoomControl:     true
@@ -53,7 +50,7 @@ window.DEFNS_MAP = (function () {
       const pane = map.createPane(name + 'Pane');
       pane.style.zIndex = z;
       // overlay panes shouldn't intercept clicks meant for the map itself;
-      // disable pointer-events except for the alerts pane which has popups.
+      // disable pointer-events except for the alerts pane (popups).
       if (name !== 'alerts') {
         pane.style.pointerEvents = 'none';
       }
@@ -81,19 +78,18 @@ window.DEFNS_MAP = (function () {
         { attribution: 'Tiles \u00a9 Esri', maxZoom: 19 }
       )
     };
-    // Light by default - matches dashboard tone, doesn't fight the precip colors
     basemaps['Light (CartoDB Positron)'].addTo(map);
     L.control.layers(basemaps, null, { position: 'topright', collapsed: true })
       .addTo(map);
   }
 
-  // ---- Precipitation polygons (NDFD or MRMS) ------------------------------
-  function setPrecip(geojson, ariaLabel) {
-    clearPrecip();
-    if (!geojson || !geojson.features || !geojson.features.length) return;
-
-    layers.precip = L.geoJSON(geojson, {
-      pane: 'precipPane',
+  // ---- Generic precip polygon renderer ------------------------------------
+  // Used by both setForecast and setObserved. Same color ramp; the only
+  // differences are the pane (z-order) and a tooltip prefix.
+  function _renderPrecip(geojson, paneKey, sourceLabel) {
+    if (!geojson || !geojson.features || !geojson.features.length) return null;
+    return L.geoJSON(geojson, {
+      pane: paneKey + 'Pane',
       style: function (feature) {
         const cat = feature.properties.category;
         return {
@@ -107,41 +103,52 @@ window.DEFNS_MAP = (function () {
       onEachFeature: function (feature, layer) {
         const p = feature.properties || {};
         layer.bindTooltip(
-          `Category ${p.category} \u00b7 ${p.label || ''}`,
+          `${sourceLabel} \u00b7 cat ${p.category} \u00b7 ${p.label || ''}`,
           { sticky: true, direction: 'top' }
         );
       }
-    }).addTo(map);
-
-    // Update the screen-reader description of the layer
-    if (ariaLabel) {
-      const el = document.getElementById('layer-precip-label');
-      if (el) el.textContent = ariaLabel;
-    }
+    });
   }
 
-  function clearPrecip() {
-    if (layers.precip) {
-      map.removeLayer(layers.precip);
-      layers.precip = null;
+  function setForecast(geojson) {
+    if (layers.forecast) {
+      map.removeLayer(layers.forecast);
+      layers.forecast = null;
     }
+    layers.forecast = _renderPrecip(geojson, 'forecast', 'NDFD');
+    if (layers.forecast) layers.forecast.addTo(map);
+  }
+  function setForecastVisible(visible) {
+    if (!layers.forecast) return;
+    if (visible && !map.hasLayer(layers.forecast)) layers.forecast.addTo(map);
+    if (!visible && map.hasLayer(layers.forecast))  map.removeLayer(layers.forecast);
   }
 
-  function setPrecipVisible(visible) {
-    if (!layers.precip) return;
-    if (visible && !map.hasLayer(layers.precip)) layers.precip.addTo(map);
-    if (!visible && map.hasLayer(layers.precip))  map.removeLayer(layers.precip);
+  function setObserved(geojson) {
+    if (layers.observed) {
+      map.removeLayer(layers.observed);
+      layers.observed = null;
+    }
+    layers.observed = _renderPrecip(geojson, 'observed', 'MRMS');
+    if (layers.observed) layers.observed.addTo(map);
+  }
+  function setObservedVisible(visible) {
+    if (!layers.observed) return;
+    if (visible && !map.hasLayer(layers.observed)) layers.observed.addTo(map);
+    if (!visible && map.hasLayer(layers.observed))  map.removeLayer(layers.observed);
   }
 
   // ---- Flagged debris flow polygons (alerts) ------------------------------
   function setAlerts(geojson) {
-    clearAlerts();
+    if (layers.alerts) {
+      map.removeLayer(layers.alerts);
+      layers.alerts = null;
+    }
     if (!geojson || !geojson.features || !geojson.features.length) return;
 
     layers.alerts = L.geoJSON(geojson, {
       pane: 'alertsPane',
       style: {
-        // Orange to match the metric card and CTA palette
         color:       '#C04C00',
         fillColor:   '#C04C00',
         weight:      2,
@@ -159,13 +166,6 @@ window.DEFNS_MAP = (function () {
         );
       }
     }).addTo(map);
-  }
-
-  function clearAlerts() {
-    if (layers.alerts) {
-      map.removeLayer(layers.alerts);
-      layers.alerts = null;
-    }
   }
 
   function setAlertsVisible(visible) {
@@ -194,9 +194,6 @@ window.DEFNS_MAP = (function () {
   // ---- NCGS reference layer (debris flows from AGOL) ----------------------
   function setReferenceVisible(visible) {
     if (visible && !layers.reference) {
-      // esri-leaflet renders FeatureServer features client-side. Slow when
-      // zoomed out (it queries everything in view), but works without
-      // republishing the NCGS data.
       if (typeof L.esri === 'undefined') {
         console.warn(
           '[DEFNS] esri-leaflet not loaded; NCGS reference layer unavailable'
@@ -223,10 +220,11 @@ window.DEFNS_MAP = (function () {
   // ---- Public API ---------------------------------------------------------
   return {
     init,
-    setPrecip, clearPrecip, setPrecipVisible,
-    setAlerts, clearAlerts, setAlertsVisible,
+    setForecast, setForecastVisible,
+    setObserved, setObservedVisible,
+    setAlerts,   setAlertsVisible,
     setRadarVisible,
     setReferenceVisible,
-    _internalMap: () => map     // expose for debugging only
+    _internalMap: () => map     // expose for app.js (invalidateSize) and Phase B
   };
 })();

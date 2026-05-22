@@ -101,11 +101,20 @@ window.DEFNS_CONFIG = (function () {
   // Leaflet's default tilePane is 200. Anything we want above basemaps must
   // be in its own pane with a higher zIndex. This is what saved us from the
   // "radar tiles loaded but invisible under satellite basemap" bug.
+  //
+  // Order from bottom to top, matching the sidebar layer-toggle order (#7):
+  //   NDFD forecast precipitation  -> bottom (forecast is conceptual; show first)
+  //   MRMS observed precipitation  -> above forecast
+  //   NEXRAD radar                 -> above precip polygons
+  //   Flagged debris flow zones    -> alerts on top (highest priority visual)
+  //   NCGS reference layer         -> on top of alerts so user can see all
+  //                                   debris flows when reference toggled on
   const PANE_ZINDEX = {
-    radar:           400,    // NEXRAD radar overlay
-    precip:          410,    // NDFD/MRMS precipitation polygons
-    ncgs_reference:  420,    // NCGS debris flow reference layer
-    alerts:          430     // flagged debris flow zones (highest priority)
+    forecast:        400,    // NDFD forecast polygons
+    observed:        410,    // MRMS observed polygons
+    radar:           420,    // NEXRAD radar overlay
+    alerts:          430,    // flagged debris flow zones
+    ncgs_reference:  440     // NCGS debris flow reference (above alerts when on)
   };
 
   return {

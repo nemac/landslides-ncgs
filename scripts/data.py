@@ -158,18 +158,20 @@ def fetch_precip_forecast(
 ) -> tuple[gpd.GeoDataFrame, datetime, datetime]:
     """Fetch precipitation polygons for the requested forecast window.
 
-    Fetches CONUS-wide. The intersection with WNC-only debris flow polygons
-    naturally constrains alerts to Western NC; the broader fetch is so the
-    display layer can show forecast conditions across the country.
+    NDFD's "Accumulation by Time" service stores 6-hour accumulation
+    periods (per the NWS NDFD spec, periods are 6 hours long beginning
+    and ending at 0000, 0600, 1200, 1800 UTC). To cover a longer
+    window_hours, we return ALL 6-hour periods whose accumulation window
+    overlaps [now, now + window_hours]. The client-side intersection logic
+    takes the MAX category across overlapping polygons, so duplicates
+    don't break alerts.
 
     Parameters
     ----------
     window_hours : int
-        Hours past the forecast issuance to take the accumulation snapshot
-        from. Must be a positive multiple of 6.
+        Hours past now to take the accumulation snapshot. Multiple of 6.
     min_category : int
-        Lowest NDFD precipitation category to include. See config.py for
-        the category -> rainfall range mapping.
+        Lowest NDFD precipitation category to include (0-19).
 
     Returns
     -------
@@ -177,46 +179,51 @@ def fetch_precip_forecast(
         Features above the threshold across CONUS.
         Columns: category, label, fromdate, todate, geometry.
     fromdate : datetime (UTC)
-        When the forecast cycle was issued.
+        Now - the start of our query window.
     todate : datetime (UTC)
-        End of the accumulation window we requested.
+        End of the accumulation window we requested (now + window_hours).
     """
     if window_hours <= 0 or window_hours % 6 != 0:
         raise ValueError(
             f"window_hours must be a positive multiple of 6 (got {window_hours})"
         )
 
+    now_dt = datetime.now(timezone.utc)
+    end_dt = now_dt + timedelta(hours=window_hours)
+
     print(f"Fetching NDFD precipitation forecast "
-          f"(window={window_hours}h, min category={min_category}, CONUS)...")
+          f"(window={window_hours}h, min category={min_category})...")
+    print(f"  query window from: {now_dt:%Y-%m-%d %H:%M UTC}")
+    print(f"  query window to:   {end_dt:%Y-%m-%d %H:%M UTC}")
 
-    # 1. discover the current forecast cycle
-    fromdate_ms = _query_latest_forecast_issuance()
-    todate_ms = fromdate_ms + window_hours * 3600 * 1000
-
-    fromdate_dt = datetime.fromtimestamp(fromdate_ms / 1000, tz=timezone.utc)
-    todate_dt = datetime.fromtimestamp(todate_ms / 1000, tz=timezone.utc)
-    print(f"  forecast issued  : {fromdate_dt:%Y-%m-%d %H:%M UTC}")
-    print(f"  accumulation thru: {todate_dt:%Y-%m-%d %H:%M UTC}")
-
-    # 2. build the WHERE clause. We restrict to region='conus' so we don't
-    #    pull Alaska / Hawaii / PR polygons (they're outside our area of
-    #    interest and they balloon the response). NDFD `region` values are
-    #    lowercase.
-    fromdate_lit = fromdate_dt.strftime("%Y-%m-%d %H:%M:%S")
-    todate_lit = todate_dt.strftime("%Y-%m-%d %H:%M:%S")
+    # Build the WHERE clause. Overlap test: a polygon's accumulation
+    # period [fromdate, todate] overlaps [now, end] iff
+    #     fromdate < end  AND  todate > now
+    # ArcGIS REST API supports `timestamp 'YYYY-MM-DD HH:MM:SS'` literals
+    # for date/time field comparisons.
     where = (
-        f"fromdate = date '{fromdate_lit}' "
-        f"AND todate = date '{todate_lit}' "
-        f"AND category >= {min_category} "
-        f"AND region = 'conus'"
+        f"fromdate < timestamp '{end_dt:%Y-%m-%d %H:%M:%S}' "
+        f"AND todate > timestamp '{now_dt:%Y-%m-%d %H:%M:%S}' "
+        f"AND category >= {min_category}"
     )
 
-    # 3. no spatial filter - return all CONUS polygons above threshold
+    # Server-side spatial filter to the WNC bbox. Without this, busy CONUS
+    # forecasts can return >2000 features and hit the ArcGIS maxRecordCount
+    # cap, truncating WNC features arbitrarily. Filtering at the service
+    # cuts the response to just our area and keeps us well below the cap.
+    from config import WNC_BBOX
+    bbox_str = ",".join(str(c) for c in WNC_BBOX)
+
     params = {
         "where": where,
         "outFields": "category,label,fromdate,todate",
         "outSR": 4326,
         "f": "geojson",
+        "returnGeometry": "true",
+        "geometry":      bbox_str,
+        "geometryType":  "esriGeometryEnvelope",
+        "inSR":          "4326",
+        "spatialRel":    "esriSpatialRelIntersects",
     }
     r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query",
                      params=params, timeout=90)
@@ -224,7 +231,7 @@ def fetch_precip_forecast(
     page = r.json()
 
     feats = page.get("features", [])
-    print(f"  -> {len(feats)} precipitation polygons above threshold (CONUS)")
+    print(f"  -> {len(feats)} precipitation polygons above threshold (WNC bbox)")
 
     if not feats:
         gdf = gpd.GeoDataFrame(
@@ -235,7 +242,7 @@ def fetch_precip_forecast(
     else:
         gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
 
-    return gdf, fromdate_dt, todate_dt
+    return gdf, now_dt, end_dt
 
 
 # =============================================================================

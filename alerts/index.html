@@ -105,10 +105,30 @@
          ================================================================ -->
     <aside class="sidebar" role="complementary" aria-label="Dashboard settings">
 
-      <h2 class="sidebar-heading">Settings</h2>
+      <div class="sidebar-heading-row">
+        <h2 class="sidebar-heading">Settings</h2>
+        <span class="help-icon" tabindex="0"
+              aria-label="Keyboard navigation instructions"
+              role="button"
+              aria-describedby="kbd-tooltip">?</span>
+        <div class="tooltip" id="kbd-tooltip" role="tooltip">
+          <strong>Keyboard navigation:</strong>
+          <ul>
+            <li><kbd>Tab</kbd> moves between controls</li>
+            <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> switch options within
+                radio groups</li>
+            <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> on the slider adjusts
+                threshold</li>
+            <li><kbd>Space</kbd> toggles checkboxes</li>
+            <li><kbd>Enter</kbd> activates buttons and links</li>
+            <li>On the map: arrow keys pan,
+                <kbd>+</kbd>/<kbd>&minus;</kbd> zoom</li>
+          </ul>
+        </div>
+      </div>
 
       <!-- Detection mode (NDFD forecast vs MRMS observed) -->
-      <fieldset class="control-group" aria-describedby="mode-kbd-hint">
+      <fieldset class="control-group">
         <legend>Detect alerts from</legend>
         <div class="radio-row">
           <input type="radio" id="mode-ndfd" name="detection-mode"
@@ -120,16 +140,16 @@
                  value="mrms" />
           <label for="mode-mrms">Current radar (MRMS 1-hour)</label>
         </div>
-        <p class="control-help kbd-hint" id="mode-kbd-hint">
-          Use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> arrow keys to switch
-          between options.
-        </p>
       </fieldset>
 
-      <!-- Threshold slider -->
+      <!-- Threshold slider. Label includes the active precip source name,
+           updated dynamically when the user switches detection mode. -->
       <div class="control-group">
         <label for="threshold-slider" class="control-label">
-          Alert threshold (NDFD category)
+          Alert threshold
+          <span class="control-label-suffix" id="threshold-source-label">
+            (NDFD)
+          </span>
         </label>
         <input type="range" id="threshold-slider"
                min="0" max="19" step="1" value="11"
@@ -139,10 +159,19 @@
           <strong id="threshold-readout-label">5&ndash;6&Prime;</strong>
         </div>
         <p class="control-help" id="threshold-help">
-          NDFD bins precipitation into 20 categories (0 = trace,
-          19 = &gt; 20&Prime;). Alert is raised when any debris flow polygon
-          intersects a precipitation polygon at or above this category.
+          Alert is raised when any debris flow polygon intersects a
+          precipitation polygon at or above this category.
         </p>
+
+        <!-- Metadata block - shows source + freshness for active mode -->
+        <dl class="source-meta" id="source-meta" aria-live="polite">
+          <dt>Source</dt>
+          <dd id="meta-source">awaiting data</dd>
+          <dt id="meta-time-label">Issued</dt>
+          <dd id="meta-time">--</dd>
+          <dt id="meta-extra-label" hidden></dt>
+          <dd id="meta-extra" hidden></dd>
+        </dl>
       </div>
 
       <!-- Window selector (only relevant in NDFD mode) -->
@@ -163,16 +192,23 @@
 
       <hr class="sidebar-divider" />
 
-      <!-- Map layer toggles -->
+      <!-- Map layer toggles. Order from #7:
+           NDFD forecast -> MRMS observed -> NEXRAD radar -> Flagged zones
+           -> Reference layer. The NDFD/MRMS visibility toggles are
+           independent of the detection-mode radio: you can be in NDFD
+           detection mode and still display MRMS observed for comparison. -->
       <h3 class="sidebar-subheading">Map Layers</h3>
       <fieldset class="control-group">
         <legend class="sr-only">Map layer visibility</legend>
 
         <div class="checkbox-row">
-          <input type="checkbox" id="layer-precip" checked />
-          <label for="layer-precip">
-            <span id="layer-precip-label">Forecast precipitation</span>
-          </label>
+          <input type="checkbox" id="layer-ndfd" checked />
+          <label for="layer-ndfd">NDFD forecast precipitation</label>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="layer-mrms" />
+          <label for="layer-mrms">MRMS observed precipitation</label>
         </div>
 
         <div class="checkbox-row">
@@ -196,19 +232,16 @@
 
       <hr class="sidebar-divider" />
 
-      <!-- Precipitation legend (collapsed by default) -->
-      <details class="legend-details">
-        <summary>Precipitation legend (NDFD categories)</summary>
+      <!-- Precipitation legend - populated by JS from PRECIP_LABELS +
+           PRECIP_COLORS in config.js. The current threshold gets an
+           arrow indicator on the left so users can see at a glance which
+           categories are "alerting" vs "below threshold."
+           Same legend works for NDFD and MRMS because they share the
+           20-category scale by design. -->
+      <details class="legend-details" open>
+        <summary>Precipitation legend</summary>
         <ol class="legend-list" id="legend-list">
-          <!-- populated by JS in Phase 2; static placeholder for Phase 1 -->
-          <li><span class="legend-swatch" style="background:#7E22CE"
-                aria-hidden="true"></span>cat 0 &middot; 0.01&ndash;0.10&Prime;</li>
-          <li><span class="legend-swatch" style="background:#A855F7"
-                aria-hidden="true"></span>cat 5 &middot; 1&ndash;1.5&Prime;</li>
-          <li><span class="legend-swatch" style="background:#EAB308"
-                aria-hidden="true"></span>cat 11 &middot; 5&ndash;6&Prime;</li>
-          <li><span class="legend-swatch" style="background:#C04C00"
-                aria-hidden="true"></span>cat 19 &middot; &gt; 20&Prime;</li>
+          <!-- Populated by JS - one <li> per category 0..19 -->
         </ol>
       </details>
 
@@ -268,20 +301,29 @@
         </summary>
 
         <div class="alerts-body" id="alerts-body">
+          <div class="alerts-toolbar">
+            <button type="button" id="export-csv" class="btn-secondary"
+                    aria-label="Download flagged zones as CSV">
+              <span aria-hidden="true">&darr;</span>
+              Export CSV
+            </button>
+          </div>
+
           <div class="table-wrapper" tabindex="0"
                aria-label="Scrollable alerts table">
             <table id="alerts-table">
               <caption class="sr-only">
                 Debris flow polygons intersecting precipitation polygons at or
                 above the configured threshold. Sorted by precipitation
-                category, highest first.
+                category, highest first. Click a row to zoom the map to
+                that polygon.
               </caption>
               <thead>
                 <tr>
                   <th scope="col" id="col-id">Polygon ID</th>
                   <th scope="col" id="col-county">County</th>
                   <th scope="col" id="col-cat">Precip category</th>
-                  <th scope="col" id="col-rain">Forecast / observed</th>
+                  <th scope="col" id="col-source">Source &middot; observed/issued</th>
                   <th scope="col" id="col-area">Area (acres)</th>
                 </tr>
               </thead>

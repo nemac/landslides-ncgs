@@ -26,16 +26,24 @@
     modeMrms:        $('mode-mrms'),
     thresholdSlider: $('threshold-slider'),
     thresholdLabel:  $('threshold-readout-label'),
+    thresholdSourceLabel: $('threshold-source-label'),
     windowSelect:    $('window-select'),
     windowGroup:     $('window-control-group'),
     mrmsWindowNote:  $('mrms-window-note'),
 
-    // Layer toggles
-    layerPrecip:    $('layer-precip'),
-    layerRadar:     $('layer-radar'),
-    layerAlerts:    $('layer-alerts'),
-    layerReference: $('layer-reference'),
-    layerPrecipLabel: $('layer-precip-label'),
+    // Source metadata block (under threshold help text)
+    metaSource:      $('meta-source'),
+    metaTime:        $('meta-time'),
+    metaTimeLabel:   $('meta-time-label'),
+    metaExtra:       $('meta-extra'),
+    metaExtraLabel:  $('meta-extra-label'),
+
+    // Layer toggles (#2 + #7 reordered)
+    layerNdfd:       $('layer-ndfd'),
+    layerMrms:       $('layer-mrms'),
+    layerRadar:      $('layer-radar'),
+    layerAlerts:     $('layer-alerts'),
+    layerReference:  $('layer-reference'),
 
     // Refresh
     manualRefresh:    $('manual-refresh'),
@@ -54,9 +62,13 @@
     metricFlaggedSub:   $('metric-flagged-sub'),
     metricFlaggedCard:  $('metric-flagged-card'),
 
-    // Alerts table
+    // Alerts table + export
     alertsTbody:    $('alerts-tbody'),
-    alertsSummary: $('alerts-summary')
+    alertsSummary:  $('alerts-summary'),
+    exportCsvBtn:   $('export-csv'),
+
+    // Legend
+    legendList:     $('legend-list')
   };
 
   // ---- State --------------------------------------------------------------
@@ -72,15 +84,120 @@
   // =====================================================================
   function init() {
     MAP.init();
+    _buildLegend();          // populate 20-category legend
     _wireEvents();
     _syncControlsFromState();
+    _updateLegendThreshold();
 
-    // Phase 3a: try to fetch live data files. If they're missing (e.g.
-    // refresh.py hasn't been run yet) or fail to load, fall back to the
-    // mock fixtures so the page is always functional.
     _loadLiveData().then(refresh);
-
     _startAutoRefresh();
+  }
+
+  // =====================================================================
+  // LEGEND - build once, then update the threshold-arrow marker as needed
+  // =====================================================================
+  function _buildLegend() {
+    if (!els.legendList) return;
+    const frag = document.createDocumentFragment();
+    for (let cat = 0; cat <= 19; cat++) {
+      const li = document.createElement('li');
+      li.dataset.cat = String(cat);
+
+      const arrow = document.createElement('span');
+      arrow.className = 'legend-arrow';
+      arrow.setAttribute('aria-hidden', 'true');
+      // text placeholder; updated by _updateLegendThreshold
+      arrow.textContent = '';
+
+      const swatch = document.createElement('span');
+      swatch.className = 'legend-swatch';
+      swatch.setAttribute('aria-hidden', 'true');
+      swatch.style.background = CFG.PRECIP_COLORS[cat] || '#888';
+
+      const text = document.createElement('span');
+      text.className = 'legend-text';
+      text.textContent = `cat ${cat} \u00b7 ${CFG.PRECIP_LABELS[cat]}`;
+
+      li.appendChild(arrow);
+      li.appendChild(swatch);
+      li.appendChild(text);
+      frag.appendChild(li);
+    }
+    els.legendList.innerHTML = '';
+    els.legendList.appendChild(frag);
+  }
+
+  function _updateLegendThreshold() {
+    if (!els.legendList) return;
+    const lis = els.legendList.querySelectorAll('li');
+    lis.forEach(function (li) {
+      const cat = Number(li.dataset.cat);
+      const arrow = li.querySelector('.legend-arrow');
+      li.classList.toggle('at-or-above', cat >= state.threshold);
+      li.classList.toggle('current',     cat === state.threshold);
+      if (arrow) arrow.textContent = (cat === state.threshold) ? '\u25B6' : '';
+    });
+  }
+
+  // =====================================================================
+  // EVENT WIRING
+  // =====================================================================
+  function _wireEvents() {
+    els.modeNdfd.addEventListener('change', _onModeChange);
+    els.modeMrms.addEventListener('change', _onModeChange);
+
+    // Threshold slider - debounced refresh
+    let thresholdDebounceTimer = null;
+    els.thresholdSlider.addEventListener('input', function () {
+      state.threshold = Number(this.value);
+      _updateThresholdLabel();
+      _updateLegendThreshold();
+      clearTimeout(thresholdDebounceTimer);
+      thresholdDebounceTimer = setTimeout(refresh, 120);
+    });
+
+    els.windowSelect.addEventListener('change', function () {
+      state.window = Number(this.value);
+      refresh();
+    });
+
+    // Layer toggles (new structure - separate NDFD and MRMS visibility)
+    els.layerNdfd.addEventListener('change', function () {
+      MAP.setForecastVisible(this.checked);
+    });
+    els.layerMrms.addEventListener('change', function () {
+      MAP.setObservedVisible(this.checked);
+    });
+    els.layerRadar.addEventListener('change', function () {
+      MAP.setRadarVisible(this.checked);
+    });
+    els.layerAlerts.addEventListener('change', function () {
+      MAP.setAlertsVisible(this.checked);
+    });
+    els.layerReference.addEventListener('change', function () {
+      MAP.setReferenceVisible(this.checked);
+    });
+
+    // Refresh
+    els.manualRefresh.addEventListener('click', _autoRefreshTick);
+    els.autoRefreshToggle.addEventListener('change', function () {
+      if (this.checked) _startAutoRefresh();
+      else              _stopAutoRefresh();
+    });
+
+    // CSV export (#11)
+    if (els.exportCsvBtn) {
+      els.exportCsvBtn.addEventListener('click', _exportCsv);
+    }
+
+    // Alerts disclosure toggle - invalidate map size so tiles fill the new space
+    const disclosure = document.getElementById('alerts-disclosure');
+    if (disclosure) {
+      disclosure.addEventListener('toggle', function () {
+        const map = MAP._internalMap && MAP._internalMap();
+        if (map) requestAnimationFrame(function () { map.invalidateSize(); });
+      });
+    }
   }
 
   // =====================================================================
@@ -125,66 +242,6 @@
     });
   }
 
-  // =====================================================================
-  // EVENT WIRING
-  // =====================================================================
-  function _wireEvents() {
-    // Detection mode
-    els.modeNdfd.addEventListener('change', _onModeChange);
-    els.modeMrms.addEventListener('change', _onModeChange);
-
-    // Threshold slider — debounced refresh on input
-    let thresholdDebounceTimer = null;
-    els.thresholdSlider.addEventListener('input', function () {
-      state.threshold = Number(this.value);
-      _updateThresholdLabel();
-      // Debounce the heavier "recompute alerts" work
-      clearTimeout(thresholdDebounceTimer);
-      thresholdDebounceTimer = setTimeout(refresh, 120);
-    });
-
-    // Window selector (NDFD only)
-    els.windowSelect.addEventListener('change', function () {
-      state.window = Number(this.value);
-      refresh();
-    });
-
-    // Layer toggles
-    els.layerPrecip.addEventListener('change', function () {
-      MAP.setPrecipVisible(this.checked);
-    });
-    els.layerRadar.addEventListener('change', function () {
-      MAP.setRadarVisible(this.checked);
-    });
-    els.layerAlerts.addEventListener('change', function () {
-      MAP.setAlertsVisible(this.checked);
-    });
-    els.layerReference.addEventListener('change', function () {
-      MAP.setReferenceVisible(this.checked);
-    });
-
-    // Refresh
-    els.manualRefresh.addEventListener('click', _autoRefreshTick);
-    els.autoRefreshToggle.addEventListener('change', function () {
-      if (this.checked) _startAutoRefresh();
-      else              _stopAutoRefresh();
-    });
-
-    // When the alerts disclosure opens/closes, Leaflet's view of its
-    // container dimensions becomes stale. invalidateSize() forces it to
-    // re-measure and redraw tiles cleanly. Use the native 'toggle' event.
-    const disclosure = document.getElementById('alerts-disclosure');
-    if (disclosure) {
-      disclosure.addEventListener('toggle', function () {
-        const map = MAP._internalMap && MAP._internalMap();
-        if (map) {
-          // Wait one frame for CSS to settle before measuring
-          requestAnimationFrame(function () { map.invalidateSize(); });
-        }
-      });
-    }
-  }
-
   function _syncControlsFromState() {
     els.thresholdSlider.value = String(state.threshold);
     els.windowSelect.value    = String(state.window);
@@ -197,13 +254,12 @@
   // =====================================================================
   function _onModeChange() {
     state.mode = els.modeMrms.checked ? 'mrms' : 'ndfd';
-    // Apply mode-appropriate default threshold so user isn't stuck on a
-    // value that means something different in the other mode.
     state.threshold = state.mode === 'mrms'
       ? CFG.MRMS_DEFAULT_THRESHOLD_CATEGORY
       : CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY;
     els.thresholdSlider.value = String(state.threshold);
     _updateThresholdLabel();
+    _updateLegendThreshold();
     _updateModeUI();
     refresh();
   }
@@ -218,7 +274,7 @@
         'channelized debris flow model. Alert raised when any debris ' +
         'flow polygon falls inside an observed precipitation polygon at ' +
         'or above the configured rainfall threshold.';
-      els.layerPrecipLabel.textContent = 'Observed precipitation';
+      els.thresholdSourceLabel.textContent = '(MRMS)';
     } else {
       els.windowGroup.hidden    = false;
       els.mrmsWindowNote.hidden = true;
@@ -227,7 +283,7 @@
         'Geological Survey channelized debris flow model. Alert raised ' +
         'when any debris flow polygon falls inside a forecast polygon ' +
         'at or above the configured rainfall threshold.';
-      els.layerPrecipLabel.textContent = 'Forecast precipitation';
+      els.thresholdSourceLabel.textContent = '(NDFD)';
     }
   }
 
@@ -237,48 +293,77 @@
   }
 
   // =====================================================================
-  // REFRESH — recomputes everything from current state + (mock) data
+  // REFRESH — recomputes everything from current state + loaded data
   // =====================================================================
   function refresh() {
-    const data = _currentDataset();
+    // ---- Render BOTH precip layers (independent of detection mode) ------
+    // The user can toggle visibility of each via the sidebar; we always
+    // load both into the map so the toggles work instantly.
+    MAP.setForecast(MOCK.NDFD_FORECAST);
+    MAP.setForecastVisible(els.layerNdfd.checked);
 
-    // ---- Map: render precip polygons --------------------------------------
-    const precipLabel = state.mode === 'mrms'
-      ? 'Observed precipitation (MRMS)'
-      : 'Forecast precipitation (NDFD)';
-    MAP.setPrecip(data.precip, precipLabel);
-    MAP.setPrecipVisible(els.layerPrecip.checked);
+    MAP.setObserved(MOCK.MRMS_OBSERVED);
+    MAP.setObservedVisible(els.layerMrms.checked);
 
-    // ---- Compute alerts ---------------------------------------------------
-    const result = AL.compute(data.precip, data.debris, state.threshold);
+    // ---- Pick the active dataset for alert computation ------------------
+    const active = state.mode === 'mrms'
+      ? MOCK.MRMS_OBSERVED
+      : MOCK.NDFD_FORECAST;
 
-    // ---- Map: render alert polygons ---------------------------------------
+    const result = AL.compute(active, MOCK.DEBRIS_FLOWS, state.threshold);
+
+    // Stash the latest results for CSV export
+    state.lastAlerts = result.alerts;
+    state.lastCtx    = _buildSourceCtx(active);
+
+    // ---- Map: render alert polygons -------------------------------------
     MAP.setAlerts(result.alerts);
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    // ---- Update header metrics --------------------------------------------
-    _updateHeader(data, result.summary);
+    // ---- Header metrics --------------------------------------------------
+    _updateHeader(active, result.summary);
 
-    // ---- Update alerts table ----------------------------------------------
-    AL.render(result.alerts, els.alertsTbody, els.alertsSummary);
+    // ---- Source metadata block (#6) -------------------------------------
+    _updateSourceMeta(active);
 
-    // ---- Update "last updated" stamp --------------------------------------
+    // ---- Alerts table ----------------------------------------------------
+    AL.render(result.alerts, els.alertsTbody, els.alertsSummary, state.lastCtx);
+
+    // Disable CSV button when there's nothing to export
+    if (els.exportCsvBtn) {
+      els.exportCsvBtn.disabled = !(result.alerts.features &&
+                                    result.alerts.features.length);
+    }
+
+    // ---- "Last updated" stamp -------------------------------------------
     els.lastUpdated.textContent =
       'Last updated: ' + new Date().toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit'
       });
   }
 
-  function _currentDataset() {
-    if (state.mode === 'mrms') {
-      return { precip: MOCK.MRMS_OBSERVED, debris: MOCK.DEBRIS_FLOWS };
+  // -- helpers consumed by refresh ----------------------------------------
+
+  function _buildSourceCtx(activeFC) {
+    const m = (activeFC && activeFC.meta) || {};
+    const isoTime = state.mode === 'mrms' ? m.observed_at : m.issued;
+    let display = '--';
+    if (isoTime) {
+      const d = new Date(isoTime);
+      display = d.toUTCString().slice(17, 22) + ' UTC ' +
+                d.toUTCString().slice(5, 11);
     }
-    return { precip: MOCK.NDFD_FORECAST, debris: MOCK.DEBRIS_FLOWS };
+    return {
+      sourceLabel:  state.mode === 'mrms' ? 'MRMS' : 'NDFD',
+      timestamp:    display,
+      timestampISO: isoTime || ''
+    };
   }
 
-  function _updateHeader(data, summary) {
+  function _updateHeader(activeFC, summary) {
+    const m = activeFC.meta || {};
+
     if (state.mode === 'mrms') {
-      const m = data.precip.meta || {};
       const obs = m.observed_at ? new Date(m.observed_at) : new Date();
       els.metricIssuedTime.textContent =
         obs.toUTCString().slice(17, 22) + ' UTC';
@@ -288,7 +373,6 @@
       els.metricWindowSub.textContent  =
         'ending ' + obs.toUTCString().slice(17, 22) + ' UTC';
     } else {
-      const m = data.precip.meta || {};
       const issued = m.issued ? new Date(m.issued) : new Date();
       const ends   = m.window_end ? new Date(m.window_end) : new Date();
       els.metricIssuedTime.textContent =
@@ -308,12 +392,79 @@
     els.metricFlaggedSub.textContent =
       'of ' + summary.total + ' debris flow polygons';
 
-    // Visual emphasis on the flagged card when there are alerts
     if (summary.flagged > 0) {
       els.metricFlaggedCard.classList.add('has-alerts');
     } else {
       els.metricFlaggedCard.classList.remove('has-alerts');
     }
+  }
+
+  function _updateSourceMeta(activeFC) {
+    const m = (activeFC && activeFC.meta) || {};
+
+    els.metaSource.textContent = m.source || '--';
+
+    if (state.mode === 'mrms') {
+      els.metaTimeLabel.textContent = 'Observed';
+      const obs = m.observed_at ? new Date(m.observed_at) : null;
+      els.metaTime.textContent = obs
+        ? obs.toUTCString().slice(5, 22) + ' UTC'
+        : '--';
+
+      // Extra row for MRMS: max observed inches
+      els.metaExtraLabel.hidden = false;
+      els.metaExtra.hidden = false;
+      els.metaExtraLabel.textContent = 'Max observed';
+      if (m.max_inches != null) {
+        const min_ago = m.minutes_ago != null
+          ? ` (${Math.round(m.minutes_ago)} min ago)`
+          : '';
+        els.metaExtra.textContent = m.max_inches.toFixed(2) + '\u2033' + min_ago;
+      } else {
+        els.metaExtra.textContent = '--';
+      }
+    } else {
+      els.metaTimeLabel.textContent = 'Issued';
+      const issued = m.issued ? new Date(m.issued) : null;
+      els.metaTime.textContent = issued
+        ? issued.toUTCString().slice(5, 22) + ' UTC'
+        : '--';
+
+      // Extra row for NDFD: window end
+      els.metaExtraLabel.hidden = false;
+      els.metaExtra.hidden = false;
+      els.metaExtraLabel.textContent = 'Window end';
+      const ends = m.window_end ? new Date(m.window_end) : null;
+      els.metaExtra.textContent = ends
+        ? ends.toUTCString().slice(5, 22) + ' UTC'
+        : '--';
+    }
+  }
+
+  // =====================================================================
+  // CSV EXPORT (#11)
+  // =====================================================================
+  function _exportCsv() {
+    if (!state.lastAlerts || !state.lastAlerts.features
+        || !state.lastAlerts.features.length) {
+      return;
+    }
+
+    const csv = AL.toCSV(state.lastAlerts, state.lastCtx);
+    const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `defns-alerts-${ts}Z.csv`;
+
+    // Use a Blob + ObjectURL so we don't have to base64-encode large CSVs
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   // =====================================================================

@@ -261,11 +261,20 @@ body {
   height: 100%;          /* parent .app-body is height-constrained */
 }
 
+.sidebar-heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  position: relative;
+}
+
 .sidebar-heading {
   font-size: var(--fs-h2);
   font-weight: 700;
-  margin: 0 0 var(--sp-3) 0;
+  margin: 0;
   color: var(--site-text);
+  flex-grow: 1;
 }
 
 .sidebar-subheading {
@@ -273,6 +282,72 @@ body {
   font-weight: 600;
   margin: 0 0 var(--sp-2) 0;
   color: var(--site-text);
+}
+
+/* Help icon + tooltip: hover/focus the "?" to reveal a panel with
+   keyboard nav instructions. Uses pure CSS for show/hide on
+   hover and :focus-within, no JS. */
+.help-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--site-bg);
+  color: var(--site-text);
+  border: 1px solid var(--site-border);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+  user-select: none;
+}
+.help-icon:hover,
+.help-icon:focus-visible {
+  background: var(--accent-1);
+  border-color: var(--accent-dark);
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  width: 280px;
+  background: var(--site-bg);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--site-text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s, transform 0.15s, visibility 0s linear 0.15s;
+}
+.sidebar-heading-row:hover .tooltip,
+.sidebar-heading-row:focus-within .tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+.tooltip strong {
+  display: block;
+  margin-bottom: var(--sp-2);
+  color: var(--site-text);
+}
+.tooltip ul {
+  margin: 0;
+  padding-left: var(--sp-4);
+  list-style: disc;
+  color: var(--site-text-muted);
+}
+.tooltip li {
+  margin-bottom: var(--sp-1);
+  line-height: 1.5;
 }
 
 .sidebar-divider {
@@ -318,14 +393,40 @@ body {
   margin-top: 2px;
 }
 
-/* Keyboard-pattern hint, used for things like radio-group arrow navigation
-   that aren't obvious to sighted keyboard users. Slightly more subdued
-   than control-help; the kbd glyphs are the focal point. */
-.kbd-hint {
-  font-style: italic;
-  margin-top: var(--sp-1);
-  opacity: 0.85;
+/* Suffix on the threshold label showing which source is active.
+   Visually de-emphasized so the primary "Alert threshold" label dominates. */
+.control-label-suffix {
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  color: var(--site-text-muted);
+  margin-left: 0.25em;
 }
+
+/* Source metadata block - shown under threshold help text. Two-column
+   <dl> with key on left, value on right. Compact - this is reference info,
+   not interactive. */
+.source-meta {
+  margin: var(--sp-3) 0 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--site-bg);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--sp-3);
+  row-gap: 4px;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+.source-meta dt {
+  color: var(--site-text-muted);
+  font-weight: 600;
+}
+.source-meta dd {
+  margin: 0;
+  color: var(--site-text);
+}
+
 kbd {
   display: inline-block;
   font-family: var(--font-sans);
@@ -414,7 +515,10 @@ select {
 .btn-primary:hover  { background: var(--accent-dark); }
 .btn-primary:active { background: var(--accent-dark); }
 
-/* Legend disclosure */
+/* Legend disclosure - shows all 20 NDFD categories (same scale used by
+   MRMS by design). The current threshold gets an arrow marker on the
+   left; categories at or above threshold get a subtle background tint
+   to visually communicate "these trigger alerts." */
 .legend-details summary {
   cursor: pointer;
   font-size: var(--fs-sm);
@@ -429,11 +533,23 @@ select {
   font-size: var(--fs-xs);
 }
 .legend-list li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px 18px 1fr;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 2px 0;
+  gap: 6px;
+  padding: 3px 4px;
   color: var(--site-text-muted);
+  border-radius: 3px;
+  position: relative;
+}
+/* Threshold-arrow column - empty by default; populated for active threshold */
+.legend-arrow {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--accent-1);
+  line-height: 1;
 }
 .legend-swatch {
   display: inline-block;
@@ -442,6 +558,17 @@ select {
   border-radius: 3px;
   border: 1px solid var(--site-border);
   flex-shrink: 0;
+}
+/* Categories at-or-above threshold: subtle highlight tint */
+.legend-list li.at-or-above {
+  background: rgba(192, 76, 0, 0.08);
+}
+.legend-list li.at-or-above .legend-text {
+  color: var(--site-text);
+}
+.legend-list li.current {
+  background: rgba(192, 76, 0, 0.18);
+  font-weight: 600;
 }
 
 /* -------------------------------------------------------------------------
@@ -547,9 +674,44 @@ select {
   border-top: 1px solid var(--site-border);
 }
 
+/* Toolbar above the table - currently houses CSV export. */
+.alerts-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+}
+
+/* Secondary button style - quieter than the primary orange CTA. */
+.btn-secondary {
+  background: var(--site-bg);
+  color: var(--site-text);
+  border: 1px solid var(--site-border);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 32px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-secondary:hover  {
+  background: var(--site-surface);
+  border-color: var(--secondary-1);
+}
+.btn-secondary:active { background: var(--site-surface); }
+.btn-secondary[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .table-wrapper {
   overflow: auto;
-  max-height: 280px;         /* internal scroll if many alerts */
+  max-height: 280px;
   border: 1px solid var(--site-border);
   border-radius: var(--radius-sm);
   margin-top: var(--sp-3);
