@@ -45,7 +45,13 @@ DATA_DIR = REPO_ROOT / "alerts" / "data"
 sys.path.insert(0, str(HERE))
 
 import data as defns_data            # noqa: E402  (intentional: see sys.path above)
-from config import WNC_BBOX           # noqa: E402
+import analysis as defns_analysis    # noqa: E402
+from config import WNC_BBOX, DISPLAY_CRS  # noqa: E402
+
+
+# Module-level cache so debris flows are fetched once per refresh run and
+# reused for both NDFD and MRMS intersections.
+_debris_cache: dict = {}
 
 
 def main() -> int:
@@ -53,18 +59,33 @@ def main() -> int:
     print(f"[defns-refresh] Output directory: {DATA_DIR}")
     print(f"[defns-refresh] Started at:       {datetime.now(timezone.utc).isoformat()}")
 
+    # Fetch precipitation first. If both fail, no point loading debris flows.
     ndfd_ok = _safely(_refresh_ndfd, "NDFD forecast")
     mrms_ok = _safely(_refresh_mrms, "MRMS observed")
 
-    if ndfd_ok and mrms_ok:
-        print("[defns-refresh] DONE - both files written.")
+    # Load debris flows once (used for both intersections below)
+    debris_ok = ndfd_ok or mrms_ok
+    if debris_ok:
+        debris_ok = _safely(_load_debris_flows, "Debris flow polygons")
+
+    # Intersect against each precip source that succeeded
+    flagged_ndfd_ok = False
+    flagged_mrms_ok = False
+    if debris_ok and ndfd_ok:
+        flagged_ndfd_ok = _safely(_refresh_flagged_ndfd, "NDFD intersections")
+    if debris_ok and mrms_ok:
+        flagged_mrms_ok = _safely(_refresh_flagged_mrms, "MRMS intersections")
+
+    # Summary
+    successes = sum([ndfd_ok, mrms_ok, flagged_ndfd_ok, flagged_mrms_ok])
+    if successes == 4:
+        print("\n[defns-refresh] DONE - all four files written.")
         return 0
-    elif not ndfd_ok and not mrms_ok:
-        print("[defns-refresh] BOTH FAILED - no files written.")
+    elif successes == 0:
+        print("\n[defns-refresh] ALL FAILED - no files written.")
         return 1
     else:
-        which = "NDFD" if not ndfd_ok else "MRMS"
-        print(f"[defns-refresh] PARTIAL - {which} failed, other file is fresh.")
+        print(f"\n[defns-refresh] PARTIAL - {successes}/4 files written.")
         return 2
 
 
@@ -149,6 +170,179 @@ def _refresh_mrms() -> None:
     out_path = DATA_DIR / "observed.geojson"
     _write_json(out_path, fc)
     print(f"  Wrote {out_path.name}: {out_path.stat().st_size / 1024:.1f} KB")
+
+
+# ============================================================================
+# Debris flow load + intersections (Phase B)
+# ============================================================================
+
+def _load_debris_flows() -> None:
+    """Fetch the full NCGS debris flow GDF once and cache it for the rest
+    of this run. Cached by module-level dict so subsequent calls are free.
+    """
+    if "gdf" in _debris_cache:
+        print("  (already cached this run)")
+        return
+
+    print("  Fetching NCGS debris flow polygons from AGOL FeatureServer...")
+    gdf = defns_data.fetch_debris_flows()
+    print(f"  Loaded {len(gdf)} debris flow polygons.")
+    _debris_cache["gdf"] = gdf
+
+
+def _refresh_flagged_ndfd() -> None:
+    """Run debris-flow x NDFD precipitation intersection. Writes
+    flagged_ndfd.geojson with one feature per debris flow polygon that
+    touches any NDFD precip polygon. Each feature carries a `max_category`
+    property = the highest NDFD category it intersects (used client-side
+    for instant threshold filtering)."""
+    _write_flagged(
+        precip_path=DATA_DIR / "forecast.geojson",
+        out_path=DATA_DIR / "flagged_ndfd.geojson",
+        source_label="NDFD",
+    )
+
+
+def _refresh_flagged_mrms() -> None:
+    """Same as _refresh_flagged_ndfd but against MRMS observed precipitation."""
+    _write_flagged(
+        precip_path=DATA_DIR / "observed.geojson",
+        out_path=DATA_DIR / "flagged_mrms.geojson",
+        source_label="MRMS",
+    )
+
+
+def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None:
+    """Shared core: read a precip GeoJSON from disk, intersect with the
+    cached debris flow GDF, write the flagged subset as GeoJSON with
+    `max_category` on each feature.
+
+    Phase B optimizations (configurable in config.py):
+      - FLAGGED_MIN_CATEGORY: drop polygons below this category at build
+      - FLAGGED_SIMPLIFY_METERS: Douglas-Peucker geometry simplification
+      - FLAGGED_COORD_PRECISION: decimal places for output coordinates
+    """
+    import geopandas as gpd
+    from config import (
+        FLAGGED_MIN_CATEGORY,
+        FLAGGED_SIMPLIFY_METERS,
+        FLAGGED_COORD_PRECISION,
+        INTERSECTION_CRS,
+    )
+
+    # Load the precip file we just wrote (round-trip through disk is wasteful
+    # but keeps each step idempotent and isolated for testing/debugging).
+    if not precip_path.exists():
+        raise FileNotFoundError(f"Precip file missing: {precip_path}")
+    precip_gdf = gpd.read_file(precip_path)
+    print(f"  Precip polygons:  {len(precip_gdf)}")
+
+    if precip_gdf.empty:
+        print(f"  No precipitation -> empty flagged file.")
+        _write_empty_flagged(out_path, source_label)
+        return
+
+    # IMPORTANT: find_alerts requires precip to already be filtered to
+    # >= threshold. We pass it unfiltered so we get the WORST CASE max
+    # category per debris flow polygon. Client filters by max_category
+    # against the slider value.
+    debris_gdf = _debris_cache["gdf"]
+    flagged = defns_analysis.find_alerts(debris_gdf, precip_gdf)
+    print(f"  Debris flows flagged (raw): {len(flagged)}")
+
+    if flagged.empty:
+        _write_empty_flagged(out_path, source_label)
+        return
+
+    # find_alerts returns columns: OBJECTID, category, label, area_acres, geometry.
+    # We need `max_category` as the client-side filter key. Same value,
+    # cleaner name for the frontend.
+    flagged = flagged.rename(columns={"category": "max_category"})
+
+    # ---- Optimization 1: drop low-category polygons -------------------------
+    n_before = len(flagged)
+    flagged = flagged[flagged["max_category"] >= FLAGGED_MIN_CATEGORY].copy()
+    dropped = n_before - len(flagged)
+    if dropped > 0:
+        print(f"  Dropped {dropped} polygons below cat {FLAGGED_MIN_CATEGORY} "
+              f"({len(flagged)} remain)")
+
+    if flagged.empty:
+        _write_empty_flagged(out_path, source_label)
+        return
+
+    # ---- Optimization 2: geometry simplification ----------------------------
+    # Use the equal-area projection (meters) so the tolerance is meaningful,
+    # then project back to display CRS for output.
+    if FLAGGED_SIMPLIFY_METERS:
+        flagged_proj = flagged.to_crs(INTERSECTION_CRS)
+        flagged_proj["geometry"] = flagged_proj.geometry.simplify(
+            FLAGGED_SIMPLIFY_METERS, preserve_topology=True
+        )
+        flagged = flagged_proj.to_crs(DISPLAY_CRS)
+        print(f"  Simplified geometries at {FLAGGED_SIMPLIFY_METERS} m tolerance")
+
+    # ---- Build the output FeatureCollection ---------------------------------
+    fc = json.loads(flagged.to_json())
+
+    # ---- Optimization 3: coordinate precision -------------------------------
+    if FLAGGED_COORD_PRECISION is not None:
+        _round_coords(fc, FLAGGED_COORD_PRECISION)
+        print(f"  Rounded coords to {FLAGGED_COORD_PRECISION} decimal places")
+
+    fc["meta"] = {
+        "source":       source_label,
+        "generated_at": _to_iso(datetime.now(timezone.utc)),
+        "n_flagged":    len(flagged),
+        "n_debris":     len(debris_gdf),
+        "min_category_shipped": FLAGGED_MIN_CATEGORY,
+    }
+    _write_json(out_path, fc)
+    print(f"  Wrote {out_path.name}: {out_path.stat().st_size / 1024:.1f} KB")
+
+
+def _round_coords(obj, precision: int) -> None:
+    """Recursively round all coordinate floats in a GeoJSON object in place.
+
+    Walks the standard GeoJSON coordinates nesting (Polygons: [[[x,y],...],
+    [[x,y],...]]; MultiPolygons: nested one level deeper). Modifies the dict
+    in place; doesn't return anything.
+    """
+    if isinstance(obj, dict):
+        if "coordinates" in obj:
+            obj["coordinates"] = _round_recursive(obj["coordinates"], precision)
+        if "features" in obj:
+            for feat in obj["features"]:
+                if "geometry" in feat and feat["geometry"]:
+                    _round_coords(feat["geometry"], precision)
+
+
+def _round_recursive(coords, precision):
+    """Round all numeric leaves in a nested coordinate list to `precision`
+    decimal places. Returns a new structure."""
+    if isinstance(coords, list):
+        if coords and isinstance(coords[0], (int, float)):
+            # Leaf: a [x, y] or [x, y, z] coordinate pair
+            return [round(c, precision) for c in coords]
+        return [_round_recursive(c, precision) for c in coords]
+    return coords
+
+
+def _write_empty_flagged(out_path: Path, source_label: str) -> None:
+    """Write a valid empty FeatureCollection so the frontend has a file
+    to fetch even when there are no flagged polygons."""
+    fc = {
+        "type": "FeatureCollection",
+        "features": [],
+        "meta": {
+            "source":       source_label,
+            "generated_at": _to_iso(datetime.now(timezone.utc)),
+            "n_flagged":    0,
+            "n_debris":     len(_debris_cache.get("gdf", []))
+        }
+    }
+    _write_json(out_path, fc)
+    print(f"  Wrote {out_path.name}: (empty)")
 
 
 # ============================================================================

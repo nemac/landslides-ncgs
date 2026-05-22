@@ -24,7 +24,77 @@ from config import (
     CACHE_DIR,
     DEBRIS_CACHE_FILENAME,
     CACHE_TTL_DAYS,
+    WNC_BBOX,
 )
+
+
+# =============================================================================
+# AGOL request helper with retry-with-backoff
+# =============================================================================
+
+def _agol_request_with_retry(url: str, params: dict, label: str,
+                              max_attempts: int = 5) -> dict:
+    """GET an ArcGIS REST endpoint, retrying transient errors (5xx, timeouts).
+
+    AGOL has periodic blips (503, 504, brief socket timeouts) that resolve
+    in seconds. We retry up to `max_attempts` times with exponential
+    backoff (1s, 2s, 4s, 8s) before giving up.
+
+    ALSO detects AGOL's HTTP-200-but-JSON-error pattern: when you send an
+    invalid field name or unsupported parameter, AGOL frequently returns
+    {"error": {...}} with status 200. Without this check, the caller sees
+    no features and silently assumes "no results" - a confusing failure
+    mode. We raise on it so the real cause surfaces.
+
+    Parameters
+    ----------
+    url : str         the /query endpoint
+    params : dict     query parameters
+    label : str       short description used in log lines (e.g. "page @offset=20000")
+    max_attempts : int  total attempts including the first; default 5
+
+    Returns
+    -------
+    dict   the parsed JSON response
+
+    Raises
+    ------
+    requests.HTTPError on the final attempt if errors persist.
+    RuntimeError if AGOL returns an HTTP-200 error envelope.
+    """
+    import time
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = requests.get(url, params=params, timeout=120)
+            if 500 <= r.status_code < 600:
+                raise requests.HTTPError(
+                    f"{r.status_code} Server Error", response=r
+                )
+            r.raise_for_status()
+            payload = r.json()
+            # AGOL error envelope check
+            if isinstance(payload, dict) and "error" in payload:
+                err = payload["error"]
+                msg = err.get("message", "(no message)")
+                details = err.get("details") or []
+                code = err.get("code", "?")
+                raise RuntimeError(
+                    f"AGOL returned error {code}: {msg}"
+                    + (f" details={details!r}" if details else "")
+                )
+            return payload
+        except (requests.HTTPError, requests.Timeout,
+                requests.ConnectionError) as e:
+            last_exc = e
+            if attempt < max_attempts:
+                backoff_s = 2 ** (attempt - 1)
+                print(f"  [retry {attempt}/{max_attempts - 1}] {label}: "
+                      f"{type(e).__name__}, waiting {backoff_s}s...")
+                time.sleep(backoff_s)
+            else:
+                print(f"  [give up] {label}: exhausted {max_attempts} attempts")
+    raise last_exc  # type: ignore[misc]
 
 
 # =============================================================================
@@ -44,11 +114,16 @@ def _cache_is_fresh() -> bool:
 
 
 def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
-    """Pull all debris flow polygons from the NCGS feature service.
+    """Pull WNC-area debris flow polygons from the NCGS feature service.
 
-    Results are cached as a local GeoPackage. Subsequent calls within the
-    cache TTL (see config.CACHE_TTL_DAYS) load from disk in ~1 second
-    instead of paginating 100+ requests against the live service.
+    Filtered server-side to the WNC bounding box (see config.WNC_BBOX) so
+    we don't pull all 228k CONUS-wide polygons; the precipitation data is
+    WNC-only anyway, so anything outside that bbox can't be flagged.
+
+    Results are cached locally as a GeoPackage. Subsequent calls within
+    the cache TTL load from disk instead of paginating against AGOL.
+
+    Includes retry-with-backoff for transient AGOL 5xx errors.
 
     Parameters
     ----------
@@ -57,7 +132,8 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     Returns
     -------
-    GeoDataFrame in EPSG:4326 with columns OBJECTID, geometry.
+    GeoDataFrame in EPSG:4326 with columns OBJECTID, geometry (plus
+    `county` if the service exposes it; gracefully omitted if not).
     """
     cache_p = _cache_path()
 
@@ -69,8 +145,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         print(f"  -> {len(gdf):,} polygons loaded from cache")
         return gdf
 
-    print("Fetching debris flow polygons from NCGS "
-          "(228k+ features expected, this may take several minutes)...")
+    bbox_str = ",".join(str(c) for c in WNC_BBOX)
+    print(f"Fetching debris flow polygons from NCGS "
+          f"(WNC bbox = {bbox_str}, expect ~5-15k features)...")
 
     all_features: list[dict] = []
     offset = 0
@@ -84,21 +161,23 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
             "resultOffset": offset,
             "resultRecordCount": page_size,
             "f": "geojson",
+            # Server-side spatial filter to WNC bbox
+            "geometry":     bbox_str,
+            "geometryType": "esriGeometryEnvelope",
+            "inSR":         "4326",
+            "spatialRel":   "esriSpatialRelIntersects",
         }
-        r = requests.get(f"{DEBRIS_FLOW_SERVICE_URL}/query",
-                         params=params, timeout=120)
-        r.raise_for_status()
-        page = r.json()
-
+        page = _agol_request_with_retry(
+            f"{DEBRIS_FLOW_SERVICE_URL}/query",
+            params,
+            label=f"debris flow page @offset={offset:,}",
+        )
         feats = page.get("features", [])
         if not feats:
             break
-
         all_features.extend(feats)
-        # Print progress every 10 pages
-        if (offset // page_size) % 10 == 0:
+        if (offset // page_size) % 5 == 0:
             print(f"  page @offset={offset:,}: running total {len(all_features):,}")
-
         if len(feats) < page_size:
             break
         offset += page_size
@@ -107,7 +186,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         return gpd.GeoDataFrame({"OBJECTID": []}, geometry=[], crs=DISPLAY_CRS)
 
     gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
-    print(f"  -> {len(gdf):,} debris flow polygons total")
+    print(f"  -> {len(gdf):,} debris flow polygons within WNC bbox")
 
     # Write to cache
     cache_p.parent.mkdir(parents=True, exist_ok=True)

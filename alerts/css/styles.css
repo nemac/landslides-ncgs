@@ -126,6 +126,7 @@ a:hover, a:focus { color: var(--accent-1); }
   border-bottom: 1px solid var(--site-border);
   padding: var(--sp-3) var(--sp-5);
   flex-shrink: 0;            /* keeps natural height; doesn't squeeze under body */
+  position: relative;        /* anchor for absolute-positioned loading indicator */
 }
 
 .header-row {
@@ -589,7 +590,7 @@ select {
 
 .map-section {
   flex: 1 1 auto;          /* map takes available space */
-  min-height: 380px;       /* don't shrink past usable size */
+  min-height: 380px;
   display: flex;
 }
 #map {
@@ -600,6 +601,74 @@ select {
   background: var(--site-bg);
   border: 1px solid var(--site-border);
   border-radius: var(--radius-md);
+}
+
+/* Loading indicator - absolutely positioned at top-right of the header
+   banner so it doesn't reflow any other content (logo, h1, subtitle,
+   metric cards). Hidden by default via [hidden] (display:none). The
+   header is position:relative to anchor this. */
+.loading-indicator {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-5);
+  z-index: 5;
+  background: var(--site-surface);
+  color: var(--site-text);
+  border: 1px solid var(--site-border);
+  border-radius: 999px;    /* fully-rounded pill */
+  padding: 6px 14px 6px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.20);
+  white-space: nowrap;
+  pointer-events: none;    /* purely informational; let clicks pass through */
+}
+/* Class-selector display:flex above otherwise wins over the [hidden]
+   attribute's default display:none. Force [hidden] to take precedence. */
+.loading-indicator[hidden] {
+  display: none;
+}
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--site-border);
+  border-top-color: var(--accent-1);
+  border-radius: 50%;
+  animation: defns-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes defns-spin {
+  to { transform: rotate(360deg); }
+}
+/* Reduced-motion preference - replace spin with a gentle pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: defns-pulse 1.4s ease-in-out infinite;
+    border-color: var(--accent-1);
+  }
+  @keyframes defns-pulse {
+    50% { opacity: 0.3; }
+  }
+}
+
+/* Clickable rows (#10). Visual + interaction affordances when a row
+   has been wired up by app.js. */
+#alerts-tbody tr.row-clickable {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+#alerts-tbody tr.row-clickable:hover {
+  background: rgba(192, 76, 0, 0.10);
+}
+#alerts-tbody tr.row-clickable:focus-visible {
+  outline: 2px solid var(--accent-1);
+  outline-offset: -2px;
+}
+#alerts-tbody tr.row-clickable:active {
+  background: rgba(192, 76, 0, 0.18);
 }
 
 /* Alerts section - now a collapsible <details> element.

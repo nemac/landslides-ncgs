@@ -284,6 +284,15 @@
         <div id="map" role="img"
              aria-label="Map of Western North Carolina showing precipitation
                         polygons and debris flow zones"></div>
+
+        <!-- Loading indicator. Positioned top-right by CSS, hidden by
+             default. Announces start/end of loading to assistive tech via
+             role=status + aria-live. -->
+        <div id="loading-indicator" class="loading-indicator"
+             role="status" aria-live="polite" aria-busy="false" hidden>
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <span class="loading-text">Loading data&hellip;</span>
+        </div>
       </section>
 
       <!-- Alerts table - the canonical, accessible representation of

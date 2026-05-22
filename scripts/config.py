@@ -280,3 +280,41 @@ MRMS_CACHE_TTL_SECONDS = 600
 # WNC bounding box (lonmin, latmin, lonmax, latmax) for clipping MRMS rasters.
 # Slightly larger than the debris flow extent so we catch polygons at edges.
 WNC_BBOX = (-84.5, 34.8, -81.0, 36.7)
+
+
+# -----------------------------------------------------------------------------
+# Static dashboard output tuning  (Phase B)
+# -----------------------------------------------------------------------------
+# These knobs control the size of the flagged_*.geojson files that ship to
+# the browser. They trade fidelity for file size; all are safe to adjust.
+
+# Minimum precipitation category to ship in flagged_*.geojson. Debris flow
+# polygons whose max intersecting precipitation category is BELOW this value
+# are dropped at build time. The slider can't reveal them later - they're
+# simply absent from the file.
+#
+#   0  = include trace precipitation (.01-.10")  <-- TESTING / DROUGHT DEMO
+#  11  = production (5"+ rainfall)
+#
+# Lower = bigger files but slider can show everything.
+# Higher = smaller files; slider effectively has a floor.
+FLAGGED_MIN_CATEGORY = 0
+
+# Simplification tolerance in meters for debris flow geometries.
+# Uses Douglas-Peucker simplification in the EPSG:5070 (meters) projection,
+# then reprojects to EPSG:4326 for output. Set to None to disable.
+#
+#   None  = no simplification (raw NCGS geometries; biggest files)
+#    5    = 5m tolerance, near-invisible at all reasonable zooms
+#   10    = 10m tolerance, invisible at WNC overview (zoom 8-11)
+#   25    = 25m tolerance, slightly chunky at street-level zoom
+FLAGGED_SIMPLIFY_METERS = 10
+
+# Number of decimal places for coordinates in output GeoJSON. Six decimal
+# places = ~11 cm precision at this latitude, more than enough for our
+# polygon visualization. Each decimal place dropped saves ~7% file size.
+#
+#   15  = Python default; sub-nanometer precision (wasteful)
+#    6  = ~11 cm precision  <-- good default
+#    5  = ~1.1 m precision  (only if you need every byte)
+FLAGGED_COORD_PRECISION = 6

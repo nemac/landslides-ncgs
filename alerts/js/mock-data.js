@@ -247,5 +247,33 @@ window.DEFNS_MOCK = (function () {
     ]
   };
 
-  return { NDFD_FORECAST, MRMS_OBSERVED, DEBRIS_FLOWS };
+  // ---- FLAGGED (Phase B) ---------------------------------------------------
+  // These start empty. When refresh.py has run, _fetchInto() in app.js
+  // replaces them with the real server-computed flagged polygon sets.
+  // Each feature carries a `max_category` property used for client-side
+  // threshold filtering. The .meta carries `n_debris` (the total count
+  // of debris flow polygons examined, used for the "of X polygons"
+  // header readout).
+  const FLAGGED_NDFD = {
+    type: 'FeatureCollection',
+    features: [],
+    meta: {
+      source:       'NDFD',
+      generated_at: null,
+      n_flagged:    0,
+      n_debris:     0
+    }
+  };
+  const FLAGGED_MRMS = {
+    type: 'FeatureCollection',
+    features: [],
+    meta: {
+      source:       'MRMS',
+      generated_at: null,
+      n_flagged:    0,
+      n_debris:     0
+    }
+  };
+
+  return { NDFD_FORECAST, MRMS_OBSERVED, DEBRIS_FLOWS, FLAGGED_NDFD, FLAGGED_MRMS };
 })();

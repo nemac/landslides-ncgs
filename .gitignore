@@ -1,0 +1,17 @@
+# Build artifacts and caches
+cache/
+scripts/cache/
+*.gpkg
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

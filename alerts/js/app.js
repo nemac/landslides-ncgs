@@ -68,7 +68,10 @@
     exportCsvBtn:   $('export-csv'),
 
     // Legend
-    legendList:     $('legend-list')
+    legendList:     $('legend-list'),
+
+    // Loading indicator (Phase B)
+    loadingIndicator: $('loading-indicator')
   };
 
   // ---- State --------------------------------------------------------------
@@ -175,7 +178,11 @@
       MAP.setAlertsVisible(this.checked);
     });
     els.layerReference.addEventListener('change', function () {
-      MAP.setReferenceVisible(this.checked);
+      const turningOn = this.checked;
+      if (turningOn) _setLoading(true);
+      Promise.resolve(MAP.setReferenceVisible(turningOn)).then(function () {
+        if (turningOn) _setLoading(false);
+      });
     });
 
     // Refresh
@@ -201,28 +208,37 @@
   }
 
   // =====================================================================
-  // LIVE DATA FETCH (Phase 3a)
+  // LIVE DATA FETCH (Phase 3a + Phase B)
   // =====================================================================
-  // Replaces what was hardcoded in mock-data.js. We mutate MOCK in place
-  // because everything downstream (refresh(), _currentDataset()) reads
-  // from MOCK.NDFD_FORECAST and MOCK.MRMS_OBSERVED - so a successful fetch
-  // transparently upgrades the dashboard from mock to live data.
+  // We fetch four files in parallel:
+  //   forecast.geojson      NDFD precip (visualization)
+  //   observed.geojson      MRMS precip (visualization)
+  //   flagged_ndfd.geojson  Pre-computed alerts (server-side intersection)
+  //   flagged_mrms.geojson  Pre-computed alerts (server-side intersection)
+  //
+  // The MOCK module is mutated in-place when fetches succeed, so refresh()
+  // transparently uses live data wherever it's available.
   // =====================================================================
   function _loadLiveData() {
+    _setLoading(true);
     return Promise.allSettled([
-      _fetchInto('data/forecast.geojson', 'NDFD_FORECAST'),
-      _fetchInto('data/observed.geojson', 'MRMS_OBSERVED')
+      _fetchInto('data/forecast.geojson',     'NDFD_FORECAST'),
+      _fetchInto('data/observed.geojson',     'MRMS_OBSERVED'),
+      _fetchInto('data/flagged_ndfd.geojson', 'FLAGGED_NDFD'),
+      _fetchInto('data/flagged_mrms.geojson', 'FLAGGED_MRMS')
     ]).then(function (results) {
-      const ndfdOK = results[0].status === 'fulfilled' && results[0].value;
-      const mrmsOK = results[1].status === 'fulfilled' && results[1].value;
-      if (ndfdOK && mrmsOK) {
-        console.log('[DEFNS] Live data loaded (NDFD + MRMS).');
-      } else if (ndfdOK || mrmsOK) {
-        const which = ndfdOK ? 'MRMS' : 'NDFD';
-        console.warn(`[DEFNS] ${which} fetch failed; using mock for that source.`);
-      } else {
-        console.warn('[DEFNS] No live data; using mock fixtures for both sources.');
-      }
+      const labels = ['NDFD precip', 'MRMS precip', 'NDFD flagged', 'MRMS flagged'];
+      const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
+      console.log(`[DEFNS] Live data: ${okCount}/4 files loaded.`);
+      results.forEach(function (r, i) {
+        if (r.status !== 'fulfilled' || !r.value) {
+          console.warn(`[DEFNS] ${labels[i]} failed; falling back to mock.`);
+        }
+      });
+      _setLoading(false);
+    }).catch(function (err) {
+      _setLoading(false);
+      console.error('[DEFNS] _loadLiveData crashed:', err);
     });
   }
 
@@ -234,12 +250,30 @@
       if (!geojson || !geojson.type || geojson.type !== 'FeatureCollection') {
         throw new Error(`${url}: not a FeatureCollection`);
       }
-      MOCK[mockKey] = geojson;        // upgrade the dataset in place
+      MOCK[mockKey] = geojson;
       return true;
     }).catch(function (err) {
       console.warn(`[DEFNS] ${url} fetch failed: ${err.message}`);
       return false;
     });
+  }
+
+  // =====================================================================
+  // LOADING INDICATOR
+  // =====================================================================
+  // Reference-counted so multiple overlapping loads (e.g. page-init data
+  // fetch + NCGS reference toggle) compose correctly. The spinner only
+  // hides when every outstanding _setLoading(true) has been matched by a
+  // _setLoading(false). Floors at zero so spurious off-calls can't push
+  // the counter negative.
+  let _loadingCount = 0;
+  function _setLoading(isLoading) {
+    if (!els.loadingIndicator) return;
+    _loadingCount += isLoading ? 1 : -1;
+    if (_loadingCount < 0) _loadingCount = 0;
+    const busy = _loadingCount > 0;
+    els.loadingIndicator.hidden = !busy;
+    els.loadingIndicator.setAttribute('aria-busy', busy ? 'true' : 'false');
   }
 
   function _syncControlsFromState() {
@@ -293,53 +327,150 @@
   }
 
   // =====================================================================
-  // REFRESH — recomputes everything from current state + loaded data
+  // REFRESH - recomputes everything from current state + loaded data
+  //
+  // Phase B: alerts are pre-computed by refresh.py and shipped as
+  // flagged_ndfd.geojson and flagged_mrms.geojson. Each feature has a
+  // `max_category` property. We filter client-side by:
+  //     feature.properties.max_category >= state.threshold
+  // No turf intersection on the client - all spatial work is done by
+  // refresh.py in geopandas, which is orders of magnitude faster than
+  // doing it in JS for 228k debris flow polygons.
   // =====================================================================
   function refresh() {
     // ---- Render BOTH precip layers (independent of detection mode) ------
-    // The user can toggle visibility of each via the sidebar; we always
-    // load both into the map so the toggles work instantly.
     MAP.setForecast(MOCK.NDFD_FORECAST);
     MAP.setForecastVisible(els.layerNdfd.checked);
-
     MAP.setObserved(MOCK.MRMS_OBSERVED);
     MAP.setObservedVisible(els.layerMrms.checked);
 
-    // ---- Pick the active dataset for alert computation ------------------
-    const active = state.mode === 'mrms'
+    // ---- Pick the active precip + flagged dataset for the current mode --
+    const activePrecip = state.mode === 'mrms'
       ? MOCK.MRMS_OBSERVED
       : MOCK.NDFD_FORECAST;
+    const activeFlagged = state.mode === 'mrms'
+      ? MOCK.FLAGGED_MRMS
+      : MOCK.FLAGGED_NDFD;
 
-    const result = AL.compute(active, MOCK.DEBRIS_FLOWS, state.threshold);
+    // ---- Filter pre-computed flagged data by threshold -------------------
+    let alertsFC;
+    let totalCandidates = 0;
+    let totalDebris     = 0;
 
-    // Stash the latest results for CSV export
-    state.lastAlerts = result.alerts;
-    state.lastCtx    = _buildSourceCtx(active);
+    if (activeFlagged && activeFlagged.features) {
+      // Live mode: server pre-computed. Filter by max_category client-side.
+      totalCandidates = activeFlagged.features.length;
+      totalDebris     = (activeFlagged.meta && activeFlagged.meta.n_debris)
+                        || totalCandidates;
+      const matched = activeFlagged.features.filter(function (f) {
+        return Number(f.properties.max_category) >= state.threshold;
+      });
+      alertsFC = { type: 'FeatureCollection', features: matched };
+    } else {
+      // Fallback mode: no flagged file present. Use legacy client-side
+      // turf intersection against the mock 8-rectangle debris flows.
+      // This keeps the dashboard testable before refresh.py has run.
+      const result = AL.compute(activePrecip, MOCK.DEBRIS_FLOWS, state.threshold);
+      alertsFC = result.alerts;
+      totalDebris = result.summary.total;
+    }
 
-    // ---- Map: render alert polygons -------------------------------------
-    MAP.setAlerts(result.alerts);
+    // ---- Stash for CSV export + click-to-zoom ---------------------------
+    state.lastAlerts = alertsFC;
+    state.lastCtx    = _buildSourceCtx(activePrecip);
+
+    // ---- Map: render alert polygons --------------------------------------
+    MAP.setAlerts(alertsFC);
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
     // ---- Header metrics --------------------------------------------------
-    _updateHeader(active, result.summary);
+    _updateHeader(activePrecip, {
+      flagged: alertsFC.features.length,
+      total:   totalDebris,
+      maxCategory: _maxCategoryIn(alertsFC)
+    });
 
-    // ---- Source metadata block (#6) -------------------------------------
-    _updateSourceMeta(active);
+    // ---- Source metadata block ------------------------------------------
+    _updateSourceMeta(activePrecip);
 
     // ---- Alerts table ----------------------------------------------------
-    AL.render(result.alerts, els.alertsTbody, els.alertsSummary, state.lastCtx);
+    // Normalize property name: pre-computed flagged data uses `max_category`
+    // (a property of the polygon itself), while client-side fallback uses
+    // `precip_category` (a property of the intersection event). The table
+    // renderer reads `precip_category` for the swatch and label. Bridge:
+    alertsFC.features.forEach(function (f) {
+      const p = f.properties;
+      if (p.max_category != null && p.precip_category == null) {
+        p.precip_category = p.max_category;
+        p.precip_label    = CFG.PRECIP_LABELS[p.max_category] || null;
+      }
+    });
 
-    // Disable CSV button when there's nothing to export
+    AL.render(alertsFC, els.alertsTbody, els.alertsSummary, state.lastCtx);
+    _wireRowClicks();        // (re-wire after every render - new <tr> each time)
+
     if (els.exportCsvBtn) {
-      els.exportCsvBtn.disabled = !(result.alerts.features &&
-                                    result.alerts.features.length);
+      els.exportCsvBtn.disabled = !(alertsFC.features && alertsFC.features.length);
     }
 
-    // ---- "Last updated" stamp -------------------------------------------
     els.lastUpdated.textContent =
       'Last updated: ' + new Date().toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit'
       });
+  }
+
+  function _maxCategoryIn(fc) {
+    if (!fc || !fc.features || !fc.features.length) return null;
+    let max = -1;
+    for (const f of fc.features) {
+      const c = Number(f.properties.precip_category != null
+                       ? f.properties.precip_category
+                       : f.properties.max_category);
+      if (c > max) max = c;
+    }
+    return max >= 0 ? max : null;
+  }
+
+  // =====================================================================
+  // CLICK-TO-ZOOM (#10)
+  // =====================================================================
+  // Each row in the alerts table corresponds to one flagged polygon.
+  // Clicking the row zooms the map to that polygon's extent.
+  function _wireRowClicks() {
+    if (!els.alertsTbody || !state.lastAlerts) return;
+    const rows = els.alertsTbody.querySelectorAll('tr[data-objectid]');
+    rows.forEach(function (tr) {
+      const oid = tr.dataset.objectid;
+      if (!oid) return;
+      tr.classList.add('row-clickable');
+      tr.tabIndex = 0;
+      tr.setAttribute('role', 'button');
+      tr.setAttribute('aria-label', `Zoom map to polygon ${oid}`);
+      tr.addEventListener('click', function () { _zoomToObjectId(oid); });
+      tr.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          _zoomToObjectId(oid);
+        }
+      });
+    });
+  }
+
+  function _zoomToObjectId(objectid) {
+    if (!state.lastAlerts) return;
+    const match = state.lastAlerts.features.find(function (f) {
+      return String(f.properties.OBJECTID) === String(objectid);
+    });
+    if (!match || !match.geometry) return;
+    const lmap = MAP._internalMap && MAP._internalMap();
+    if (!lmap) return;
+    try {
+      const bbox = turf.bbox(match);   // [minX, minY, maxX, maxY]
+      const bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+      lmap.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    } catch (e) {
+      console.warn('[DEFNS] Could not zoom to polygon:', e);
+    }
   }
 
   // -- helpers consumed by refresh ----------------------------------------
