@@ -124,17 +124,15 @@ a:hover, a:focus { color: var(--accent-1); }
   background: var(--site-surface);
   border-top: 3px solid var(--accent-1);
   border-bottom: 1px solid var(--site-border);
-  padding: var(--sp-4) var(--sp-5);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  padding: var(--sp-3) var(--sp-5);
+  flex-shrink: 0;            /* keeps natural height; doesn't squeeze under body */
 }
 
 .header-row {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-4);
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 
 .logo img {
@@ -161,15 +159,16 @@ a:hover, a:focus { color: var(--accent-1); }
 .app-header h1 {
   font-size: var(--fs-h1);
   font-weight: 700;
-  margin: 0 0 var(--sp-2) 0;
+  margin: 0 0 var(--sp-1) 0;
   color: var(--site-text);
 }
 
 .subtitle {
   font-size: var(--fs-sm);
   color: var(--site-text-muted);
-  max-width: 80ch;
   margin: 0;
+  /* No max-width - subtitle flows to fill available horizontal space,
+     keeping the header more compact vertically by needing fewer lines. */
 }
 
 /* Metric cards row */
@@ -229,12 +228,26 @@ a:hover, a:focus { color: var(--accent-1); }
 }
 
 /* -------------------------------------------------------------------------
-   Body layout: sidebar + content
+   Body layout: flexbox column so the header takes its natural height and
+   the body region fills the remaining viewport space. Replaces the older
+   approach of declaring a fixed --header-h and computing app-body height
+   from it - that broke whenever the actual header content was taller than
+   the assumed value.
    ------------------------------------------------------------------------- */
+html { height: 100%; }
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .app-body {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  min-height: calc(100vh - var(--header-h));
+  flex: 1;
+  min-height: 0;            /* allow grid children to shrink */
+  overflow: hidden;
 }
 
 /* -------------------------------------------------------------------------
@@ -245,9 +258,7 @@ a:hover, a:focus { color: var(--accent-1); }
   border-right: 1px solid var(--site-border);
   padding: var(--sp-4) var(--sp-4) var(--sp-6);
   overflow-y: auto;
-  max-height: calc(100vh - var(--header-h));
-  position: sticky;
-  top: var(--header-h);
+  height: 100%;          /* parent .app-body is height-constrained */
 }
 
 .sidebar-heading {
@@ -434,40 +445,84 @@ select {
 }
 
 /* -------------------------------------------------------------------------
-   Content area: map + alerts table
+   Content area: map + collapsible alerts table.
+   Constrained to parent .app-body height; scroll happens here.
+   The map expands to fill available vertical space; the alerts panel
+   collapses to a slim header and can be expanded to peek at the table.
    ------------------------------------------------------------------------- */
 .content {
   padding: var(--sp-4);
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-  min-width: 0;       /* keep grid track from blowing out on long content */
+  height: 100%;
+  overflow-y: auto;       /* scroll inside content if anything overflows */
+  min-width: 0;
 }
 
-.map-section { flex-shrink: 0; }
+.map-section {
+  flex: 1 1 auto;          /* map takes available space */
+  min-height: 380px;       /* don't shrink past usable size */
+  display: flex;
+}
 #map {
+  flex: 1;
   width: 100%;
-  height: 500px;
+  height: 100%;
+  min-height: 380px;
   background: var(--site-bg);
   border: 1px solid var(--site-border);
   border-radius: var(--radius-md);
 }
 
-/* Alerts table */
+/* Alerts section - now a collapsible <details> element.
+   Closed state: thin bar showing alert count, summary text on the right.
+   Open state: bar stays, table appears below with its own max-height and
+   internal scrolling so it never pushes the map off-screen. */
 .alerts-section {
   background: var(--site-surface);
   border: 1px solid var(--site-border);
   border-radius: var(--radius-md);
-  padding: var(--sp-4);
+  flex-shrink: 0;
 }
 
-.alerts-section-header {
+/* The <summary> is the always-visible "header bar" of the disclosure */
+.alerts-section > summary {
+  list-style: none;          /* hide default triangle - we render our own */
+  cursor: pointer;
+  padding: var(--sp-3) var(--sp-4);
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-3);
+  flex-wrap: wrap;
+  border-radius: var(--radius-md);
+  transition: background 0.15s;
+}
+.alerts-section > summary::-webkit-details-marker {
+  display: none;             /* Safari - hide default disclosure triangle */
+}
+.alerts-section > summary:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.alerts-section > summary:focus-visible {
+  outline: 3px solid var(--site-focus);
+  outline-offset: -3px;      /* keep inside the rounded border */
+}
+
+/* Custom chevron that rotates on open. Uses CSS only - no JS. */
+.alerts-disclosure-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid var(--site-text);
+  border-bottom: 2px solid var(--site-text);
+  transform: rotate(-45deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  margin-right: var(--sp-1);
+}
+.alerts-section[open] > summary .alerts-disclosure-icon {
+  transform: rotate(45deg);   /* rotates to point down when open */
 }
 
 .alerts-section h2 {
@@ -475,18 +530,29 @@ select {
   font-weight: 700;
   margin: 0;
   color: var(--site-text);
+  flex-grow: 1;
 }
 
 .alerts-summary {
   font-size: var(--fs-sm);
   color: var(--site-text-muted);
   margin: 0;
+  text-align: right;
+}
+
+/* When closed, summary is the only visible part. When open, the inner
+   .alerts-body becomes visible with the table. */
+.alerts-body {
+  padding: 0 var(--sp-4) var(--sp-4);
+  border-top: 1px solid var(--site-border);
 }
 
 .table-wrapper {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 280px;         /* internal scroll if many alerts */
   border: 1px solid var(--site-border);
   border-radius: var(--radius-sm);
+  margin-top: var(--sp-3);
 }
 
 #alerts-table {
@@ -520,30 +586,44 @@ select {
 }
 
 /* -------------------------------------------------------------------------
-   Footer
+   Footer - hidden in the fixed-layout dashboard view.
+   The accessibility statement is the canonical reference; the same info
+   that was in the footer is now in the sidebar's footer-links section.
    ------------------------------------------------------------------------- */
 .app-footer {
-  background: var(--site-surface);
-  border-top: 1px solid var(--site-border);
-  padding: var(--sp-4) var(--sp-5);
-  font-size: var(--fs-xs);
-  color: var(--site-text-muted);
+  display: none;
 }
-.app-footer p { margin: 0 0 var(--sp-1) 0; }
 
 /* -------------------------------------------------------------------------
-   Responsive: collapse sidebar to a top section on narrow viewports
+   Responsive: on narrow viewports, abandon the fixed-pane layout and let
+   the page scroll naturally. The fixed layout assumes desktop-ish space.
    ------------------------------------------------------------------------- */
 @media (max-width: 900px) {
+  html, body {
+    overflow: auto;
+    height: auto;
+  }
+  body {
+    display: block;        /* override flex column */
+  }
   .app-body {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+    flex: none;
+    min-height: 0;
   }
   .sidebar {
-    position: static;
-    max-height: none;
+    height: auto;
     border-right: none;
     border-bottom: 1px solid var(--site-border);
   }
+  .content {
+    height: auto;
+    overflow: visible;
+  }
+  .map-section { min-height: 360px; }
+  #map        { min-height: 360px; height: 360px; }
   .metrics {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -554,5 +634,5 @@ select {
   .logo img { width: 56px; height: 56px; }
   .app-header h1 { font-size: var(--fs-lg); }
   .metrics { grid-template-columns: 1fr; }
-  #map { height: 360px; }
+  #map { height: 320px; min-height: 320px; }
 }
