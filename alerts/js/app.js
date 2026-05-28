@@ -454,28 +454,14 @@
     // afterward.
     _populateWindowSelect(state.mode);
 
+    // Mode-specific badge on the threshold readout. The subtitle itself is
+    // now static (set once in index.html) since the new copy describes the
+    // dashboard as a whole rather than per-mode behavior.
     if (isMrms) {
-      els.subtitle.textContent =
-        'Real-time observed precipitation (NOAA MRMS multi-sensor ' +
-        'radar+gauge accumulation) cross-referenced with the NC Geological ' +
-        'Survey channelized debris flow model. Choose an observation window ' +
-        '(1, 24, or 72 hours) to see flagged debris flows where observed ' +
-        'rainfall over that window meets the threshold.';
       els.thresholdSourceLabel.textContent = '(MRMS)';
     } else if (isHistorical) {
-      els.subtitle.textContent =
-        'Historical precipitation data from a past weather event, ' +
-        'cross-referenced with the NC Geological Survey channelized ' +
-        'debris flow model. Demonstrates which polygons would have been ' +
-        'flagged at the time. Threshold slider works as in live mode.';
       els.thresholdSourceLabel.textContent = '(historical)';
     } else {
-      els.subtitle.textContent =
-        'Real-time precipitation forecast (NWS NDFD) cross-referenced ' +
-        'with the NC Geological Survey channelized debris flow model. ' +
-        'Choose a forecast window (12, 24, 48, or 72 hours) to see flagged ' +
-        'debris flows where forecast rainfall meets the threshold at any ' +
-        'point in the window.';
       els.thresholdSourceLabel.textContent = '(NDFD)';
     }
   }
