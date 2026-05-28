@@ -52,6 +52,16 @@
           above the configured rainfall threshold.
         </p>
       </div>
+
+      <!-- Loading indicator. Right-aligned in the header-row so it
+           doesn't fight the map's basemap selector. Hidden by default;
+           toggled by _setLoading() in app.js. role=status + aria-live
+           so screen readers announce loading start/end. -->
+      <div id="loading-indicator" class="loading-indicator"
+           role="status" aria-live="polite" aria-busy="false" hidden>
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span class="loading-text">Loading&hellip;</span>
+      </div>
     </div>
 
     <!-- Metrics row. Each metric is a <dl> for semantic key/value pairing.
@@ -127,7 +137,7 @@
         </div>
       </div>
 
-      <!-- Detection mode (NDFD forecast vs MRMS observed) -->
+      <!-- Detection mode (NDFD forecast / MRMS observed / Historical event) -->
       <fieldset class="control-group">
         <legend>Detect alerts from</legend>
         <div class="radio-row">
@@ -138,7 +148,25 @@
         <div class="radio-row">
           <input type="radio" id="mode-mrms" name="detection-mode"
                  value="mrms" />
-          <label for="mode-mrms">Current radar (MRMS 1-hour)</label>
+          <label for="mode-mrms">Observed precipitation (MRMS)</label>
+        </div>
+        <div class="radio-row">
+          <input type="radio" id="mode-historical" name="detection-mode"
+                 value="historical" />
+          <label for="mode-historical">Historical event</label>
+        </div>
+
+        <!-- Sub-controls visible only when mode-historical is selected.
+             aria-controlled by the radio buttons via JS in app.js. The
+             event dropdown is populated at runtime from events.json. -->
+        <div class="sub-control" id="historical-sub-controls" hidden>
+          <label for="event-select" class="control-label">
+            Event
+          </label>
+          <select id="event-select" aria-describedby="event-description">
+            <option value="">Loading events&hellip;</option>
+          </select>
+          <p class="control-help" id="event-description"></p>
         </div>
       </fieldset>
 
@@ -174,21 +202,16 @@
         </dl>
       </div>
 
-      <!-- Window selector (only relevant in NDFD mode) -->
+      <!-- Window selector. Visible for NDFD and MRMS modes; hidden for
+           historical mode. Options and label are set by JS based on the
+           active detection mode (NDFD = forward-looking forecast windows;
+           MRMS = backward-looking observation windows). -->
       <div class="control-group" id="window-control-group">
-        <label for="window-select" class="control-label">Forecast window</label>
+        <label for="window-select" class="control-label" id="window-label">Forecast window</label>
         <select id="window-select">
-          <option value="6">6 hours</option>
-          <option value="12" selected>12 hours</option>
-          <option value="18">18 hours</option>
-          <option value="24">24 hours</option>
-          <option value="48">48 hours</option>
-          <option value="72">72 hours</option>
+          <!-- Populated dynamically by app.js _populateWindowSelect() -->
         </select>
       </div>
-      <p class="control-help mode-only-mrms" id="mrms-window-note" hidden>
-        MRMS mode uses a fixed 1-hour observed accumulation.
-      </p>
 
       <hr class="sidebar-divider" />
 
@@ -265,7 +288,7 @@
       <!-- Footer links -->
       <hr class="sidebar-divider" />
       <p class="sidebar-footer-links">
-        <a href="accessibility.html">Accessibility statement</a><br />
+        <a href="accessibility.html" target="_blank" rel="noopener">Accessibility statement</a><br />
         <a href="https://landslidesncgs.com/" target="_blank" rel="noopener">
           NCGS landslides home &nearr;
         </a>
@@ -278,21 +301,24 @@
          ================================================================ -->
     <main class="content" role="main" id="main-content">
 
+      <!-- Hindcast banner. Hidden by default; shown when historical mode
+           is active. role=alert isn't appropriate (not urgent); aria-live
+           polite so screen readers announce mode changes. -->
+      <div id="hindcast-banner" class="hindcast-banner" hidden
+           role="status" aria-live="polite">
+        <span class="hindcast-banner-icon" aria-hidden="true">&#9888;</span>
+        <span class="hindcast-banner-text">
+          <strong>Historical data</strong>
+          <span id="hindcast-banner-detail"></span>
+        </span>
+      </div>
+
       <!-- Map. aria-hidden because the map is a visual aid; canonical
            data lives in the alerts table below, which IS accessible. -->
       <section class="map-section" aria-label="Interactive map">
         <div id="map" role="img"
              aria-label="Map of Western North Carolina showing precipitation
                         polygons and debris flow zones"></div>
-
-        <!-- Loading indicator. Positioned top-right by CSS, hidden by
-             default. Announces start/end of loading to assistive tech via
-             role=status + aria-live. -->
-        <div id="loading-indicator" class="loading-indicator"
-             role="status" aria-live="polite" aria-busy="false" hidden>
-          <span class="loading-spinner" aria-hidden="true"></span>
-          <span class="loading-text">Loading data&hellip;</span>
-        </div>
       </section>
 
       <!-- Alerts table - the canonical, accessible representation of
@@ -331,14 +357,17 @@
                 <tr>
                   <th scope="col" id="col-id">Polygon ID</th>
                   <th scope="col" id="col-county">County</th>
+                  <th scope="col" id="col-watershed">Watershed</th>
                   <th scope="col" id="col-cat">Precip category</th>
+                  <th scope="col" id="col-thresh">Precip threshold</th>
                   <th scope="col" id="col-source">Source &middot; observed/issued</th>
+                  <th scope="col" id="col-window">Forecast window</th>
                   <th scope="col" id="col-area">Area (acres)</th>
                 </tr>
               </thead>
               <tbody id="alerts-tbody">
                 <tr>
-                  <td colspan="5" class="empty-row">
+                  <td colspan="8" class="empty-row">
                     Loading data&hellip;
                   </td>
                 </tr>

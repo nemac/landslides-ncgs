@@ -2,35 +2,39 @@
 """
 refresh.py - DEFNS Alerts data pipeline
 
-Fetches live NWS NDFD precipitation forecast and NOAA MRMS 1-hour observed
-QPE, clips both to the WNC bounding box, and writes two GeoJSON files that
-the static frontend reads on page load:
+Three modes:
 
-    landslidesncgs.com/alerts/data/forecast.geojson
-    landslidesncgs.com/alerts/data/observed.geojson
+  python scripts/refresh.py
+      Default: fetch live NDFD forecast, MRMS observed, run debris flow
+      intersections, write four files to alerts/data/.
 
-Each file is a standard GeoJSON FeatureCollection with an additional `meta`
-property at the top level containing timestamps, source info, and freshness
-markers. (Non-strict GeoJSON, but every parser tolerates extra top-level
-keys.)
+  python scripts/refresh.py --hindcast
+      Generate historical (hindcast) data for every event in events.py.
+      Writes to alerts/data/historical/ - one precip + one flagged file
+      per event, plus events.json (the manifest the frontend reads).
 
-Phase 3a: Run manually whenever fresh data is wanted.
+  python scripts/refresh.py --hindcast helene_2024
+      Only generate hindcast data for a specific event id. Useful when
+      adding or re-processing one event without touching the others.
 
-    python scripts/refresh.py
+Live mode writes:
+    alerts/data/forecast.geojson         NDFD precipitation polygons
+    alerts/data/observed.geojson         MRMS precipitation polygons
+    alerts/data/flagged_ndfd.geojson     Debris flow polygons + max NDFD cat
+    alerts/data/flagged_mrms.geojson     Debris flow polygons + max MRMS cat
 
-Phase 3b: Wrap in a GitHub Actions cron once the deploy story is settled.
+Hindcast mode writes (per event):
+    alerts/data/historical/{event_id}_precip.geojson
+    alerts/data/historical/{event_id}_flagged.geojson
+    alerts/data/historical/events.json   Manifest (regenerated each run)
 
-Exit codes:
-    0 = both files written successfully
-    1 = both fetches failed
-    2 = one fetch failed (the other file is still written)
-
-This means the script is safe to run on a schedule; the frontend gracefully
-falls back to mock data if a file is missing or stale.
+Each GeoJSON has a `meta` property at the top level carrying timestamps
+and source info. Non-strict GeoJSON but every parser tolerates it.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import traceback
@@ -41,6 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 DATA_DIR = REPO_ROOT / "alerts" / "data"
+HISTORICAL_DIR = DATA_DIR / "historical"
 
 sys.path.insert(0, str(HERE))
 
@@ -55,38 +60,113 @@ _debris_cache: dict = {}
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="DEFNS data pipeline: live precip + alerts, or hindcast."
+    )
+    parser.add_argument(
+        "--hindcast",
+        nargs="?",
+        const="ALL",
+        default=None,
+        metavar="EVENT_ID",
+        help=(
+            "Generate hindcast files. Pass an event id to generate just "
+            "that event, or no argument to generate all events in "
+            "events.HISTORICAL_EVENTS."
+        ),
+    )
+    args = parser.parse_args()
+
+    if args.hindcast is None:
+        return _main_live()
+    return _main_hindcast(args.hindcast)
+
+
+def _main_live() -> int:
+    """Original live-mode entry point. Fetches NDFD + MRMS at each
+    supported window, plus flagged debris flow intersections per window.
+
+    Generates per-window file pairs:
+      forecast_{N}h.geojson + flagged_ndfd_{N}h.geojson  for N in NDFD_WINDOWS_HOURS
+      observed_{N}h.geojson + flagged_mrms_{N}h.geojson  for N in MRMS_WINDOWS_HOURS
+
+    Each window's fetch and intersection is independent - one failure
+    doesn't block the others.
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     print(f"[defns-refresh] Output directory: {DATA_DIR}")
     print(f"[defns-refresh] Started at:       {datetime.now(timezone.utc).isoformat()}")
+    print(f"[defns-refresh] NDFD windows: {NDFD_WINDOWS_HOURS}")
+    print(f"[defns-refresh] MRMS windows: {MRMS_WINDOWS_HOURS}")
 
-    # Fetch precipitation first. If both fail, no point loading debris flows.
-    ndfd_ok = _safely(_refresh_ndfd, "NDFD forecast")
-    mrms_ok = _safely(_refresh_mrms, "MRMS observed")
+    # ---- Phase 1: fetch precipitation per window -----------------------
+    ndfd_window_ok: dict[int, bool] = {}
+    mrms_window_ok: dict[int, bool] = {}
 
-    # Load debris flows once (used for both intersections below)
-    debris_ok = ndfd_ok or mrms_ok
-    if debris_ok:
-        debris_ok = _safely(_load_debris_flows, "Debris flow polygons")
+    for hrs in NDFD_WINDOWS_HOURS:
+        ndfd_window_ok[hrs] = _safely(
+            lambda h=hrs: _refresh_ndfd(window_hours=h),
+            f"NDFD forecast ({hrs}h)",
+        )
 
-    # Intersect against each precip source that succeeded
-    flagged_ndfd_ok = False
-    flagged_mrms_ok = False
-    if debris_ok and ndfd_ok:
-        flagged_ndfd_ok = _safely(_refresh_flagged_ndfd, "NDFD intersections")
-    if debris_ok and mrms_ok:
-        flagged_mrms_ok = _safely(_refresh_flagged_mrms, "MRMS intersections")
+    for hrs in MRMS_WINDOWS_HOURS:
+        mrms_window_ok[hrs] = _safely(
+            lambda h=hrs: _refresh_mrms(window_hours=h),
+            f"MRMS observed ({hrs}h)",
+        )
 
-    # Summary
-    successes = sum([ndfd_ok, mrms_ok, flagged_ndfd_ok, flagged_mrms_ok])
-    if successes == 4:
-        print("\n[defns-refresh] DONE - all four files written.")
+    # ---- Phase 2: load debris flows once for all intersections ---------
+    any_precip_ok = any(ndfd_window_ok.values()) or any(mrms_window_ok.values())
+    if not any_precip_ok:
+        print("\n[defns-refresh] ALL precipitation fetches failed; "
+              "skipping debris flow intersections.")
+        return 1
+
+    debris_ok = _safely(_load_debris_flows, "Debris flow polygons")
+    if not debris_ok:
+        print("\n[defns-refresh] Debris flow load failed; "
+              "wrote precip files but cannot produce flagged files.")
+        return 2
+
+    # ---- Phase 3: intersect each successful precip with debris flows ---
+    flagged_ok: dict[str, bool] = {}
+    for hrs in NDFD_WINDOWS_HOURS:
+        if ndfd_window_ok[hrs]:
+            flagged_ok[f"ndfd_{hrs}h"] = _safely(
+                lambda h=hrs: _refresh_flagged_ndfd(window_hours=h),
+                f"NDFD intersections ({hrs}h)",
+            )
+    for hrs in MRMS_WINDOWS_HOURS:
+        if mrms_window_ok[hrs]:
+            flagged_ok[f"mrms_{hrs}h"] = _safely(
+                lambda h=hrs: _refresh_flagged_mrms(window_hours=h),
+                f"MRMS intersections ({hrs}h)",
+            )
+
+    # ---- Summary --------------------------------------------------------
+    total_precip = len(NDFD_WINDOWS_HOURS) + len(MRMS_WINDOWS_HOURS)
+    total_flagged = sum(ndfd_window_ok.values()) + sum(mrms_window_ok.values())
+    precip_successes = sum(ndfd_window_ok.values()) + sum(mrms_window_ok.values())
+    flagged_successes = sum(flagged_ok.values())
+
+    print(f"\n[defns-refresh] DONE - "
+          f"{precip_successes}/{total_precip} precip files written, "
+          f"{flagged_successes}/{total_flagged} flagged files written.")
+
+    # Return 0 if everything succeeded, 2 if partial, 1 if nothing worked
+    if precip_successes == total_precip and flagged_successes == total_flagged:
         return 0
-    elif successes == 0:
-        print("\n[defns-refresh] ALL FAILED - no files written.")
+    elif precip_successes == 0 and flagged_successes == 0:
         return 1
     else:
-        print(f"\n[defns-refresh] PARTIAL - {successes}/4 files written.")
         return 2
+
+
+# Per-mode window lists. Kept here (not in config.py) so refresh-script
+# loop control is local to refresh.py - changing here doesn't affect
+# data.py or any other module.
+NDFD_WINDOWS_HOURS = [12, 24, 48, 72]
+MRMS_WINDOWS_HOURS = [1, 24, 72]
 
 
 def _safely(fn, label: str) -> bool:
@@ -106,11 +186,12 @@ def _safely(fn, label: str) -> bool:
 # NDFD forecast
 # ============================================================================
 
-def _refresh_ndfd() -> None:
-    # min_category=0 returns ALL categories so the client can re-threshold
-    # without re-fetching. Window matches the default UI value (12 hr).
+def _refresh_ndfd(window_hours: int = 12) -> None:
+    """Fetch NDFD forecast for a specific window. Writes per-window file
+    forecast_{N}h.geojson. min_category=0 returns ALL categories so the
+    client can re-threshold without re-fetching."""
     gdf, fromdate, todate = defns_data.fetch_precip_forecast(
-        window_hours=12, min_category=0
+        window_hours=window_hours, min_category=0
     )
     print(f"  Fetched {len(gdf)} NDFD polygons across all categories.")
 
@@ -122,17 +203,19 @@ def _refresh_ndfd() -> None:
     gdf_slim = gdf_clipped[keep_cols].copy()
 
     # Convert to GeoJSON and attach meta
-    fc = json.loads(gdf_slim.to_json())
+    fc = json.loads(gdf_slim.to_json()) if not gdf_slim.empty else {
+        "type": "FeatureCollection", "features": [],
+    }
     fc["meta"] = {
         "source":        "NWS NDFD precipitation forecast",
         "issued":        _to_iso(fromdate),
         "window_end":    _to_iso(todate),
-        "window_hours":  12,
+        "window_hours":  window_hours,
         "generated_at":  _to_iso(datetime.now(timezone.utc)),
         "n_polygons":    len(gdf_slim),
     }
 
-    out_path = DATA_DIR / "forecast.geojson"
+    out_path = DATA_DIR / f"forecast_{window_hours}h.geojson"
     _write_json(out_path, fc)
     print(f"  Wrote {out_path.name}: {out_path.stat().st_size / 1024:.1f} KB")
 
@@ -141,8 +224,10 @@ def _refresh_ndfd() -> None:
 # MRMS observed
 # ============================================================================
 
-def _refresh_mrms() -> None:
-    gdf, fromdate, todate, meta = defns_data.fetch_mrms_qpe_1h()
+def _refresh_mrms(window_hours: int = 1) -> None:
+    """Fetch MRMS observed precipitation for a specific window. Writes
+    per-window file observed_{N}h.geojson."""
+    gdf, fromdate, todate, meta = defns_data.fetch_mrms_qpe(window_hours=window_hours)
     print(f"  Fetched {len(gdf)} MRMS polygons from {meta['product']}.")
     print(f"  Valid time:  {meta['valid_time'].isoformat()}")
     print(f"  Max inches:  {meta['max_inches']:.3f}")
@@ -156,18 +241,20 @@ def _refresh_mrms() -> None:
     keep_cols = [c for c in ["category", "label", "geometry"] if c in gdf_clipped.columns]
     gdf_slim = gdf_clipped[keep_cols].copy()
 
-    fc = json.loads(gdf_slim.to_json())
+    fc = json.loads(gdf_slim.to_json()) if not gdf_slim.empty else {
+        "type": "FeatureCollection", "features": [],
+    }
     fc["meta"] = {
         "source":        f"NOAA MRMS {meta['product']}",
         "observed_at":   _to_iso(meta["valid_time"]),
-        "window_hours":  1,
+        "window_hours":  window_hours,
         "max_inches":    float(meta["max_inches"]),
         "minutes_ago":   float(meta["minutes_ago"]),
         "generated_at":  _to_iso(datetime.now(timezone.utc)),
         "n_polygons":    len(gdf_slim),
     }
 
-    out_path = DATA_DIR / "observed.geojson"
+    out_path = DATA_DIR / f"observed_{window_hours}h.geojson"
     _write_json(out_path, fc)
     print(f"  Wrote {out_path.name}: {out_path.stat().st_size / 1024:.1f} KB")
 
@@ -190,24 +277,22 @@ def _load_debris_flows() -> None:
     _debris_cache["gdf"] = gdf
 
 
-def _refresh_flagged_ndfd() -> None:
-    """Run debris-flow x NDFD precipitation intersection. Writes
-    flagged_ndfd.geojson with one feature per debris flow polygon that
-    touches any NDFD precip polygon. Each feature carries a `max_category`
-    property = the highest NDFD category it intersects (used client-side
-    for instant threshold filtering)."""
+def _refresh_flagged_ndfd(window_hours: int = 12) -> None:
+    """Run debris-flow x NDFD precipitation intersection for a window.
+    Writes flagged_ndfd_{N}h.geojson with one feature per debris flow
+    polygon that touches any NDFD precip polygon at this window."""
     _write_flagged(
-        precip_path=DATA_DIR / "forecast.geojson",
-        out_path=DATA_DIR / "flagged_ndfd.geojson",
+        precip_path=DATA_DIR / f"forecast_{window_hours}h.geojson",
+        out_path=DATA_DIR / f"flagged_ndfd_{window_hours}h.geojson",
         source_label="NDFD",
     )
 
 
-def _refresh_flagged_mrms() -> None:
+def _refresh_flagged_mrms(window_hours: int = 1) -> None:
     """Same as _refresh_flagged_ndfd but against MRMS observed precipitation."""
     _write_flagged(
-        precip_path=DATA_DIR / "observed.geojson",
-        out_path=DATA_DIR / "flagged_mrms.geojson",
+        precip_path=DATA_DIR / f"observed_{window_hours}h.geojson",
+        out_path=DATA_DIR / f"flagged_mrms_{window_hours}h.geojson",
         source_label="MRMS",
     )
 
@@ -343,6 +428,212 @@ def _write_empty_flagged(out_path: Path, source_label: str) -> None:
     }
     _write_json(out_path, fc)
     print(f"  Wrote {out_path.name}: (empty)")
+
+
+# ============================================================================
+# Hindcast mode (Stage IV historical events)
+# ============================================================================
+
+def _main_hindcast(which: str) -> int:
+    """Generate hindcast files. If `which == 'ALL'`, do every event in
+    events.HISTORICAL_EVENTS. Otherwise just the specified event id."""
+    import events as defns_events
+
+    HISTORICAL_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[defns-refresh] Hindcast mode")
+    print(f"[defns-refresh] Output directory: {HISTORICAL_DIR}")
+    print(f"[defns-refresh] Started at:       {datetime.now(timezone.utc).isoformat()}")
+
+    if which == "ALL":
+        events_to_run = defns_events.HISTORICAL_EVENTS
+    else:
+        events_to_run = [defns_events.get_event(which)]
+
+    # We need debris flows once for all intersections
+    if not _safely(_load_debris_flows, "Debris flow polygons"):
+        print("[defns-refresh] FAIL - debris flows could not be loaded.")
+        return 1
+
+    n_ok = 0
+    n_fail = 0
+    for event in events_to_run:
+        label = f"Event: {event['id']} ({event['name']})"
+        if _safely(lambda e=event: _refresh_hindcast_event(e), label):
+            n_ok += 1
+        else:
+            n_fail += 1
+
+    # Always write the manifest covering ALL events (not just this run),
+    # so removing a single event from the run doesn't make the frontend
+    # forget about the others that exist on disk.
+    _write_events_manifest(defns_events.HISTORICAL_EVENTS)
+
+    if n_fail == 0:
+        print(f"\n[defns-refresh] DONE - {n_ok} event(s) processed.")
+        return 0
+    elif n_ok > 0:
+        print(f"\n[defns-refresh] PARTIAL - {n_ok} ok, {n_fail} failed.")
+        return 2
+    else:
+        print(f"\n[defns-refresh] ALL FAILED - {n_fail} events failed.")
+        return 1
+
+
+def _refresh_hindcast_event(event: dict) -> None:
+    """Generate one event's pair of files: precip + flagged."""
+    event_id = event["id"]
+
+    # ---- Fetch Stage IV precip ------------------------------------------
+    print(f"  Event: {event['name']}")
+    print(f"  Date label: {event['date_label']}")
+    print(f"  End date: {event['end_date']}")
+    print(f"  Accumulation: {event['accumulation_days']} day(s)")
+
+    precip_gdf, fetch_meta = defns_data.fetch_stage_iv_qpe(
+        end_date=event["end_date"],
+        accumulation_days=event["accumulation_days"],
+    )
+    print(f"  Stage IV polygons (clipped to WNC): {len(precip_gdf)}")
+
+    # ---- Write precip GeoJSON -------------------------------------------
+    keep_cols = [c for c in ["category", "label", "geometry"]
+                 if c in precip_gdf.columns]
+    precip_slim = precip_gdf[keep_cols].copy() if keep_cols else precip_gdf
+
+    precip_fc = json.loads(precip_slim.to_json()) if not precip_slim.empty else {
+        "type": "FeatureCollection",
+        "features": [],
+    }
+    precip_fc["meta"] = {
+        "source":             fetch_meta["product"],
+        "event_id":           event_id,
+        "event_name":         event["name"],
+        "date_label":         event["date_label"],
+        "end_date":           event["end_date"],
+        "accumulation_days":  event["accumulation_days"],
+        "max_inches":         float(fetch_meta["max_inches"]),
+        "generated_at":       _to_iso(datetime.now(timezone.utc)),
+        "n_polygons":         len(precip_slim),
+        "description":        event["description"],
+    }
+    precip_path = HISTORICAL_DIR / f"{event_id}_precip.geojson"
+    _write_json(precip_path, precip_fc)
+    print(f"  Wrote {precip_path.name}: "
+          f"{precip_path.stat().st_size / 1024:.1f} KB")
+
+    # ---- Compute + write flagged debris flows ---------------------------
+    if precip_gdf.empty:
+        print(f"  No precip -> empty flagged file.")
+        _write_hindcast_empty_flagged(event_id, event)
+        return
+
+    debris_gdf = _debris_cache["gdf"]
+    flagged = defns_analysis.find_alerts(debris_gdf, precip_gdf)
+    print(f"  Debris flows flagged (raw): {len(flagged)}")
+
+    if flagged.empty:
+        _write_hindcast_empty_flagged(event_id, event)
+        return
+
+    flagged = flagged.rename(columns={"category": "max_category"})
+
+    # Apply same Phase B optimizations as live mode for size parity
+    from config import (
+        FLAGGED_MIN_CATEGORY,
+        FLAGGED_SIMPLIFY_METERS,
+        FLAGGED_COORD_PRECISION,
+        INTERSECTION_CRS,
+    )
+
+    n_before = len(flagged)
+    flagged = flagged[flagged["max_category"] >= FLAGGED_MIN_CATEGORY].copy()
+    if n_before - len(flagged) > 0:
+        print(f"  Dropped {n_before - len(flagged)} polygons below "
+              f"cat {FLAGGED_MIN_CATEGORY}")
+
+    if FLAGGED_SIMPLIFY_METERS:
+        flagged_proj = flagged.to_crs(INTERSECTION_CRS)
+        flagged_proj["geometry"] = flagged_proj.geometry.simplify(
+            FLAGGED_SIMPLIFY_METERS, preserve_topology=True
+        )
+        flagged = flagged_proj.to_crs(DISPLAY_CRS)
+
+    flagged_fc = json.loads(flagged.to_json())
+    if FLAGGED_COORD_PRECISION is not None:
+        _round_coords(flagged_fc, FLAGGED_COORD_PRECISION)
+
+    flagged_fc["meta"] = {
+        "source":            fetch_meta["product"],
+        "event_id":          event_id,
+        "event_name":        event["name"],
+        "date_label":        event["date_label"],
+        "end_date":          event["end_date"],
+        "accumulation_days": event["accumulation_days"],
+        "max_inches":        float(fetch_meta["max_inches"]),
+        "generated_at":      _to_iso(datetime.now(timezone.utc)),
+        "n_flagged":         len(flagged),
+        "n_debris":          len(debris_gdf),
+        "min_category_shipped": FLAGGED_MIN_CATEGORY,
+    }
+    flagged_path = HISTORICAL_DIR / f"{event_id}_flagged.geojson"
+    _write_json(flagged_path, flagged_fc)
+    print(f"  Wrote {flagged_path.name}: "
+          f"{flagged_path.stat().st_size / 1024:.1f} KB")
+
+
+def _write_hindcast_empty_flagged(event_id: str, event: dict) -> None:
+    """Write a valid empty flagged FeatureCollection for an event whose
+    precip didn't intersect any debris flows. Lets the frontend distinguish
+    "no event selected" (no file) from "event selected, no flags" (file
+    exists, empty features array)."""
+    fc = {
+        "type": "FeatureCollection",
+        "features": [],
+        "meta": {
+            "event_id":      event_id,
+            "event_name":    event["name"],
+            "date_label":    event["date_label"],
+            "end_date":      event["end_date"],
+            "generated_at":  _to_iso(datetime.now(timezone.utc)),
+            "n_flagged":     0,
+            "n_debris":      len(_debris_cache.get("gdf", [])),
+        }
+    }
+    _write_json(HISTORICAL_DIR / f"{event_id}_flagged.geojson", fc)
+    print(f"  Wrote {event_id}_flagged.geojson (empty)")
+
+
+def _write_events_manifest(events: list[dict]) -> None:
+    """Write events.json - the frontend reads this to populate the dropdown.
+
+    Only includes events whose precip file actually exists on disk; that way
+    if a user adds an event to events.py but hasn't run the refresh yet, it
+    doesn't appear in the UI as a broken option.
+    """
+    available = []
+    for event in events:
+        precip_path = HISTORICAL_DIR / f"{event['id']}_precip.geojson"
+        flagged_path = HISTORICAL_DIR / f"{event['id']}_flagged.geojson"
+        if precip_path.exists() and flagged_path.exists():
+            available.append({
+                "id":                event["id"],
+                "name":               event["name"],
+                "date_label":         event["date_label"],
+                "end_date":           event["end_date"],
+                "accumulation_days":  event["accumulation_days"],
+                "description":        event["description"],
+                "precip_file":        f"historical/{event['id']}_precip.geojson",
+                "flagged_file":       f"historical/{event['id']}_flagged.geojson",
+            })
+
+    manifest = {
+        "events":       available,
+        "generated_at": _to_iso(datetime.now(timezone.utc)),
+    }
+    path = HISTORICAL_DIR / "events.json"
+    _write_json(path, manifest)
+    print(f"\n[defns-refresh] Wrote manifest: {path.name} "
+          f"({len(available)} event(s) available)")
 
 
 # ============================================================================

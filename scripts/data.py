@@ -63,16 +63,33 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
     RuntimeError if AGOL returns an HTTP-200 error envelope.
     """
     import time
+    # Some AGOL services (notably UNC Asheville's services5 instance) send
+    # Brotli-compressed responses by default. Python `requests` only decodes
+    # Brotli if the `brotli` package is installed (often not the case in
+    # default conda envs). Explicitly limiting to gzip/deflate makes the
+    # server fall back to a format we can always decode.
+    headers = {"Accept-Encoding": "gzip, deflate"}
+
     last_exc = None
     for attempt in range(1, max_attempts + 1):
         try:
-            r = requests.get(url, params=params, timeout=120)
+            r = requests.get(url, params=params, timeout=120, headers=headers)
             if 500 <= r.status_code < 600:
                 raise requests.HTTPError(
                     f"{r.status_code} Server Error", response=r
                 )
             r.raise_for_status()
-            payload = r.json()
+            try:
+                payload = r.json()
+            except ValueError as je:
+                # JSON parse failed - server probably gave us an HTML error
+                # page or an empty body despite the 200 status. Show what we
+                # actually got, then raise for retry.
+                snippet = r.text[:200].strip() if r.text else "(empty body)"
+                raise requests.HTTPError(
+                    f"Non-JSON response (probably transient server issue): "
+                    f"{snippet}", response=r
+                ) from je
             # AGOL error envelope check
             if isinstance(payload, dict) and "error" in payload:
                 err = payload["error"]
@@ -125,6 +142,12 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     Includes retry-with-backoff for transient AGOL 5xx errors.
 
+    Each polygon is also augmented with `county` and `watershed` (HUC12 name)
+    columns via spatial join against US Census TIGER counties (NC only) and
+    USGS WBD HUC12 subwatersheds. These joins happen once when the cache
+    is first built; existing caches missing these columns are
+    transparently upgraded in place.
+
     Parameters
     ----------
     force_refresh : bool
@@ -132,8 +155,8 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     Returns
     -------
-    GeoDataFrame in EPSG:4326 with columns OBJECTID, geometry (plus
-    `county` if the service exposes it; gracefully omitted if not).
+    GeoDataFrame in EPSG:4326 with columns OBJECTID, county, watershed,
+    geometry.
     """
     cache_p = _cache_path()
 
@@ -143,6 +166,32 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
               f"({cache_p}, {age_h:.1f}h old)...")
         gdf = gpd.read_file(cache_p)
         print(f"  -> {len(gdf):,} polygons loaded from cache")
+
+        # Upgrade cached GDFs that don't yet have county/watershed columns,
+        # OR have them present but fully empty (which happens if a prior
+        # run hit a service outage and saved a cache with empty strings).
+        needs_augment = (
+            "county" not in gdf.columns
+            or "watershed" not in gdf.columns
+            or (gdf["county"].fillna("").astype(str) == "").all()
+            or (gdf["watershed"].fillna("").astype(str) == "").all()
+        )
+        if needs_augment:
+            reasons = []
+            if "county" not in gdf.columns:
+                reasons.append("county column missing")
+            elif (gdf["county"].fillna("").astype(str) == "").all():
+                reasons.append("county column all empty")
+            if "watershed" not in gdf.columns:
+                reasons.append("watershed column missing")
+            elif (gdf["watershed"].fillna("").astype(str) == "").all():
+                reasons.append("watershed column all empty")
+            print(f"  Cache needs augmentation: {', '.join(reasons)}")
+            gdf = _augment_with_admin_boundaries(gdf)
+            print(f"  Saving augmented cache...")
+            gdf.to_file(cache_p, driver="GPKG")
+            print(f"  cache updated ({cache_p.stat().st_size / 1e6:.1f} MB)")
+
         return gdf
 
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
@@ -188,6 +237,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
     print(f"  -> {len(gdf):,} debris flow polygons within WNC bbox")
 
+    # Augment with administrative boundaries (county + HUC12 watershed)
+    gdf = _augment_with_admin_boundaries(gdf)
+
     # Write to cache
     cache_p.parent.mkdir(parents=True, exist_ok=True)
     print(f"  caching to {cache_p}...")
@@ -195,6 +247,241 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     print(f"  cache written ({cache_p.stat().st_size / 1e6:.1f} MB)")
 
     return gdf
+
+
+# =============================================================================
+# Administrative boundaries (counties + watersheds) for debris flow context
+# =============================================================================
+
+# US Census Bureau TIGERweb counties layer
+_CENSUS_COUNTIES_URL = (
+    "https://tigerweb.geo.census.gov/arcgis/rest/services/"
+    "TIGERweb/State_County/MapServer/13/query"
+)
+
+# UNC Asheville-hosted HUC12 watershed boundary dataset.
+#
+# Why UNC Asheville and not Esri's central Living Atlas:
+# We tested four sources on 2026-05-28 and only UNC's worked:
+#   1. USGS National Map (hydrowfs.nationalmap.gov/.../wbd/MapServer/6):
+#      500 Server Errors on every retry.
+#   2. Esri's "new authoritative" Living Atlas HUC12 item
+#      (917b0818267847aca910d465b5a3e8ec): proxies through to USGS National
+#      Map, inheriting the 500/400 errors.
+#   3. Esri's "retiring" Living Atlas HUC12 service
+#      (services.arcgis.com/P3ePLMYs2RVChkJx/.../USA_Watershed_Boundary_Dataset_HUC_12s):
+#      400 Bad Request errors - the service appears to have been
+#      decommissioned despite its item page still showing on AGOL.
+#   4. UNC Asheville's hosted copy (THIS ONE): worked perfectly, 827
+#      watersheds returned with 99.94% match rate against debris flow
+#      polygons.
+#
+# UNC's service is hosted on Esri's services5.arcgis.com infrastructure
+# (same ArcGIS Online platform that hosts Esri's central services). UNC
+# downloaded USGS WBD data and republished it as their own FeatureServer.
+# So technically this IS an "Esri-hosted" source - it's just curated and
+# published by UNC Asheville rather than Esri's central team. The
+# underlying data is the same USGS WBD that Esri's broken services were
+# supposed to be serving.
+_HUC12_QUERY_URL = (
+    "https://services5.arcgis.com/7weheFjxuNkGGiZi/arcgis/rest/services/"
+    "Watershed_Boundary_HUC12/FeatureServer/0/query"
+)
+
+
+
+def _fetch_nc_counties() -> gpd.GeoDataFrame:
+    """Fetch counties from NC and neighboring states (TN, GA, SC, VA).
+
+    Queries each state SEPARATELY rather than using a multi-value WHERE
+    clause. TIGERweb has been observed to return empty response bodies
+    for IN(...) clauses and even simple OR-chains - the single-value
+    STATE='X' form is the only one consistently accepted. The per-state
+    loop also makes failures granular: if VA's query fails, we still get
+    counties from the other 4 states.
+
+    Returns a GDF in EPSG:4326 with columns NAME and geometry.
+    """
+    print("  Fetching NC + neighboring-state county boundaries from "
+          "US Census TIGERweb...")
+    # State FIPS: 37=NC, 47=TN, 13=GA, 45=SC, 51=VA
+    states = [
+        ("37", "NC"),
+        ("47", "TN"),
+        ("13", "GA"),
+        ("45", "SC"),
+        ("51", "VA"),
+    ]
+
+    all_features: list[dict] = []
+    for fips, abbrev in states:
+        params = {
+            "where":          f"STATE='{fips}'",
+            "outFields":      "NAME,GEOID,STATE",
+            "outSR":          "4326",
+            "f":              "geojson",
+            "returnGeometry": "true",
+        }
+        try:
+            page = _agol_request_with_retry(
+                _CENSUS_COUNTIES_URL, params,
+                label=f"{abbrev} counties",
+            )
+            feats = page.get("features", [])
+            print(f"    {abbrev}: {len(feats)} counties")
+            all_features.extend(feats)
+        except Exception as e:
+            print(f"    ! {abbrev} county fetch failed: {e}; continuing")
+
+    if not all_features:
+        print("  ! No county features returned from any state")
+        return gpd.GeoDataFrame(columns=["NAME", "geometry"],
+                                 geometry="geometry", crs=DISPLAY_CRS)
+    gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
+    print(f"  -> {len(gdf)} counties loaded total")
+    return gdf
+
+
+def _fetch_wnc_huc12() -> gpd.GeoDataFrame:
+    """Fetch HUC12 subwatersheds intersecting the WNC bbox.
+
+    Source: Esri Living Atlas "USA Watershed Boundary Dataset HUC 12s"
+    feature service (see _HUC12_QUERY_URL comment for why we use this
+    rather than Esri's newer "authoritative" item, which actually proxies
+    to USGS's unreliable National Map service).
+
+    Returns a GDF in EPSG:4326 with columns:
+      NAME      subwatershed name (e.g. "South Toe River-Carolina Hemlocks")
+      HUC12     12-digit USGS HUC identifier (if present in source schema)
+      geometry
+    """
+    print("  Fetching WNC HUC12 watersheds from Esri Living Atlas...")
+    bbox_str = ",".join(str(c) for c in WNC_BBOX)
+    params = {
+        "where":          "1=1",
+        # Request all fields rather than guessing case (Living Atlas
+        # schemas can differ from USGS native - sometimes NAME, sometimes
+        # name, sometimes huc12 vs HUC12). We normalize after fetch.
+        "outFields":      "*",
+        "geometry":       bbox_str,
+        "geometryType":   "esriGeometryEnvelope",
+        "inSR":           "4326",
+        "spatialRel":     "esriSpatialRelIntersects",
+        "outSR":          "4326",
+        "f":              "geojson",
+        "returnGeometry": "true",
+    }
+    page = _agol_request_with_retry(_HUC12_QUERY_URL, params,
+                                     label="WNC HUC12 watersheds")
+    feats = page.get("features", [])
+    if not feats:
+        print("  ! No HUC12 features returned from AGOL")
+        return gpd.GeoDataFrame(columns=["NAME", "HUC12", "geometry"],
+                                 geometry="geometry", crs=DISPLAY_CRS)
+    gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
+
+    # Normalize field names. Try multiple variants since Living Atlas
+    # and USGS native services have slightly different schemas.
+    name_col = next((c for c in ("name", "NAME", "Name")
+                     if c in gdf.columns), None)
+    huc_col  = next((c for c in ("huc12", "HUC12", "Huc12")
+                     if c in gdf.columns), None)
+    if name_col and name_col != "NAME":
+        gdf = gdf.rename(columns={name_col: "NAME"})
+    if huc_col and huc_col != "HUC12":
+        gdf = gdf.rename(columns={huc_col: "HUC12"})
+
+    if "NAME" not in gdf.columns:
+        # Last resort: pick the first string column as the name
+        text_cols = [c for c in gdf.columns
+                     if c != "geometry" and gdf[c].dtype == object]
+        if text_cols:
+            print(f"  ! 'NAME' field not found; using '{text_cols[0]}' as watershed name")
+            gdf = gdf.rename(columns={text_cols[0]: "NAME"})
+        else:
+            print("  ! No usable name field found on Living Atlas response")
+            gdf["NAME"] = ""
+
+    print(f"  -> {len(gdf)} HUC12 watersheds loaded for WNC")
+    return gdf
+
+
+def _augment_with_admin_boundaries(debris_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Spatially join debris flow polygons against counties + HUC12s.
+
+    Uses representative_point() rather than the polygon itself to ensure
+    each debris flow gets exactly ONE county and ONE watershed (a polygon
+    that crosses boundaries would otherwise produce multiple sjoin rows).
+
+    Mutates and returns the input GDF with two new columns: county, watershed.
+    Failures (e.g. Census service unavailable) are non-fatal: missing
+    values become empty strings and the rest of the pipeline continues.
+    """
+    print(f"\n  Augmenting {len(debris_gdf):,} debris flow polygons "
+          f"with county + watershed info...")
+
+    # Cache the auxiliary datasets module-level so multiple calls within
+    # one run don't re-fetch.
+    if "counties" not in _admin_cache:
+        try:
+            _admin_cache["counties"] = _fetch_nc_counties()
+        except Exception as e:
+            print(f"  ! County fetch failed: {e}; will fill with ''")
+            _admin_cache["counties"] = None
+
+    if "watersheds" not in _admin_cache:
+        try:
+            _admin_cache["watersheds"] = _fetch_wnc_huc12()
+        except Exception as e:
+            print(f"  ! Watershed fetch failed: {e}; will fill with ''")
+            _admin_cache["watersheds"] = None
+
+    counties_gdf  = _admin_cache.get("counties")
+    watersheds_gdf = _admin_cache.get("watersheds")
+
+    # Build a one-time points layer (representative_point) for fast sjoins.
+    # Carry only OBJECTID through so we can re-join the result columns
+    # back to debris_gdf by index.
+    rep_points = gpd.GeoDataFrame(
+        {"_join_idx": range(len(debris_gdf))},
+        geometry=debris_gdf.geometry.representative_point(),
+        crs=debris_gdf.crs,
+    )
+
+    # County join
+    if counties_gdf is not None and len(counties_gdf) > 0:
+        cj = gpd.sjoin(
+            rep_points,
+            counties_gdf[["NAME", "geometry"]].rename(columns={"NAME": "county"}),
+            how="left", predicate="within",
+        )
+        # Sort back to original order in case sjoin reordered rows.
+        cj = cj.sort_values("_join_idx").drop_duplicates("_join_idx", keep="first")
+        debris_gdf["county"] = cj["county"].fillna("").values
+        n_with = (debris_gdf["county"] != "").sum()
+        print(f"  -> {n_with}/{len(debris_gdf):,} polygons matched to a county")
+    else:
+        debris_gdf["county"] = ""
+
+    # Watershed join
+    if watersheds_gdf is not None and len(watersheds_gdf) > 0:
+        wj = gpd.sjoin(
+            rep_points,
+            watersheds_gdf[["NAME", "geometry"]].rename(columns={"NAME": "watershed"}),
+            how="left", predicate="within",
+        )
+        wj = wj.sort_values("_join_idx").drop_duplicates("_join_idx", keep="first")
+        debris_gdf["watershed"] = wj["watershed"].fillna("").values
+        n_with = (debris_gdf["watershed"] != "").sum()
+        print(f"  -> {n_with}/{len(debris_gdf):,} polygons matched to a watershed")
+    else:
+        debris_gdf["watershed"] = ""
+
+    return debris_gdf
+
+
+# Module-level cache so counties+watersheds are fetched once per process
+_admin_cache: dict = {}
 
 
 # =============================================================================
@@ -420,52 +707,68 @@ def _classify_mrms_inches_to_category(rainfall_inches: float) -> int:
     return 19  # >= 20"
 
 
-def fetch_mrms_qpe_1h(
+def fetch_mrms_qpe(
+    window_hours: int = 1,
     bbox: tuple[float, float, float, float] | None = None,
 ) -> tuple[gpd.GeoDataFrame, datetime, datetime, dict]:
-    """Fetch the most recent MRMS 1-hour QPE, clip to ``bbox``, polygonize
-    qualifying cells by NDFD category, and return.
+    """Fetch the most recent MRMS N-hour QPE accumulation.
 
-    The fetcher tries multiple MRMS products in order (Pass1 first, then
-    RadarOnly, then Pass2) - whichever produces a successful fetch wins.
-    Pass1 is the primary because it's published ~5-10 min after the hour
-    AND includes gauge correction, vs Pass2 which is more accurate but
-    published 60-75 min after the hour (too stale for real-time alerts).
+    MRMS publishes pre-summed accumulation products for 1, 3, 6, 12, 24,
+    48, and 72 hours (per the NSSL spec). This function works against any
+    of those windows uniformly - the only difference between a 1-hour
+    fetch and a 72-hour fetch is the product directory in the URL.
+
+    The fetcher tries the same Pass1 -> RadarOnly -> Pass2 fallback chain
+    we use for the 1-hour product. Pass1 is primary (published ~5-10 min
+    after the hour, includes gauge correction); RadarOnly is fast fallback
+    (~2-3 min after the hour); Pass2 is last resort (~60-75 min, most
+    accurate but stalest).
+
+    Parameters
+    ----------
+    window_hours : int
+        Accumulation window. Must be in config.MRMS_HOUR_WINDOWS.
+    bbox : tuple, optional
+        Geographic bbox to clip the polygons to. Defaults to WNC_BBOX.
 
     Returns
     -------
     (precip_gdf, fromdate, todate, meta)
-        precip_gdf : GeoDataFrame in NDFD-compatible shape
-        fromdate, todate : datetime UTC. fromdate = todate - 1 hour
-        meta : dict with keys
-            product : str (e.g. "MultiSensor Pass1")
-            file_url : str
-            valid_time : datetime UTC (the file's valid-hour ending)
-            minutes_ago : float
-            max_inches : float (maximum value in WNC bbox)
-            n_polygons : int
+        precip_gdf : GeoDataFrame in NDFD-compatible category bins
+        fromdate, todate : datetime UTC; todate is the valid-time of the
+            product file, fromdate is todate - window_hours
+        meta : dict with keys: product, product_id, file_url, valid_time,
+            minutes_ago, max_inches, n_polygons, window_hours
 
     Raises
     ------
-    RuntimeError if rasterio is not installed, or if no MRMS file
-    succeeded across all product fallbacks.
+    ValueError if window_hours isn't a supported MRMS window.
+    RuntimeError if no MRMS file succeeded across all product fallbacks.
     """
     if not HAS_RASTERIO:
         raise RuntimeError(
             "MRMS mode requires the rasterio package. Install with:\n"
-            "    conda install -c conda-forge rasterio libgdal-grib\n"
-            "Then restart Streamlit."
+            "    conda install -c conda-forge rasterio libgdal-grib"
         )
 
-    from config import MRMS_URL_TEMPLATES, MRMS_PRODUCT_FALLBACK, WNC_BBOX
+    from config import (
+        MRMS_URL_TEMPLATES, MRMS_HOUR_WINDOWS, WNC_BBOX,
+        mrms_product_fallback_for_hours,
+    )
+    if window_hours not in MRMS_HOUR_WINDOWS:
+        raise ValueError(
+            f"window_hours={window_hours} not in MRMS_HOUR_WINDOWS "
+            f"({MRMS_HOUR_WINDOWS}). Edit config.py to add a new window."
+        )
     if bbox is None:
         bbox = WNC_BBOX
 
     now = datetime.now(timezone.utc)
     errors: list[str] = []
+    fallback_chain = mrms_product_fallback_for_hours(window_hours)
 
-    # Try each product in order. Each product has its own expected lag.
-    for product_cfg in MRMS_PRODUCT_FALLBACK:
+    # Try each product variant in order. Each has its own expected lag.
+    for product_cfg in fallback_chain:
         product_name = product_cfg["name"]
         lookback = product_cfg["lookback_minutes"]
         display_name = product_cfg["display"]
@@ -484,18 +787,21 @@ def fetch_mrms_qpe_1h(
                 D=valid_time.day, H=valid_time.hour,
             )
             try:
-                gdf, max_inches = _read_mrms_grib_to_polygons(url, bbox, valid_time)
-                fromdate = valid_time - timedelta(hours=1)
+                gdf, max_inches = _read_mrms_grib_to_polygons(
+                    url, bbox, valid_time
+                )
+                fromdate = valid_time - timedelta(hours=window_hours)
                 todate = valid_time
                 minutes_ago = (now - valid_time).total_seconds() / 60.0
                 meta = {
-                    "product": display_name,
-                    "product_id": product_name,
-                    "file_url": url,
-                    "valid_time": valid_time,
-                    "minutes_ago": minutes_ago,
-                    "max_inches": max_inches,
-                    "n_polygons": len(gdf),
+                    "product":      display_name,
+                    "product_id":   product_name,
+                    "file_url":     url,
+                    "valid_time":   valid_time,
+                    "minutes_ago":  minutes_ago,
+                    "max_inches":   max_inches,
+                    "n_polygons":   len(gdf),
+                    "window_hours": window_hours,
                 }
                 return gdf, fromdate, todate, meta
             except Exception as e:
@@ -506,9 +812,17 @@ def fetch_mrms_qpe_1h(
                 continue
 
     raise RuntimeError(
-        "Could not fetch any MRMS file across all product fallbacks. "
-        "Recent errors:\n  " + "\n  ".join(errors[-5:])
+        f"Could not fetch any MRMS {window_hours}-hour file across all "
+        f"product fallbacks. Recent errors:\n  " + "\n  ".join(errors[-5:])
     )
+
+
+def fetch_mrms_qpe_1h(
+    bbox: tuple[float, float, float, float] | None = None,
+) -> tuple[gpd.GeoDataFrame, datetime, datetime, dict]:
+    """Backward-compat alias for fetch_mrms_qpe(window_hours=1).
+    Existing callers that don't know about windows keep working."""
+    return fetch_mrms_qpe(window_hours=1, bbox=bbox)
 
 
 def _read_mrms_grib_to_polygons(
@@ -599,3 +913,279 @@ def _category_label(cat: int) -> str:
         return PRECIP_LABELS.get(cat, f"cat {cat}")
     except Exception:
         return f"cat {cat}"
+
+
+# =============================================================================
+# NWPS Stage IV historical precipitation (hindcast)
+# =============================================================================
+
+STAGE_IV_URL_TEMPLATE = (
+    "https://water.noaa.gov/resources/downloads/precip/stageIV/"
+    "{YYYY:04d}/{MM:02d}/{DD:02d}/"
+    "nws_precip_1day_{YYYY:04d}{MM:02d}{DD:02d}_conus.tif"
+)
+
+
+def fetch_stage_iv_qpe(
+    end_date: str,
+    accumulation_days: int,
+) -> tuple[gpd.GeoDataFrame, dict]:
+    """Fetch NWPS Stage IV multi-day precipitation accumulation.
+
+    Stage IV publishes 1-day GeoTIFFs (12Z-12Z windows) for each calendar
+    day, archived 2016-present. To produce an N-day accumulation, we
+    download N consecutive 1-day files and sum them. NWPS removes the
+    pre-computed multi-day files after ~365 days, so we don't rely on
+    those - the 1-day-and-sum approach works for any historical date.
+
+    Each 1-day file represents the 24-hour period ending at 12Z on the
+    day in its filename. So for an N-day total ending at 12Z on end_date,
+    we sum the files for end_date, end_date-1, ..., end_date-(N-1).
+
+    Parameters
+    ----------
+    end_date : str
+        Last day of the accumulation window, "YYYY-MM-DD". The window
+        covers the N days ending at 12Z on end_date.
+    accumulation_days : int
+        Width of the accumulation window in days. Must be positive.
+
+    Returns
+    -------
+    gdf : GeoDataFrame
+        Precipitation polygons in EPSG:4326, clipped to the WNC bbox,
+        binned to NDFD categories 0-19. Columns: category, label, geometry.
+    meta : dict
+        {'product', 'end_date', 'accumulation_days', 'max_inches',
+         'urls_used', 'days_missing'}
+
+    Raises
+    ------
+    ValueError      if accumulation_days is non-positive
+    RuntimeError    if more than half the daily files are unavailable
+    """
+    from datetime import datetime as _datetime, timedelta as _timedelta
+
+    if accumulation_days < 1:
+        raise ValueError(f"accumulation_days must be >= 1, got {accumulation_days}")
+
+    end_dt = _datetime.strptime(end_date, "%Y-%m-%d")
+    days = [end_dt - _timedelta(days=i) for i in range(accumulation_days)]
+    days_oldest_first = sorted(days)
+
+    print(f"  Fetching Stage IV {accumulation_days}-day accumulation "
+          f"ending {end_date}")
+    print(f"  Range: {days_oldest_first[0]:%Y-%m-%d} "
+          f"through {days_oldest_first[-1]:%Y-%m-%d}")
+
+    accumulator = None
+    accumulator_transform = None
+    accumulator_crs = None
+    accumulator_nodata = None
+    urls_used = []
+    days_missing = []
+
+    for day in days_oldest_first:
+        url = STAGE_IV_URL_TEMPLATE.format(
+            YYYY=day.year, MM=day.month, DD=day.day
+        )
+        try:
+            arr, transform, crs, nodata = _download_stage_iv_one_day(url)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                print(f"  ! {day:%Y-%m-%d}: file not found (404), skipping")
+                days_missing.append(day.strftime("%Y-%m-%d"))
+                continue
+            raise
+
+        urls_used.append(url)
+
+        if accumulator is None:
+            # First successful day - initialize the accumulator with its
+            # grid as the reference. All subsequent days must align with
+            # this grid (Stage IV files share the same HRAP grid, so this
+            # is a safety check, not active reprojection).
+            import numpy as np
+            accumulator = np.where(
+                (arr != nodata) & np.isfinite(arr) & (arr > 0),
+                arr, 0
+            ).astype("float64")
+            accumulator_transform = transform
+            accumulator_crs = crs
+            accumulator_nodata = nodata
+        else:
+            import numpy as np
+            if arr.shape != accumulator.shape:
+                print(f"  ! {day:%Y-%m-%d}: grid mismatch "
+                      f"({arr.shape} vs {accumulator.shape}), skipping")
+                days_missing.append(day.strftime("%Y-%m-%d"))
+                continue
+            valid = (arr != nodata) & np.isfinite(arr) & (arr > 0)
+            accumulator = accumulator + np.where(valid, arr, 0)
+
+    # Bail if too many days were missing
+    if accumulator is None:
+        raise RuntimeError(
+            f"All {accumulation_days} daily files failed; nothing to sum"
+        )
+    if len(days_missing) > accumulation_days / 2:
+        raise RuntimeError(
+            f"{len(days_missing)}/{accumulation_days} daily files missing "
+            f"({days_missing}); accumulation would be misleading"
+        )
+
+    print(f"  Summed {accumulation_days - len(days_missing)} day(s) "
+          f"({len(days_missing)} missing)")
+
+    # Polygonize the accumulator. _polygonize_inches_array reuses our
+    # MRMS-style logic; the only difference is we already have inches
+    # (no mm->in conversion needed) and a pre-summed accumulator.
+    gdf, max_inches = _polygonize_stage_iv_inches(
+        accumulator, accumulator_transform, accumulator_crs, accumulator_nodata
+    )
+
+    meta = {
+        "product":           f"NWPS Stage IV ({accumulation_days}-day sum)",
+        "end_date":          end_date,
+        "accumulation_days": accumulation_days,
+        "max_inches":        max_inches,
+        "urls_used":         urls_used,
+        "days_missing":      days_missing,
+    }
+    return gdf, meta
+
+
+def _download_stage_iv_one_day(url: str):
+    """Download a single 1-day Stage IV file and return
+    (data_array, transform, crs, nodata). Tries .tif first, falls back to
+    .nc (NetCDF) - both are published by NWPS and rasterio reads them
+    identically. Some dates have only one format available, especially
+    around the Hurricane Helene period (Sept 27-29, 2024) when NCEI's
+    archive ingest in Asheville, NC was disrupted by the storm itself.
+    """
+    print(f"    fetching {url.rsplit('/', 1)[-1]}...")
+    r = requests.get(url, timeout=120)
+
+    if r.status_code == 404 and url.endswith('.tif'):
+        # Try NetCDF fallback
+        nc_url = url[:-4] + '.nc'
+        print(f"    .tif missing, trying {nc_url.rsplit('/', 1)[-1]}...")
+        r = requests.get(nc_url, timeout=120)
+        url = nc_url
+
+    if r.status_code == 404:
+        raise requests.HTTPError(f"404 at {url}", response=r)
+    r.raise_for_status()
+
+    from rasterio.io import MemoryFile
+    with MemoryFile(r.content) as memfile:
+        with memfile.open() as src:
+            data = src.read(1).astype("float32")
+            transform = src.transform
+            crs = src.crs
+            nodata = src.nodata if src.nodata is not None else -9999
+    return data, transform, crs, nodata
+
+
+def _polygonize_stage_iv_inches(
+    data_inches,
+    transform,
+    src_crs,
+    nodata,
+) -> tuple[gpd.GeoDataFrame, float]:
+    """Reproject the accumulator to WGS84, clip to WNC, polygonize at NDFD
+    category cutoffs. Stage IV's native CRS is polar stereographic (HRAP
+    grid); we reproject to a regular lat/lon grid before binning so we get
+    rectangular pixel polygons in the output."""
+    import numpy as np
+    from rasterio.warp import reproject, Resampling, calculate_default_transform
+
+    # Reproject to WGS84 at ~native (4km) resolution
+    is_geographic = (src_crs is not None
+                     and (src_crs.to_epsg() == 4326 or src_crs.is_geographic))
+
+    if is_geographic:
+        data_wgs84 = data_inches
+        transform_wgs84 = transform
+    else:
+        dst_crs = "EPSG:4326"
+        src_height, src_width = data_inches.shape
+        # Get the source bounds for calculate_default_transform
+        from rasterio.transform import array_bounds
+        src_bounds = array_bounds(src_height, src_width, transform)
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            src_crs, dst_crs, src_width, src_height,
+            *src_bounds,
+            resolution=0.04,   # ~4km at WNC latitude
+        )
+        data_wgs84 = np.full(
+            (dst_height, dst_width),
+            fill_value=0.0,
+            dtype="float64",
+        )
+        reproject(
+            source=data_inches.astype("float64"),
+            destination=data_wgs84,
+            src_transform=transform,
+            src_crs=src_crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            src_nodata=0,   # we already replaced nodata with 0 in accumulator
+            dst_nodata=0,
+            resampling=Resampling.bilinear,
+        )
+        transform_wgs84 = dst_transform
+
+    valid_mask = np.isfinite(data_wgs84) & (data_wgs84 > 0)
+    max_inches = float(data_wgs84[valid_mask].max()) if valid_mask.any() else 0.0
+    print(f"  Max accumulation across CONUS: {max_inches:.2f}\u2033")
+
+    # NDFD category bins (same approach as MRMS)
+    from config import MRMS_CATEGORY_CUTOFFS_INCHES
+    cat_bounds: list[tuple[float, float]] = []
+    prev = 0.01
+    for upper in MRMS_CATEGORY_CUTOFFS_INCHES:
+        cat_bounds.append((prev, upper))
+        prev = upper
+    cat_bounds.append((prev, float("inf")))
+
+    # Use the masked array to keep no-data out of any bin
+    data_for_binning = np.where(valid_mask, data_wgs84, -1.0)
+
+    records = []
+    for cat, (lo, hi) in enumerate(cat_bounds):
+        bin_mask = (data_for_binning >= lo) & (data_for_binning < hi)
+        if not bin_mask.any():
+            continue
+        for geom_json, _ in _raster_shapes(
+            bin_mask.astype("uint8"),
+            mask=bin_mask,
+            transform=transform_wgs84,
+        ):
+            geom = _shapely_shape(geom_json)
+            if not geom.is_valid or geom.is_empty:
+                continue
+            records.append({
+                "category": cat,
+                "label": _category_label(cat),
+                "geometry": geom,
+            })
+
+    if not records:
+        empty = gpd.GeoDataFrame(
+            columns=["category", "label", "geometry"],
+            geometry="geometry",
+            crs="EPSG:4326",
+        )
+        return empty, max_inches
+
+    gdf = gpd.GeoDataFrame(records, geometry="geometry", crs="EPSG:4326")
+
+    # Clip to WNC bbox
+    from shapely.geometry import box as _shapely_box
+    bbox_geom = _shapely_box(*WNC_BBOX)
+    gdf = gdf[gdf.intersects(bbox_geom)].copy()
+    print(f"  {len(gdf)} polygons within WNC bbox")
+
+    return gdf, max_inches
+

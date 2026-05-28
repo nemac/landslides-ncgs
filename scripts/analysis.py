@@ -73,7 +73,14 @@ def find_alerts(
     )
     deduped = deduped.to_crs(DISPLAY_CRS)
 
-    return deduped[["OBJECTID", "category", "label", "area_acres", "geometry"]]
+    return deduped[[
+        "OBJECTID", "category", "label", "area_acres",
+        # Optional admin columns: include if present on the debris flow GDF.
+        # _augment_with_admin_boundaries adds these in data.py; preserving
+        # them here lets the frontend display county + watershed per row.
+        *[c for c in ("county", "watershed") if c in deduped.columns],
+        "geometry"
+    ]]
 
 
 def summarize_alerts(alerts_gdf: gpd.GeoDataFrame) -> dict:

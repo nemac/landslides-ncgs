@@ -216,45 +216,66 @@ CACHE_TTL_DAYS = 30
 #
 # Product: MultiSensor_QPE_01H_Pass2 (the most accurate 1-hour product).
 
-MRMS_URL_TEMPLATES = {
-    # MultiSensor Pass1: radar + rain gauge bias correction. Published
-    # ~5-10 minutes after the hour. Good balance of recency and accuracy.
-    # This is the primary product for real-time alert detection.
-    "MultiSensor_QPE_01H_Pass1": (
-        "https://mtarchive.geol.iastate.edu/"
-        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/MultiSensor_QPE_01H_Pass1/"
-        "MultiSensor_QPE_01H_Pass1_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
-    ),
-    # RadarOnly: pure radar QPE, no gauge correction. Published ~2-3 min
-    # after the hour. Fast fallback if Pass1 isn't yet available.
-    "RadarOnly_QPE_01H": (
-        "https://mtarchive.geol.iastate.edu/"
-        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/RadarOnly_QPE_01H/"
-        "RadarOnly_QPE_01H_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
-    ),
-    # MultiSensor Pass2: radar + comprehensive gauge correction. Published
-    # ~60-75 minutes after the hour. Most accurate but most delayed - use
-    # only for retrospective analysis. Last fallback in real-time mode.
-    "MultiSensor_QPE_01H_Pass2": (
-        "https://mtarchive.geol.iastate.edu/"
-        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/MultiSensor_QPE_01H_Pass2/"
-        "MultiSensor_QPE_01H_Pass2_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
-    ),
-}
+# MRMS supports pre-summed accumulation windows of 1, 3, 6, 12, 24, 48, 72
+# hours per the NSSL spec. We use [1, 24, 72] - the subset that IEM
+# actually archives. Empirically verified 2026-05-28: IEM returns 404s
+# for 12H and 48H products at any hour (their archive keeps a "limited
+# assortment" per their schema docs). If we ever need 12H or 48H, we
+# can compute them by summing N consecutive 01H files, like Stage IV
+# does for the multi-day hindcast accumulations.
+MRMS_HOUR_WINDOWS = [1, 24, 72]
 
-# Order of products to try. We start with the fastest (Pass1), fall back to
-# RadarOnly if Pass1 isn't yet available, then Pass2 as a last resort. The
-# "lookback_minutes" tells the fetcher how many minutes after the hour we
-# can expect this product's file to be available - we use that to compute
-# the most recent valid-time target.
-MRMS_PRODUCT_FALLBACK = [
-    {"name": "MultiSensor_QPE_01H_Pass1", "lookback_minutes": 15,
-     "display": "MultiSensor Pass1"},
-    {"name": "RadarOnly_QPE_01H", "lookback_minutes": 10,
-     "display": "RadarOnly"},
-    {"name": "MultiSensor_QPE_01H_Pass2", "lookback_minutes": 75,
-     "display": "MultiSensor Pass2"},
-]
+
+def _mrms_url_template(product_name: str) -> str:
+    """Construct the IEM archive URL template for an MRMS product. The
+    template still has {Y}/{M}/{D}/{H} placeholders for the caller to fill."""
+    return (
+        "https://mtarchive.geol.iastate.edu/"
+        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/" + product_name + "/"
+        + product_name + "_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
+    )
+
+
+# Auto-generated MRMS URL templates for every supported (window x variant)
+# combination. Variants: MultiSensor Pass1 (~5-10 min lag, primary),
+# RadarOnly (~2-3 min lag, fast fallback), MultiSensor Pass2 (~60-75 min
+# lag, most accurate but stale).
+#
+# Resulting keys look like "MultiSensor_QPE_24H_Pass1", "RadarOnly_QPE_72H",
+# etc - exactly matching the NSSL product naming used by IEM's directory
+# structure.
+MRMS_URL_TEMPLATES = {}
+for _hours in MRMS_HOUR_WINDOWS:
+    for _variant_fmt in (
+        "MultiSensor_QPE_{H:02d}H_Pass1",
+        "RadarOnly_QPE_{H:02d}H",
+        "MultiSensor_QPE_{H:02d}H_Pass2",
+    ):
+        _product_name = _variant_fmt.format(H=_hours)
+        MRMS_URL_TEMPLATES[_product_name] = _mrms_url_template(_product_name)
+
+
+def mrms_product_fallback_for_hours(hours: int) -> list[dict]:
+    """Pass1 -> RadarOnly -> Pass2 fallback chain for a given accumulation
+    window. The lookback minutes describe when each variant typically
+    becomes available after the hour mark; the fetcher uses these to
+    compute the most recent valid timestamp likely to have a file."""
+    return [
+        {"name":             f"MultiSensor_QPE_{hours:02d}H_Pass1",
+         "lookback_minutes": 15,
+         "display":          f"MultiSensor Pass1 ({hours}H)"},
+        {"name":             f"RadarOnly_QPE_{hours:02d}H",
+         "lookback_minutes": 10,
+         "display":          f"RadarOnly ({hours}H)"},
+        {"name":             f"MultiSensor_QPE_{hours:02d}H_Pass2",
+         "lookback_minutes": 75,
+         "display":          f"MultiSensor Pass2 ({hours}H)"},
+    ]
+
+
+# Backward-compat: the original MRMS_PRODUCT_FALLBACK targeted 1-hour only.
+# Existing callers that don't know about windows get the 1H fallback chain.
+MRMS_PRODUCT_FALLBACK = mrms_product_fallback_for_hours(1)
 
 # Kept for backward compatibility (old URL template constant). Points to Pass1.
 MRMS_URL_TEMPLATE = MRMS_URL_TEMPLATES["MultiSensor_QPE_01H_Pass1"]

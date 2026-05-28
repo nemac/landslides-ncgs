@@ -428,6 +428,27 @@ body {
   color: var(--site-text);
 }
 
+/* "Source" link styling - the clickable URL out to the data provider's
+   landing page. Uses the existing dark-green accent color so it stays
+   on-brand. Underline on hover for affordance. */
+#meta-source a {
+  color: var(--accent-1);
+  text-decoration: none;
+  font-weight: 600;
+}
+#meta-source a:hover,
+#meta-source a:focus-visible {
+  text-decoration: underline;
+}
+/* External-link arrow (U+2197 NORTH EAST ARROW). Subtle so it doesn't
+   compete with the text. Slightly smaller and partially transparent. */
+.external-link-icon {
+  display: inline-block;
+  font-size: 0.85em;
+  opacity: 0.7;
+  vertical-align: baseline;
+}
+
 kbd {
   display: inline-block;
   font-family: var(--font-sans);
@@ -471,6 +492,66 @@ kbd {
   color: var(--site-text);
   cursor: pointer;
   line-height: 1.4;
+}
+
+/* Indented block that appears under a radio option when it's selected.
+   Used for the historical-event sub-controls. Hidden by [hidden] attribute,
+   but our own display rule overrides that - so explicit [hidden] override
+   is needed (same gotcha as .loading-indicator). */
+.sub-control {
+  margin-left: calc(18px + var(--sp-2));   /* matches radio input width + gap */
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--site-border);
+  display: block;
+}
+.sub-control[hidden] { display: none; }
+.sub-control select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  background: var(--site-bg);
+  color: var(--site-text);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+  min-height: 32px;
+}
+.sub-control .control-label {
+  font-size: var(--fs-xs);
+  color: var(--site-text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Hindcast banner - shown above the map when in historical mode.
+   Amber/warning palette so it's distinct from normal data. */
+.hindcast-banner {
+  background: #5c3a00;          /* dark amber */
+  color: #ffd47a;
+  border: 1px solid #8a5a00;
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.hindcast-banner[hidden] { display: none; }
+.hindcast-banner-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.hindcast-banner-text {
+  flex: 1;
+}
+.hindcast-banner-text strong {
+  display: block;
+  color: #ffe6b0;
+  font-weight: 700;
 }
 
 /* Slider */

@@ -10,6 +10,15 @@
         rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <style>
+    /* The shared dashboard stylesheet sets body { height: 100vh;
+       overflow: hidden } so the map+sidebar layout doesn't scroll.
+       That's wrong for this content-only page - we WANT scroll here.
+       Override with !important since these come after the linked
+       stylesheet and need to win against its class-level rules. */
+    html, body {
+      height: auto !important;
+      overflow: auto !important;
+    }
     /* Minor overrides for a content-only page */
     .doc-body { max-width: 70ch; margin: 0 auto; padding: 2rem 1.5rem; }
     .doc-body h2 { font-size: 1.3rem; margin-top: 2rem; }

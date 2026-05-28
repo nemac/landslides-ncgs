@@ -67,7 +67,7 @@ window.DEFNS_MOCK = (function () {
     }
   };
 
-  // ---- MRMS 1-hour observed precipitation (mocked) ------------------------
+  // ---- MRMS observed precipitation (mocked) -------------------------------
   // More fragmented than NDFD - radar sees real cells, not smoothed
   // forecast bins. Three small polygons at different intensities.
   const MRMS_OBSERVED = {
@@ -275,5 +275,35 @@ window.DEFNS_MOCK = (function () {
     }
   };
 
-  return { NDFD_FORECAST, MRMS_OBSERVED, DEBRIS_FLOWS, FLAGGED_NDFD, FLAGGED_MRMS };
+  // ---- HISTORICAL (Phase Hindcast) -----------------------------------------
+  // These start as empty FeatureCollections. _fetchInto in app.js replaces
+  // them with the selected event's precip and flagged data when the user
+  // picks an event from the dropdown.
+  const HISTORICAL_PRECIP = {
+    type: 'FeatureCollection',
+    features: [],
+    meta: {
+      source:       'HISTORICAL',
+      event_name:    null,
+      end_date:      null,
+      n_polygons:    0
+    }
+  };
+  const HISTORICAL_FLAGGED = {
+    type: 'FeatureCollection',
+    features: [],
+    meta: {
+      source:        'HISTORICAL',
+      event_name:    null,
+      end_date:      null,
+      n_flagged:     0,
+      n_debris:      0
+    }
+  };
+
+  return {
+    NDFD_FORECAST, MRMS_OBSERVED, DEBRIS_FLOWS,
+    FLAGGED_NDFD, FLAGGED_MRMS,
+    HISTORICAL_PRECIP, HISTORICAL_FLAGGED
+  };
 })();

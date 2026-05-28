@@ -24,12 +24,18 @@
     // Mode + controls
     modeNdfd:        $('mode-ndfd'),
     modeMrms:        $('mode-mrms'),
+    modeHistorical:  $('mode-historical'),
+    historicalSubControls: $('historical-sub-controls'),
+    eventSelect:     $('event-select'),
+    eventDescription:$('event-description'),
+    hindcastBanner:  $('hindcast-banner'),
+    hindcastBannerDetail: $('hindcast-banner-detail'),
     thresholdSlider: $('threshold-slider'),
     thresholdLabel:  $('threshold-readout-label'),
     thresholdSourceLabel: $('threshold-source-label'),
     windowSelect:    $('window-select'),
     windowGroup:     $('window-control-group'),
-    mrmsWindowNote:  $('mrms-window-note'),
+    windowLabel:     $('window-label'),
 
     // Source metadata block (under threshold help text)
     metaSource:      $('meta-source'),
@@ -76,10 +82,38 @@
 
   // ---- State --------------------------------------------------------------
   const state = {
-    mode:      'ndfd',                                  // 'ndfd' | 'mrms'
+    mode:      'ndfd',                                  // 'ndfd' | 'mrms' | 'historical'
     threshold: CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY,     // 0..19
-    window:    CFG.NDFD_DEFAULT_WINDOW_HOURS,           // hours (NDFD only)
-    autoRefreshTimer: null
+    window:    CFG.NDFD_DEFAULT_WINDOW_HOURS,           // hours, semantics depends on mode
+    autoRefreshTimer: null,
+    // Track which window's data is currently loaded into the MOCK keys.
+    // Lets us skip re-fetching when the user toggles modes and the
+    // already-loaded window matches the new mode's selection.
+    loadedWindows: { ndfd: null, mrms: null },
+  };
+
+  // Per-mode window dropdown configuration. NDFD is forward-looking
+  // (forecast); MRMS is backward-looking (observation). The min option
+  // differs (NDFD's smallest meaningful window is 12h because the
+  // service publishes 6-hour blocks; MRMS pre-sums every hour so 1h
+  // is a useful real-time view). Historical mode hides the dropdown
+  // because each event has a fixed accumulation window.
+  //
+  // MRMS window set is [1, 24, 72] - the subset that IEM actually
+  // archives. NSSL produces 12H and 48H accumulations but IEM doesn't
+  // mirror them; semantically 1H/24H/72H cover the useful range anyway
+  // (now / last day / recent storm activity).
+  const WINDOW_OPTIONS_BY_MODE = {
+    ndfd: {
+      options: [12, 24, 48, 72],
+      default: 12,
+      label:   'Forecast window',
+    },
+    mrms: {
+      options: [1, 24, 72],
+      default: 1,
+      label:   'Observation window',
+    },
   };
 
   // =====================================================================
@@ -89,10 +123,29 @@
     MAP.init();
     _buildLegend();          // populate 20-category legend
     _wireEvents();
+
+    // Populate the window dropdown for the initial mode BEFORE
+    // _syncControlsFromState() so the dropdown has the right options
+    // when state.window gets reflected back into the UI.
+    _populateWindowSelect(state.mode);
+
     _syncControlsFromState();
     _updateLegendThreshold();
 
-    _loadLiveData().then(refresh);
+    // Load events manifest in parallel with live data. The manifest is
+    // small (~1 KB) so this doesn't slow page load. If it fails (file
+    // doesn't exist yet), _loadEventsManifest disables the historical
+    // radio gracefully.
+    //
+    // _loadLiveDataInitial preloads BOTH modes' default windows so
+    // mode-switching is instant (no fetch lag the first time the user
+    // toggles to MRMS). Switching to a non-default window still requires
+    // an on-demand fetch via _loadLiveData().
+    Promise.all([
+      _loadLiveDataInitial(),
+      _loadEventsManifest()
+    ]).then(refresh);
+
     _startAutoRefresh();
   }
 
@@ -148,6 +201,12 @@
   function _wireEvents() {
     els.modeNdfd.addEventListener('change', _onModeChange);
     els.modeMrms.addEventListener('change', _onModeChange);
+    els.modeHistorical.addEventListener('change', _onModeChange);
+
+    // Event dropdown - reload data when user picks a different event
+    if (els.eventSelect) {
+      els.eventSelect.addEventListener('change', _onEventChange);
+    }
 
     // Threshold slider - debounced refresh
     let thresholdDebounceTimer = null;
@@ -161,7 +220,10 @@
 
     els.windowSelect.addEventListener('change', function () {
       state.window = Number(this.value);
-      refresh();
+      // _loadLiveData() is window-aware: fetches the matching per-window
+      // files for the active mode, then refresh() re-renders with the new
+      // data. No-op if the requested window is already cached.
+      _loadLiveData().then(refresh);
     });
 
     // Layer toggles (new structure - separate NDFD and MRMS visibility)
@@ -219,26 +281,82 @@
   // The MOCK module is mutated in-place when fetches succeed, so refresh()
   // transparently uses live data wherever it's available.
   // =====================================================================
-  function _loadLiveData() {
+  // Per-window file loaders.
+  //
+  // After our 2026-05-28 multi-window refactor, refresh.py writes
+  // window-suffixed files like forecast_12h.geojson, observed_24h.geojson,
+  // flagged_ndfd_72h.geojson, etc. The frontend keeps the most recently
+  // loaded window of each mode in the MOCK keys (NDFD_FORECAST, etc.) and
+  // tracks which window that is in state.loadedWindows.
+  //
+  // On page init we preload the DEFAULT window for both modes (NDFD 12h
+  // and MRMS 1h) so mode-switching is instant. When the user picks a
+  // different window from the dropdown, _loadLiveData() fetches just
+  // that window's files into the same MOCK keys.
+  // =====================================================================
+  function _loadLiveDataInitial() {
     _setLoading(true);
     return Promise.allSettled([
-      _fetchInto('data/forecast.geojson',     'NDFD_FORECAST'),
-      _fetchInto('data/observed.geojson',     'MRMS_OBSERVED'),
-      _fetchInto('data/flagged_ndfd.geojson', 'FLAGGED_NDFD'),
-      _fetchInto('data/flagged_mrms.geojson', 'FLAGGED_MRMS')
+      _fetchInto('data/forecast_12h.geojson',     'NDFD_FORECAST'),
+      _fetchInto('data/observed_1h.geojson',      'MRMS_OBSERVED'),
+      _fetchInto('data/flagged_ndfd_12h.geojson', 'FLAGGED_NDFD'),
+      _fetchInto('data/flagged_mrms_1h.geojson',  'FLAGGED_MRMS')
     ]).then(function (results) {
-      const labels = ['NDFD precip', 'MRMS precip', 'NDFD flagged', 'MRMS flagged'];
+      const labels = ['NDFD 12h', 'MRMS 1h', 'NDFD 12h flagged', 'MRMS 1h flagged'];
       const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
-      console.log(`[DEFNS] Live data: ${okCount}/4 files loaded.`);
+      console.log(`[DEFNS] Initial live data: ${okCount}/4 files loaded.`);
       results.forEach(function (r, i) {
         if (r.status !== 'fulfilled' || !r.value) {
           console.warn(`[DEFNS] ${labels[i]} failed; falling back to mock.`);
         }
       });
+      // Mark these default windows as loaded so we don't re-fetch them
+      // when the user lands on the default mode/window combination.
+      state.loadedWindows.ndfd = 12;
+      state.loadedWindows.mrms = 1;
       _setLoading(false);
     }).catch(function (err) {
       _setLoading(false);
-      console.error('[DEFNS] _loadLiveData crashed:', err);
+      console.error('[DEFNS] _loadLiveDataInitial crashed:', err);
+    });
+  }
+
+  function _loadLiveData() {
+    // Fetch the current mode's selected window IF it differs from what's
+    // already loaded. No-op if the requested window is cached.
+    if (state.mode === 'historical') return Promise.resolve();
+
+    const target = state.window;
+    if (state.mode === 'ndfd' && state.loadedWindows.ndfd === target) {
+      return Promise.resolve();
+    }
+    if (state.mode === 'mrms' && state.loadedWindows.mrms === target) {
+      return Promise.resolve();
+    }
+
+    _setLoading(true);
+    let promises;
+    if (state.mode === 'ndfd') {
+      promises = [
+        _fetchInto(`data/forecast_${target}h.geojson`,     'NDFD_FORECAST'),
+        _fetchInto(`data/flagged_ndfd_${target}h.geojson`, 'FLAGGED_NDFD'),
+      ];
+    } else {  // mrms
+      promises = [
+        _fetchInto(`data/observed_${target}h.geojson`,     'MRMS_OBSERVED'),
+        _fetchInto(`data/flagged_mrms_${target}h.geojson`, 'FLAGGED_MRMS'),
+      ];
+    }
+
+    return Promise.allSettled(promises).then(function (results) {
+      _setLoading(false);
+      const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
+      console.log(`[DEFNS] ${state.mode.toUpperCase()} ${target}h: ${okCount}/2 files loaded.`);
+      // Mark loaded even if some files failed - we don't want infinite
+      // retry loops on missing files. The MOCK keys will hold whatever
+      // succeeded plus stale data for whatever didn't.
+      if (state.mode === 'ndfd') state.loadedWindows.ndfd = target;
+      else if (state.mode === 'mrms') state.loadedWindows.mrms = target;
     });
   }
 
@@ -287,42 +405,209 @@
   // MODE SWITCHING
   // =====================================================================
   function _onModeChange() {
-    state.mode = els.modeMrms.checked ? 'mrms' : 'ndfd';
-    state.threshold = state.mode === 'mrms'
-      ? CFG.MRMS_DEFAULT_THRESHOLD_CATEGORY
-      : CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY;
+    if (els.modeMrms.checked) {
+      state.mode = 'mrms';
+      state.threshold = CFG.MRMS_DEFAULT_THRESHOLD_CATEGORY;
+    } else if (els.modeHistorical.checked) {
+      state.mode = 'historical';
+      // Use the MRMS default threshold for historical - both are observed
+      // precipitation accumulations, similar ranges of interest.
+      state.threshold = CFG.MRMS_DEFAULT_THRESHOLD_CATEGORY;
+    } else {
+      state.mode = 'ndfd';
+      state.threshold = CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY;
+    }
     els.thresholdSlider.value = String(state.threshold);
     _updateThresholdLabel();
     _updateLegendThreshold();
     _updateModeUI();
-    refresh();
+
+    if (state.mode === 'historical') {
+      // Lazy-load the currently selected event's files, then refresh.
+      _loadSelectedEvent().then(refresh);
+    } else {
+      // _populateWindowSelect (called by _updateModeUI above) already
+      // reset state.window to the new mode's default. _loadLiveData will
+      // fetch that window if it isn't already cached - usually it IS
+      // cached because _loadLiveDataInitial preloaded both defaults at
+      // page init.
+      _loadLiveData().then(refresh);
+    }
   }
 
   function _updateModeUI() {
-    if (state.mode === 'mrms') {
-      els.windowGroup.hidden    = true;
-      els.mrmsWindowNote.hidden = false;
+    const isHistorical = state.mode === 'historical';
+    const isMrms       = state.mode === 'mrms';
+
+    // Show/hide the historical event sub-controls
+    if (els.historicalSubControls) {
+      els.historicalSubControls.hidden = !isHistorical;
+    }
+    // Show/hide the hindcast banner
+    if (els.hindcastBanner) {
+      els.hindcastBanner.hidden = !isHistorical;
+    }
+
+    // Populate the window dropdown for the new mode (also handles hiding
+    // for historical mode). This sets state.window to the mode's default,
+    // which we want on mode switch - the user can pick a different window
+    // afterward.
+    _populateWindowSelect(state.mode);
+
+    if (isMrms) {
       els.subtitle.textContent =
-        'Real-time observed precipitation (MRMS 1-hour radar+gauge ' +
-        'accumulation) cross-referenced with the NC Geological Survey ' +
-        'channelized debris flow model. Alert raised when any debris ' +
-        'flow polygon falls inside an observed precipitation polygon at ' +
-        'or above the configured rainfall threshold.';
+        'Real-time observed precipitation (NOAA MRMS multi-sensor ' +
+        'radar+gauge accumulation) cross-referenced with the NC Geological ' +
+        'Survey channelized debris flow model. Choose an observation window ' +
+        '(1, 24, or 72 hours) to see flagged debris flows where observed ' +
+        'rainfall over that window meets the threshold.';
       els.thresholdSourceLabel.textContent = '(MRMS)';
-    } else {
-      els.windowGroup.hidden    = false;
-      els.mrmsWindowNote.hidden = true;
+    } else if (isHistorical) {
       els.subtitle.textContent =
-        'Real-time precipitation forecast cross-referenced with the NC ' +
-        'Geological Survey channelized debris flow model. Alert raised ' +
-        'when any debris flow polygon falls inside a forecast polygon ' +
-        'at or above the configured rainfall threshold.';
+        'Historical precipitation data from a past weather event, ' +
+        'cross-referenced with the NC Geological Survey channelized ' +
+        'debris flow model. Demonstrates which polygons would have been ' +
+        'flagged at the time. Threshold slider works as in live mode.';
+      els.thresholdSourceLabel.textContent = '(historical)';
+    } else {
+      els.subtitle.textContent =
+        'Real-time precipitation forecast (NWS NDFD) cross-referenced ' +
+        'with the NC Geological Survey channelized debris flow model. ' +
+        'Choose a forecast window (12, 24, 48, or 72 hours) to see flagged ' +
+        'debris flows where forecast rainfall meets the threshold at any ' +
+        'point in the window.';
       els.thresholdSourceLabel.textContent = '(NDFD)';
     }
   }
 
+  // Build the window dropdown for the current mode. Called from
+  // _updateModeUI() on mode change, and once from init().
+  //
+  // - Historical mode: hides the dropdown entirely (each event has a
+  //   fixed accumulation window baked into its precip file).
+  // - NDFD / MRMS modes: shows the dropdown with mode-appropriate options
+  //   and label, and resets state.window to that mode's default. The
+  //   reset is intentional - mode switching is a deliberate context
+  //   change, so starting at the default is the cleanest UX.
+  function _populateWindowSelect(mode) {
+    const cfg = WINDOW_OPTIONS_BY_MODE[mode];
+    if (!cfg) {
+      els.windowGroup.hidden = true;
+      return;
+    }
+    els.windowGroup.hidden = false;
+    els.windowLabel.textContent = cfg.label;
+
+    // Rebuild options to match the new mode's set
+    els.windowSelect.innerHTML = '';
+    cfg.options.forEach(function (hrs) {
+      const opt = document.createElement('option');
+      opt.value = String(hrs);
+      opt.textContent = hrs + ' hour' + (hrs === 1 ? '' : 's');
+      if (hrs === cfg.default) opt.selected = true;
+      els.windowSelect.appendChild(opt);
+    });
+    state.window = cfg.default;
+  }
+
+  // =====================================================================
+  // HISTORICAL EVENT HANDLING
+  // =====================================================================
+  // Events are listed in data/historical/events.json (written by
+  // refresh.py --hindcast). Each entry references its precip + flagged
+  // files. We populate the dropdown from this manifest, and load the
+  // selected event's files on demand.
+  function _loadEventsManifest() {
+    return fetch('data/historical/events.json', { cache: 'no-cache' })
+      .then(function (r) {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(function (manifest) {
+        const events = (manifest && manifest.events) || [];
+        state.events = events;
+        _populateEventDropdown(events);
+        if (events.length > 0 && els.eventSelect) {
+          els.eventSelect.value = events[0].id;
+          _updateEventDescription(events[0]);
+        }
+      })
+      .catch(function (err) {
+        console.warn('[DEFNS] No historical events manifest:', err.message);
+        state.events = [];
+        if (els.eventSelect) {
+          els.eventSelect.innerHTML =
+            '<option value="">No events available</option>';
+        }
+        // Disable the historical radio if no events exist
+        if (els.modeHistorical) {
+          els.modeHistorical.disabled = true;
+          const label = document.querySelector('label[for="mode-historical"]');
+          if (label) label.style.opacity = '0.5';
+        }
+      });
+  }
+
+  function _populateEventDropdown(events) {
+    if (!els.eventSelect) return;
+    els.eventSelect.innerHTML = '';
+    if (events.length === 0) {
+      els.eventSelect.innerHTML =
+        '<option value="">No events available</option>';
+      return;
+    }
+    events.forEach(function (ev) {
+      const opt = document.createElement('option');
+      opt.value = ev.id;
+      opt.textContent = `${ev.name} (${ev.date_label})`;
+      els.eventSelect.appendChild(opt);
+    });
+  }
+
+  function _updateEventDescription(event) {
+    if (els.eventDescription && event) {
+      els.eventDescription.textContent = event.description || '';
+    }
+    if (els.hindcastBannerDetail && event) {
+      els.hindcastBannerDetail.textContent =
+        `${event.name} (${event.date_label})`;
+    }
+  }
+
+  function _getSelectedEvent() {
+    if (!els.eventSelect || !state.events) return null;
+    const id = els.eventSelect.value;
+    return state.events.find(function (e) { return e.id === id; }) || null;
+  }
+
+  function _onEventChange() {
+    const ev = _getSelectedEvent();
+    if (!ev) return;
+    _updateEventDescription(ev);
+    _loadSelectedEvent().then(refresh);
+  }
+
+  function _loadSelectedEvent() {
+    const ev = _getSelectedEvent();
+    if (!ev) return Promise.resolve();
+
+    _setLoading(true);
+    return Promise.allSettled([
+      _fetchInto('data/' + ev.precip_file,  'HISTORICAL_PRECIP'),
+      _fetchInto('data/' + ev.flagged_file, 'HISTORICAL_FLAGGED')
+    ]).then(function (results) {
+      _setLoading(false);
+      const okCount = results.filter(r =>
+        r.status === 'fulfilled' && r.value).length;
+      console.log(`[DEFNS] Historical event "${ev.id}": ${okCount}/2 files loaded.`);
+    });
+  }
+
   function _updateThresholdLabel() {
-    const lbl = CFG.PRECIP_LABELS[state.threshold] || '--';
+    // Show just the lower bound (e.g. "5.00\u2033") not the range
+    // (e.g. "5.00-6.00\u2033"), since the threshold means "this category OR
+    // higher" - so "at or above 5 inches" is what users want to see.
+    const lbl = CFG.formatThresholdInches(state.threshold) || '--';
     els.thresholdLabel.innerHTML = lbl;
   }
 
@@ -338,19 +623,34 @@
   // doing it in JS for 228k debris flow polygons.
   // =====================================================================
   function refresh() {
-    // ---- Render BOTH precip layers (independent of detection mode) ------
-    MAP.setForecast(MOCK.NDFD_FORECAST);
-    MAP.setForecastVisible(els.layerNdfd.checked);
-    MAP.setObserved(MOCK.MRMS_OBSERVED);
-    MAP.setObservedVisible(els.layerMrms.checked);
+    const isHistorical = state.mode === 'historical';
+
+    // ---- Render precip layers --------------------------------------------
+    // In live modes (NDFD/MRMS), show both live layers per user toggles.
+    // In historical mode, hide live layers and show the historical layer.
+    if (isHistorical) {
+      MAP.setForecast(null);                          // clear NDFD
+      MAP.setObserved(MOCK.HISTORICAL_PRECIP);        // reuse observed pane
+      MAP.setObservedVisible(true);                   // always show in hindcast
+    } else {
+      MAP.setForecast(MOCK.NDFD_FORECAST);
+      MAP.setForecastVisible(els.layerNdfd.checked);
+      MAP.setObserved(MOCK.MRMS_OBSERVED);
+      MAP.setObservedVisible(els.layerMrms.checked);
+    }
 
     // ---- Pick the active precip + flagged dataset for the current mode --
-    const activePrecip = state.mode === 'mrms'
-      ? MOCK.MRMS_OBSERVED
-      : MOCK.NDFD_FORECAST;
-    const activeFlagged = state.mode === 'mrms'
-      ? MOCK.FLAGGED_MRMS
-      : MOCK.FLAGGED_NDFD;
+    let activePrecip, activeFlagged;
+    if (isHistorical) {
+      activePrecip  = MOCK.HISTORICAL_PRECIP;
+      activeFlagged = MOCK.HISTORICAL_FLAGGED;
+    } else if (state.mode === 'mrms') {
+      activePrecip  = MOCK.MRMS_OBSERVED;
+      activeFlagged = MOCK.FLAGGED_MRMS;
+    } else {
+      activePrecip  = MOCK.NDFD_FORECAST;
+      activeFlagged = MOCK.FLAGGED_NDFD;
+    }
 
     // ---- Filter pre-computed flagged data by threshold -------------------
     let alertsFC;
@@ -477,24 +777,64 @@
 
   function _buildSourceCtx(activeFC) {
     const m = (activeFC && activeFC.meta) || {};
-    const isoTime = state.mode === 'mrms' ? m.observed_at : m.issued;
-    let display = '--';
-    if (isoTime) {
-      const d = new Date(isoTime);
-      display = d.toUTCString().slice(17, 22) + ' UTC ' +
-                d.toUTCString().slice(5, 11);
+    let isoTime, display, sourceLabel, windowLabel;
+
+    if (state.mode === 'historical') {
+      sourceLabel = 'HIST';
+      display = m.date_label || m.end_date || '--';
+      isoTime = m.end_date || '';
+      // Historical events are pre-summed accumulations. Use the actual
+      // accumulation period from the file meta.
+      windowLabel = (m.accumulation_days != null)
+        ? `${m.accumulation_days}-day accumulation`
+        : 'accumulation';
+    } else if (state.mode === 'mrms') {
+      sourceLabel = 'MRMS';
+      isoTime = m.observed_at;
+      display = isoTime
+        ? new Date(isoTime).toUTCString().slice(17, 22) + ' UTC ' +
+          new Date(isoTime).toUTCString().slice(5, 11)
+        : '--';
+      // MRMS is the 1-hour Pass1 product
+      windowLabel = '1 hr observed';
+    } else {
+      sourceLabel = 'NDFD';
+      isoTime = m.issued;
+      display = isoTime
+        ? new Date(isoTime).toUTCString().slice(17, 22) + ' UTC ' +
+          new Date(isoTime).toUTCString().slice(5, 11)
+        : '--';
+      // NDFD has a configurable forecast window. Prefer the value from
+      // file meta (what the refresh actually used) over the UI state.
+      const hrs = m.window_hours != null ? m.window_hours : state.window;
+      windowLabel = `${hrs} hr forecast`;
     }
+
+    // Threshold label: "\u2265 5.00\u2033" - same value for every row,
+    // included in context once so render() can paint the column.
+    const thresholdLabel = '\u2265 ' +
+      (CFG.formatThresholdInches(state.threshold) || '--');
+
     return {
-      sourceLabel:  state.mode === 'mrms' ? 'MRMS' : 'NDFD',
-      timestamp:    display,
-      timestampISO: isoTime || ''
+      sourceLabel,
+      timestamp:     display,
+      timestampISO:  isoTime || '',
+      windowLabel,
+      thresholdLabel,
     };
   }
 
   function _updateHeader(activeFC, summary) {
     const m = activeFC.meta || {};
 
-    if (state.mode === 'mrms') {
+    if (state.mode === 'historical') {
+      // The "Issued"/"Window" metric cards repurpose to show event identity
+      els.metricIssuedTime.textContent = m.end_date || '--';
+      els.metricIssuedDate.textContent = m.event_name || 'Historical';
+      els.metricWindow.textContent     =
+        (m.accumulation_days || '?') + ' days';
+      els.metricWindowSub.textContent  = 'accumulation';
+    } else if (state.mode === 'mrms') {
       const obs = m.observed_at ? new Date(m.observed_at) : new Date();
       els.metricIssuedTime.textContent =
         obs.toUTCString().slice(17, 22) + ' UTC';
@@ -516,7 +856,7 @@
     }
 
     els.metricThreshold.innerHTML =
-      '\u2265 ' + (CFG.PRECIP_LABELS[state.threshold] || '--');
+      '\u2265 ' + (CFG.formatThresholdInches(state.threshold) || '--');
     els.metricThresholdSub.textContent = 'NDFD category ' + state.threshold;
 
     els.metricFlagged.textContent = String(summary.flagged);
@@ -533,16 +873,52 @@
   function _updateSourceMeta(activeFC) {
     const m = (activeFC && activeFC.meta) || {};
 
-    els.metaSource.textContent = m.source || '--';
+    // Source: render as a clickable link to the upstream data service
+    // if we have a URL for the current mode. Built via DOM API rather
+    // than innerHTML so text from data.meta is safely escaped.
+    while (els.metaSource.firstChild) {
+      els.metaSource.removeChild(els.metaSource.firstChild);
+    }
+    const sourceText = m.source || '--';
+    const sourceUrl  = (CFG.SOURCE_LINKS && CFG.SOURCE_LINKS[state.mode]) || null;
 
-    if (state.mode === 'mrms') {
+    if (sourceUrl && sourceText !== '--') {
+      const link = document.createElement('a');
+      link.href   = sourceUrl;
+      link.target = '_blank';
+      link.rel    = 'noopener noreferrer';
+      link.textContent = sourceText;
+      // Trailing external-link icon (north-east arrow). aria-hidden so
+      // screen readers don't announce it; the link's target="_blank" is
+      // already implied by convention.
+      const icon = document.createElement('span');
+      icon.className = 'external-link-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = '\u2197';   // northeast arrow
+      link.appendChild(document.createTextNode(' '));
+      link.appendChild(icon);
+      els.metaSource.appendChild(link);
+    } else {
+      els.metaSource.textContent = sourceText;
+    }
+
+    if (state.mode === 'historical') {
+      els.metaTimeLabel.textContent = 'Event window';
+      els.metaTime.textContent = m.date_label || m.end_date || '--';
+
+      els.metaExtraLabel.hidden = false;
+      els.metaExtra.hidden = false;
+      els.metaExtraLabel.textContent = 'Max observed';
+      els.metaExtra.textContent = (m.max_inches != null)
+        ? m.max_inches.toFixed(2) + '\u2033'
+        : '--';
+    } else if (state.mode === 'mrms') {
       els.metaTimeLabel.textContent = 'Observed';
       const obs = m.observed_at ? new Date(m.observed_at) : null;
       els.metaTime.textContent = obs
         ? obs.toUTCString().slice(5, 22) + ' UTC'
         : '--';
 
-      // Extra row for MRMS: max observed inches
       els.metaExtraLabel.hidden = false;
       els.metaExtra.hidden = false;
       els.metaExtraLabel.textContent = 'Max observed';
@@ -602,10 +978,40 @@
   // AUTO-REFRESH
   // =====================================================================
   // On the auto-refresh tick (or when the user clicks "Refresh now"), we
-  // re-fetch the live data files. The frontend cache-busts via `cache: 'no-cache'`
-  // in _fetchInto, so we always see the latest cron output.
+  // re-fetch the live data files. The frontend cache-busts via
+  // `cache: 'no-cache'` in _fetchInto so we always see the latest cron
+  // output.
+  //
+  // This is NOT just _loadLiveData() because _loadLiveData is cache-aware
+  // (a no-op if the requested window is already loaded). Auto-refresh
+  // needs to bypass that cache and pull whatever files are on disk now,
+  // for whatever windows are currently in use for each mode.
   function _autoRefreshTick() {
-    _loadLiveData().then(refresh);
+    const promises = [];
+    const ndfdWin = state.loadedWindows.ndfd;
+    const mrmsWin = state.loadedWindows.mrms;
+
+    if (ndfdWin != null) {
+      promises.push(_fetchInto(`data/forecast_${ndfdWin}h.geojson`,     'NDFD_FORECAST'));
+      promises.push(_fetchInto(`data/flagged_ndfd_${ndfdWin}h.geojson`, 'FLAGGED_NDFD'));
+    }
+    if (mrmsWin != null) {
+      promises.push(_fetchInto(`data/observed_${mrmsWin}h.geojson`,     'MRMS_OBSERVED'));
+      promises.push(_fetchInto(`data/flagged_mrms_${mrmsWin}h.geojson`, 'FLAGGED_MRMS'));
+    }
+
+    if (promises.length === 0) {
+      // Nothing tracked yet (initial preload may not have completed).
+      // Fall back to the cache-aware loader, which will fetch if needed.
+      _loadLiveData().then(refresh);
+      return;
+    }
+
+    _setLoading(true);
+    Promise.allSettled(promises).then(function () {
+      _setLoading(false);
+      refresh();
+    });
   }
   function _startAutoRefresh() {
     _stopAutoRefresh();

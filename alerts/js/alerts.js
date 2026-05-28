@@ -115,7 +115,7 @@ window.DEFNS_ALERTS = (function () {
     if (!features.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 8;
       td.className = 'empty-row';
       td.textContent =
         'No debris flow zones meet the current threshold. ' +
@@ -135,6 +135,10 @@ window.DEFNS_ALERTS = (function () {
       return (a.properties.OBJECTID || 0) - (b.properties.OBJECTID || 0);
     });
 
+    // Precip threshold display - same for every row (it's the current
+    // slider position). Computed once outside the loop.
+    const thresholdLabel = ctx.thresholdLabel || '--';
+
     for (const f of features) {
       const p = f.properties;
       const tr = document.createElement('tr');
@@ -148,6 +152,10 @@ window.DEFNS_ALERTS = (function () {
       const cellCounty = document.createElement('td');
       cellCounty.textContent = p.county || '--';
 
+      // Watershed (HUC12 name)
+      const cellWatershed = document.createElement('td');
+      cellWatershed.textContent = p.watershed || '--';
+
       // Category with color swatch
       const cellCat = document.createElement('td');
       const swatch = document.createElement('span');
@@ -158,8 +166,12 @@ window.DEFNS_ALERTS = (function () {
       cellCat.appendChild(swatch);
       cellCat.appendChild(document.createTextNode('cat ' + p.precip_category));
 
-      // Source + timestamp (replaces the old "Forecast/observed" cell which
-      // duplicated the category label)
+      // Precip threshold - same value all rows; e.g. ">= 5.00\u2033".
+      // Encodes what the user's current slider position requires.
+      const cellThreshold = document.createElement('td');
+      cellThreshold.textContent = thresholdLabel;
+
+      // Source + timestamp
       const cellSource = document.createElement('td');
       const sourceStrong = document.createElement('strong');
       sourceStrong.textContent = ctx.sourceLabel || '--';
@@ -171,14 +183,22 @@ window.DEFNS_ALERTS = (function () {
         cellSource.appendChild(timeSpan);
       }
 
+      // Forecast window - per-source duration label.
+      // E.g. "12 hr forecast" / "1 hr observed" / "7-day accumulation".
+      const cellWindow = document.createElement('td');
+      cellWindow.textContent = ctx.windowLabel || '--';
+
       // Area
       const cellArea = document.createElement('td');
       cellArea.textContent = _estimateAcres(f.geometry);
 
       tr.appendChild(cellId);
       tr.appendChild(cellCounty);
+      tr.appendChild(cellWatershed);
       tr.appendChild(cellCat);
+      tr.appendChild(cellThreshold);
       tr.appendChild(cellSource);
+      tr.appendChild(cellWindow);
       tr.appendChild(cellArea);
 
       tbody.appendChild(tr);
@@ -204,9 +224,12 @@ window.DEFNS_ALERTS = (function () {
     const header = [
       'polygon_id',
       'county',
+      'watershed',
       'precip_category',
       'precip_label',
+      'precip_threshold',
       'source',
+      'forecast_window',
       'data_timestamp_utc',
       'export_timestamp_utc',
       'area_acres'
@@ -220,9 +243,12 @@ window.DEFNS_ALERTS = (function () {
       const fields = [
         p.OBJECTID || '',
         p.county || '',
+        p.watershed || '',
         p.precip_category != null ? p.precip_category : '',
         p.precip_label || '',
+        ctx.thresholdLabel || '',
         ctx.sourceLabel || '',
+        ctx.windowLabel || '',
         ctx.timestampISO || '',
         exportTs,
         _estimateAcres(f.geometry)

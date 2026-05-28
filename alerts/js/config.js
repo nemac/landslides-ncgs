@@ -42,6 +42,36 @@ window.DEFNS_CONFIG = (function () {
     19: '>20.00\u2033'
   };
 
+  // Lower bound (inches) of each category, used for "at-or-above" threshold
+  // displays like "alert when accumulation >= 5.00 inches" rather than the
+  // wordier "5.00-6.00 inches" range form. Mirrors MRMS_CATEGORY_CUTOFFS_INCHES
+  // in scripts/config.py: cat N's lower bound is the upper bound of cat N-1.
+  const PRECIP_LOWER_BOUNDS_INCHES = {
+    0:  0.01, 1:  0.10, 2:  0.25, 3:  0.50, 4:  0.75,
+    5:  1.00, 6:  1.50, 7:  2.00, 8:  2.50, 9:  3.00,
+    10: 4.00, 11: 5.00, 12: 6.00, 13: 8.00, 14: 10.00,
+    15: 12.00, 16: 14.00, 17: 16.00, 18: 18.00, 19: 20.00
+  };
+
+  // Format a category as a "at-or-above" threshold string like "5.00\u2033"
+  // (using the double-prime mark for inches). The leading ">=" is added
+  // by the caller so this returns just the number+inches part.
+  function formatThresholdInches(cat) {
+    const lb = PRECIP_LOWER_BOUNDS_INCHES[cat];
+    if (lb == null) return '--';
+    return lb.toFixed(2) + '\u2033';
+  }
+
+  // Per-source landing page URLs. Used by app.js to make the "Source"
+  // field in the source-meta block a clickable link to the upstream
+  // data service. Keys match state.mode values.
+  const SOURCE_LINKS = {
+    ndfd:       'https://services9.arcgis.com/RHVPKKiFTONKtxq3/' +
+                'arcgis/rest/services/NDFD_Precipitation_v1/FeatureServer/1',
+    mrms:       'https://mtarchive.geol.iastate.edu/',
+    historical: 'https://water.noaa.gov/about/precipitation-data-access'
+  };
+
   // NDFD's official color ramp. Same scheme used in NWS NDFD products and
   // in the Streamlit version (mirror of map_folium.py PRECIP_COLORS).
   // Light blues for trace amounts, ramping through greens, yellows, oranges,
@@ -120,6 +150,8 @@ window.DEFNS_CONFIG = (function () {
   return {
     MAP_CENTER, MAP_ZOOM, WNC_BBOX,
     PRECIP_LABELS, PRECIP_COLORS,
+    PRECIP_LOWER_BOUNDS_INCHES, formatThresholdInches,
+    SOURCE_LINKS,
     NDFD_DEFAULT_THRESHOLD_CATEGORY,
     NDFD_DEFAULT_WINDOW_HOURS,
     MRMS_DEFAULT_THRESHOLD_CATEGORY,
