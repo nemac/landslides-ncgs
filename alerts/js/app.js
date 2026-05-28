@@ -795,8 +795,12 @@
         ? new Date(isoTime).toUTCString().slice(17, 22) + ' UTC ' +
           new Date(isoTime).toUTCString().slice(5, 11)
         : '--';
-      // MRMS is the 1-hour Pass1 product
-      windowLabel = '1 hr observed';
+      // MRMS supports multiple observation windows (1, 24, 72 hours after
+      // the 2026-05-28 multi-window refactor). Read from file meta to
+      // get the window that was actually generated; fall back to UI state
+      // if meta is missing for some reason.
+      const hrs = m.window_hours != null ? m.window_hours : state.window;
+      windowLabel = `${hrs} hr observed`;
     } else {
       sourceLabel = 'NDFD';
       isoTime = m.issued;
@@ -840,7 +844,8 @@
         obs.toUTCString().slice(17, 22) + ' UTC';
       els.metricIssuedDate.textContent =
         obs.toUTCString().slice(5, 16);
-      els.metricWindow.textContent     = '1 hr observed';
+      els.metricWindow.textContent     =
+        (m.window_hours || state.window) + ' hr';
       els.metricWindowSub.textContent  =
         'ending ' + obs.toUTCString().slice(17, 22) + ' UTC';
     } else {
