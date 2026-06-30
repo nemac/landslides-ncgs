@@ -121,6 +121,57 @@ window.DEFNS_CONFIG = (function () {
     'nexrad-n0q/{z}/{x}/{y}.png';
   const NEXRAD_ATTRIBUTION = 'NOAA NEXRAD via Iowa Environmental Mesonet';
 
+  // NC OneMap statewide parcels - all 100 NC counties + Eastern Band of
+  // Cherokee Indians lands, with standardized cadastral attributes
+  // (siteadd, parno, scity, szip, cntyname, gisacres, ...). Queryable
+  // Feature Server; we use esri-leaflet's bbox-bounded feature layer so
+  // only visible parcels are fetched. The /secure/ in the URL is
+  // NC OneMap's URL convention - no authentication required.
+  // Fields we expose in popups: see _bindParcelsPopup in map.js.
+  const NCONEMAP_PARCELS_URL =
+    'https://services.nconemap.gov/secure/rest/services/' +
+    'NC1Map_Parcels/FeatureServer/1';
+  const NCONEMAP_PARCELS_ATTRIBUTION =
+    'NC OneMap statewide parcels (NC counties + EBCI)';
+  // Minimum map zoom level at which the parcels layer fetches features.
+  // Set high enough that a single map view contains well under the
+  // service's 5000-record limit even in dense urban areas. Layer toggle
+  // shows a hint to zoom in when below this level.
+  const NCONEMAP_PARCELS_MIN_ZOOM = 14;
+
+  // Overture Maps Foundation - building footprints distributed as PMTiles.
+  // Free public CDN at AWS S3, monthly releases. Visual-only reference
+  // layer (no popup interactivity in the PMTiles format we use).
+  //
+  // URL pattern: overturemaps-extras-us-west-2.s3.amazonaws.com/tiles/{RELEASE}/buildings.pmtiles
+  // Release tags follow Overture's YYYY-MM-DD.N naming. Not every
+  // calendar month has a release, and the S3 bucket returns 403 for
+  // non-existent releases (NOT 404 - so the request "succeeds" but
+  // serves no data, which made this hard to diagnose).
+  //
+  // To pick up a fresher release: visit
+  //   https://docs.overturemaps.org/examples/overture-tiles/
+  // and copy the release tag they reference in their working example.
+  // Their docs are the canonical place to confirm a release is live.
+  //
+  // The buildings theme contains the feature types "building" (footprints)
+  // and "building_part" (sub-parts) - both are painted by paint_rules in
+  // map.js so users see complete coverage, not just bare outer shapes.
+  const OVERTURE_BUILDINGS_PMTILES_URL =
+    'https://overturemaps-extras-us-west-2.s3.amazonaws.com/' +
+    'tiles/2026-05-20.0/buildings.pmtiles';
+  const OVERTURE_BUILDINGS_ATTRIBUTION =
+    '\u00a9 Overture Maps Foundation';
+
+  // Esri World Geocoder - used by the map's search box for address +
+  // place lookup. Free tier is generous (~1M queries/year for non-
+  // commercial use); no API key required. esri-leaflet-geocoder handles
+  // both autocomplete suggestions and full-address resolution against
+  // this endpoint internally - we just point it at the same place.
+  const ESRI_GEOCODER_URL =
+    'https://geocode.arcgis.com/arcgis/rest/services/' +
+    'World/GeocodeServer';
+
   // ---- Auto-refresh -------------------------------------------------------
   // GitHub Actions writes new JSON every 15 minutes. The frontend polls
   // for it at a slightly longer interval so we don't hammer the bucket and
@@ -132,14 +183,23 @@ window.DEFNS_CONFIG = (function () {
   // be in its own pane with a higher zIndex. This is what saved us from the
   // "radar tiles loaded but invisible under satellite basemap" bug.
   //
-  // Order from bottom to top, matching the sidebar layer-toggle order (#7):
-  //   NDFD forecast precipitation  -> bottom (forecast is conceptual; show first)
-  //   MRMS observed precipitation  -> above forecast
-  //   NEXRAD radar                 -> above precip polygons
-  //   Flagged debris flow zones    -> alerts on top (highest priority visual)
-  //   NCGS reference layer         -> on top of alerts so user can see all
-  //                                   debris flows when reference toggled on
+  // Order from bottom to top:
+  //   Buildings reference            -> just above basemap (context layer)
+  //   NC parcels reference           -> just above buildings (context layer)
+  //   NDFD forecast precipitation    -> alerts data starts here
+  //   MRMS observed precipitation    -> above forecast
+  //   NEXRAD radar                   -> above precip polygons
+  //   Flagged debris flow zones      -> alerts on top (highest priority visual)
+  //   NCGS reference layer           -> on top of alerts so user can see all
+  //                                     debris flows when reference toggled on
+  //
+  // The reference layers (buildings, parcels) intentionally sit BELOW the
+  // alert-driving layers - they're context, not primary signal. If they
+  // were above, they'd visually compete with the precipitation polygons
+  // and debris flow alerts that the dashboard is built around.
   const PANE_ZINDEX = {
+    buildings:       380,    // Overture building footprints (context)
+    parcels:         390,    // NC OneMap parcels (context)
     forecast:        400,    // NDFD forecast polygons
     observed:        410,    // MRMS observed polygons
     radar:           420,    // NEXRAD radar overlay
@@ -157,6 +217,10 @@ window.DEFNS_CONFIG = (function () {
     MRMS_DEFAULT_THRESHOLD_CATEGORY,
     NCGS_FEATURESERVER_URL,
     NEXRAD_TILES_URL, NEXRAD_ATTRIBUTION,
+    NCONEMAP_PARCELS_URL, NCONEMAP_PARCELS_ATTRIBUTION,
+    NCONEMAP_PARCELS_MIN_ZOOM,
+    OVERTURE_BUILDINGS_PMTILES_URL, OVERTURE_BUILDINGS_ATTRIBUTION,
+    ESRI_GEOCODER_URL,
     AUTO_REFRESH_MS,
     PANE_ZINDEX
   };

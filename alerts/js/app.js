@@ -50,6 +50,9 @@
     layerRadar:      $('layer-radar'),
     layerAlerts:     $('layer-alerts'),
     layerReference:  $('layer-reference'),
+    layerParcels:    $('layer-parcels'),
+    layerBuildings:  $('layer-buildings'),
+    parcelsZoomHint: $('parcels-zoom-hint'),
 
     // Refresh
     manualRefresh:    $('manual-refresh'),
@@ -247,6 +250,29 @@
       });
     });
 
+    // New reference-layer toggles (post-launch additions): NC parcels and
+    // Overture building footprints. Both are visual reference layers
+    // separate from the alert pipeline; toggling them does not require
+    // re-running the loading indicator since neither blocks on data we
+    // fetch ourselves (parcels fetch incrementally per pan/zoom; PMTiles
+    // stream from Overture's CDN).
+    if (els.layerParcels) {
+      els.layerParcels.addEventListener('change', function () {
+        MAP.setParcelsVisible(this.checked);
+      });
+    }
+    if (els.layerBuildings) {
+      els.layerBuildings.addEventListener('change', function () {
+        MAP.setBuildingsVisible(this.checked);
+      });
+    }
+
+    // Keep the "zoom in to load" hint accurate for the parcels toggle.
+    // The parcels layer only fetches at zoom >= CFG.NCONEMAP_PARCELS_MIN_ZOOM;
+    // below that, even with the toggle checked the user sees nothing.
+    // Show the hint whenever we're below the min zoom; hide it when zoomed in.
+    _wireParcelsZoomHint();
+
     // Refresh
     els.manualRefresh.addEventListener('click', _autoRefreshTick);
     els.autoRefreshToggle.addEventListener('change', function () {
@@ -399,6 +425,27 @@
     els.windowSelect.value    = String(state.window);
     _updateThresholdLabel();
     _updateModeUI();
+  }
+
+  // Show or hide the "zoom in to load" hint next to the NC Parcels toggle
+  // based on current map zoom. The hint is always present in the DOM (for
+  // screen-reader stability) but visually hidden via the .is-hidden class
+  // when not relevant. Updated on every zoomend so users see real-time
+  // feedback as they zoom in or out.
+  function _wireParcelsZoomHint() {
+    if (!els.parcelsZoomHint || !window.DEFNS_MAP) return;
+    const map = window.DEFNS_MAP._internalMap();
+    if (!map) return;
+
+    const minZoom = (window.DEFNS_CONFIG &&
+                     window.DEFNS_CONFIG.NCONEMAP_PARCELS_MIN_ZOOM) || 14;
+
+    function update() {
+      const tooFarOut = map.getZoom() < minZoom;
+      els.parcelsZoomHint.classList.toggle('is-hidden', !tooFarOut);
+    }
+    map.on('zoomend', update);
+    update();   // initial state
   }
 
   // =====================================================================
