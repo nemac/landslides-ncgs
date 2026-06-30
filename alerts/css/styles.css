@@ -948,3 +948,175 @@ select {
   .metrics { grid-template-columns: 1fr; }
   #map { height: 320px; min-height: 320px; }
 }
+
+/* =========================================================================
+   Reference-layer additions (NC parcels + Overture buildings + map search)
+   These were added post-launch-week-1 alongside the multi-window changes.
+   ========================================================================= */
+
+/* The "(zoom in to load)" hint next to the NC Parcels layer toggle. JS
+   toggles .is-hidden on this span based on current map zoom. We use
+   visibility:hidden rather than display:none so the surrounding layout
+   stays stable as the user zooms in/out (no jumpy reflow). */
+.control-help-inline.is-hidden {
+  visibility: hidden;
+}
+
+/* Leaflet popup content for NC parcel clicks. Light card on the popup's
+   default white background to match the rest of the dashboard's tone of
+   voice: readable, dense without being cramped, no decoration. */
+.parcel-popup {
+  font-family: var(--font-sans);
+  font-size:   var(--fs-sm);
+  color:       #1c3a1f;
+  min-width:   180px;
+  max-width:   240px;
+}
+.parcel-popup-addr {
+  font-weight: 600;
+  font-size:   var(--fs-base);
+  margin-bottom: 0.15rem;
+  line-height: 1.25;
+}
+.parcel-popup-addr em {
+  font-weight: 400;
+  font-style:  italic;
+  color:       #5a6663;
+}
+.parcel-popup-city {
+  color: #5a6663;
+  margin-bottom: 0.5rem;
+}
+.parcel-popup-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+  margin: 0 0 0.45rem 0;
+}
+.parcel-popup-fields dt {
+  font-weight: 600;
+  color: #3c744c;
+}
+.parcel-popup-fields dd {
+  margin: 0;
+  word-break: break-word;
+}
+.parcel-popup-source {
+  font-size: var(--fs-xs);
+  color:     #5a6663;
+  border-top: 1px solid #d4e8d8;
+  padding-top: 0.3rem;
+}
+
+/* Esri-leaflet-geocoder search control. The plugin ships its own CSS
+   (loaded via <link> in index.html), but its defaults are a generic
+   Leaflet white-box look. Override key surfaces to match our dark green
+   theme without breaking the plugin's internal positioning logic.
+   Targeted overrides only - we don't want to fight the plugin's a11y
+   affordances or keyboard handling.
+
+   Critical: do NOT set overflow:hidden on .geocoder-control - the
+   suggestions list is rendered as a child of the control and extends
+   below it. Clipping it makes results invisible.
+
+   Note on the border-less look: the plugin's container .geocoder-control
+   inherits Leaflet's .leaflet-bar border which sits slightly outside our
+   styled input. We strip the container's own visible chrome (border,
+   shadow) so only the styled input box shows, avoiding any visible gap
+   between the two boxes. */
+.geocoder-control,
+.geocoder-control.leaflet-bar {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+}
+.geocoder-control-input {
+  background:  var(--site-surface);
+  color:       var(--site-text);
+  font-family: var(--font-sans);
+  font-size:   var(--fs-base);
+  /* The input now owns its own card look (shadow, full border). We
+     stripped the container's chrome so the two boxes can't disagree. */
+  width:         100%;
+  box-sizing:    border-box;
+  border:        1px solid var(--site-border);
+  box-shadow:    0 2px 8px rgba(0, 0, 0, 0.18);
+  padding-left:  0.6rem;
+  padding-right: 0.6rem;
+  border-radius: var(--radius-md);
+}
+.geocoder-control-input::placeholder {
+  color: var(--site-text-muted);
+  opacity: 0.85;
+}
+.geocoder-control-input:focus {
+  outline: 2px solid var(--site-focus);
+  outline-offset: -2px;   /* sits inside the control's own border */
+}
+
+/* Suppress the autocomplete loading indicator that the plugin flashes
+   inside the input on every keystroke. Functionally a small UX win:
+   suggestions still appear when they're ready, but the user doesn't see
+   a spinner flicker on each character typed. Targets both the loading
+   state class and any spinner pseudo-element / background-image the
+   plugin uses to draw the indicator. */
+.geocoder-control .geocoder-control-loading,
+.geocoder-control.geocoder-control-loading::after,
+.geocoder-control .geocoder-control-input.geocoder-control-loading {
+  background-image: none !important;
+  animation:        none !important;
+}
+.geocoder-control-loading-image,
+.geocoder-control-spinner,
+.geocoder-control .leaflet-control-loading {
+  display: none !important;
+}
+/* Suggestions list - rendered below the input. Must visually escape the
+   control's border-radius and sit above all map layers. The plugin
+   positions it absolutely; we just style it. */
+.geocoder-control-suggestions,
+.geocoder-control .geocoder-control-suggestions {
+  background:  var(--site-surface);
+  border:      1px solid var(--site-border);
+  border-top:  none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow:  0 6px 12px rgba(0, 0, 0, 0.24);
+  margin-top:  -1px;       /* tuck under the input's bottom border */
+  max-height:  300px;
+  overflow-y:  auto;
+  z-index:     1100;       /* above Leaflet's default control z-indexes */
+}
+.geocoder-control-suggestion,
+.geocoder-control li.geocoder-control-suggestion {
+  background: var(--site-surface);   /* explicit on each <li> - plugin's
+                                        default puts white background here,
+                                        overriding the parent <ul>'s color */
+  color:   var(--site-text);
+  padding: 0.45rem 0.6rem;
+  cursor:  pointer;
+}
+.geocoder-control-suggestion:hover,
+.geocoder-control-selected,
+.geocoder-control-suggestion[aria-selected="true"],
+.geocoder-control li.geocoder-control-suggestion.geocoder-control-selected,
+.geocoder-control li.geocoder-control-suggestion:hover {
+  background: var(--secondary-dark);
+  color:      var(--site-text);
+}
+
+/* Layout: place controls in the top-left corner horizontally (zoom +/-
+   buttons on the left, geocoder search box to their right) instead of
+   the default vertical stack. Flex on the parent does this without
+   fighting any per-control margins or clear rules. */
+.leaflet-top.leaflet-left {
+  display:        flex;
+  flex-direction: row;
+  align-items:    flex-start;
+}
+.leaflet-top.leaflet-left .leaflet-control {
+  margin-right: 10px;     /* gap between zoom and search */
+}
+.leaflet-top.leaflet-left .leaflet-control:last-child {
+  margin-right: 0;
+}

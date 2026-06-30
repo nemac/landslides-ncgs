@@ -10,14 +10,25 @@
         rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
   <style>
-    /* The shared dashboard stylesheet sets body { height: 100vh;
-       overflow: hidden } so the map+sidebar layout doesn't scroll.
-       That's wrong for this content-only page - we WANT scroll here.
-       Override with !important since these come after the linked
-       stylesheet and need to win against its class-level rules. */
+    /* The shared dashboard stylesheet sets body to a fixed-height flex
+       column with overflow:hidden so the map+sidebar layout doesn't
+       scroll. That's wrong for this content-only page - we WANT scroll
+       here. Override comprehensively:
+         - height: auto so body grows with content
+         - min-height: 100vh so short pages still fill the viewport
+         - overflow: auto so long pages get a scroll bar
+         - display: block to neutralize the flex layout (was constraining
+           the main content's natural height in some browsers)
+       Using !important throughout because the rules they're overriding
+       are loaded by the linked stylesheet AFTER this <style> block in
+       theory, but in practice browser cascade lets these win. */
     html, body {
       height: auto !important;
+      min-height: 100vh !important;
       overflow: auto !important;
+    }
+    body {
+      display: block !important;
     }
     /* Minor overrides for a content-only page */
     .doc-body { max-width: 70ch; margin: 0 auto; padding: 2rem 1.5rem; }
@@ -115,6 +126,36 @@
           from an external ArcGIS Online service; if that service is slow,
           some data may take time to appear. The alert detection itself
           does not depend on this layer rendering.</li>
+      <li>The Overture building footprints reference layer is rendered to
+          a canvas surface for performance and is therefore not
+          individually selectable. Building footprints are decorative
+          context only and do not carry information beyond what is
+          already conveyed by the basemap and the alerts table.</li>
+      <li>The NC parcels reference layer only loads at high zoom levels
+          (street view) to keep network requests bounded. A &ldquo;zoom
+          in to load&rdquo; hint appears next to the layer toggle when
+          the current zoom is too far out for the layer to fetch
+          features.</li>
+    </ul>
+
+    <h2>Reference layers and the address search control</h2>
+    <ul>
+      <li>Toggling reference layers (NC parcels, building footprints,
+          NEXRAD radar) on or off does not affect the alerts table or
+          the canonical list of flagged debris flow zones. These layers
+          are visual context; the table is the authoritative source for
+          screen-reader and keyboard users.</li>
+      <li>The map&rsquo;s address &amp; place search box accepts city
+          names, full addresses, and landmark names. It is operable by
+          keyboard: Tab to focus the input, type to see suggestions, use
+          the up/down arrow keys to move through the suggestion list,
+          Enter to select, and Esc to dismiss.</li>
+      <li>When a parcel is clicked, a popup opens with the site address,
+          parcel number, county, acres, and last update date for that
+          parcel. Popups can be dismissed with the Esc key.</li>
+      <li>The search control sends typed queries to Esri&rsquo;s World
+          Geocoding service to return location suggestions. No personally
+          identifying information is sent beyond what the user types.</li>
     </ul>
 
     <h2>Report an accessibility issue</h2>
