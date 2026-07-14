@@ -25,6 +25,11 @@ from config import (
     DEBRIS_CACHE_FILENAME,
     CACHE_TTL_DAYS,
     WNC_BBOX,
+    OVERTURE_BUILDINGS_FILENAME,
+    OVERTURE_BUILDINGS_CACHE_TTL_DAYS,
+    OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
+    OVERTURE_BUILDINGS_COORD_PRECISION,
+    OVERTURE_BUILDINGS_MIN_AREA_SQM,
 )
 
 
@@ -33,7 +38,8 @@ from config import (
 # =============================================================================
 
 def _agol_request_with_retry(url: str, params: dict, label: str,
-                              max_attempts: int = 5) -> dict:
+                              max_attempts: int = 5,
+                              accept_encoding: str = "gzip, deflate") -> dict:
     """GET an ArcGIS REST endpoint, retrying transient errors (5xx, timeouts).
 
     AGOL has periodic blips (503, 504, brief socket timeouts) that resolve
@@ -52,6 +58,12 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
     params : dict     query parameters
     label : str       short description used in log lines (e.g. "page @offset=20000")
     max_attempts : int  total attempts including the first; default 5
+    accept_encoding : str  value of the Accept-Encoding request header.
+        Defaults to "gzip, deflate" (excludes brotli, which the requests
+        library can't decode without the optional `brotli` package - a
+        known headache with some AGOL services). Pass "identity" for
+        services that claim to send valid gzip but send malformed bytes
+        (see _fetch_wnc_huc12 for the one known case in our pipeline).
 
     Returns
     -------
@@ -63,12 +75,7 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
     RuntimeError if AGOL returns an HTTP-200 error envelope.
     """
     import time
-    # Some AGOL services (notably UNC Asheville's services5 instance) send
-    # Brotli-compressed responses by default. Python `requests` only decodes
-    # Brotli if the `brotli` package is installed (often not the case in
-    # default conda envs). Explicitly limiting to gzip/deflate makes the
-    # server fall back to a format we can always decode.
-    headers = {"Accept-Encoding": "gzip, deflate"}
+    headers = {"Accept-Encoding": accept_encoding}
 
     last_exc = None
     for attempt in range(1, max_attempts + 1):
@@ -371,8 +378,14 @@ def _fetch_wnc_huc12() -> gpd.GeoDataFrame:
         "f":              "geojson",
         "returnGeometry": "true",
     }
+    # UNC Asheville's services5 host claims Content-Encoding: gzip on its
+    # HUC12 responses but sends malformed gzip bytes ("invalid stored block
+    # lengths" / "invalid code lengths set"). Requesting identity encoding
+    # tells the server to skip compression entirely. HUC12 payloads for
+    # the WNC bbox are ~5-10 MB uncompressed - noticeable but not painful.
     page = _agol_request_with_retry(_HUC12_QUERY_URL, params,
-                                     label="WNC HUC12 watersheds")
+                                     label="WNC HUC12 watersheds",
+                                     accept_encoding="identity")
     feats = page.get("features", [])
     if not feats:
         print("  ! No HUC12 features returned from AGOL")
@@ -1189,3 +1202,198 @@ def _polygonize_stage_iv_inches(
 
     return gdf, max_inches
 
+
+
+# =============================================================================
+# Overture Maps - building footprints (visual reference layer)
+# =============================================================================
+#
+# Static GeoJSON of building footprints for the WNC bbox, extracted from
+# Overture Maps Foundation's monthly GeoParquet releases via their official
+# Python client. Output schema: id, class, height, geometry. Coverage is
+# automatically multi-state (NC + TN + GA + SC + VA wherever they fall inside
+# the WNC bbox) because Overture is a global dataset sliced by bbox.
+#
+# The extraction is SLOW (DuckDB query against Overture's hosted Parquet,
+# typically 5-15 min for a WNC-sized bbox), so we cache aggressively. The
+# OVERTURE_BUILDINGS_CACHE_TTL_DAYS check below means refresh.py only
+# triggers a fresh extract about once a month, while the file feeds the
+# frontend on every page load in between.
+
+def _overture_output_path(output_dir: Path) -> Path:
+    """Where the buildings GeoJSON lives. Same alerts/data/ directory the
+    frontend reads from - the frontend fetches this file directly."""
+    return Path(output_dir) / OVERTURE_BUILDINGS_FILENAME
+
+
+def _overture_cache_is_fresh(output_dir: Path) -> bool:
+    """Return True if the buildings GeoJSON exists AND is younger than
+    OVERTURE_BUILDINGS_CACHE_TTL_DAYS. Skip the extraction in that case.
+
+    Note this looks at the OUTPUT file rather than a separate cache file,
+    because the output IS what we'd hand to the frontend; no need to
+    maintain two copies.
+    """
+    p = _overture_output_path(output_dir)
+    if not p.exists():
+        return False
+    age_days = (datetime.now().timestamp() - p.stat().st_mtime) / 86400
+    return age_days < OVERTURE_BUILDINGS_CACHE_TTL_DAYS
+
+
+def fetch_overture_buildings(
+    output_dir: Path,
+    force_refresh: bool = False,
+) -> gpd.GeoDataFrame | None:
+    """Extract Overture building footprints for the WNC bbox, write to
+    a static GeoJSON in `output_dir`, and return the GeoDataFrame.
+
+    Returns the GeoDataFrame on success. Returns None if the cache was
+    fresh (no extraction needed) - callers can check existence on disk
+    instead.
+
+    Args:
+        output_dir: where to write `buildings_wnc.geojson`. Typically
+            the same alerts/data/ directory the frontend serves from.
+        force_refresh: if True, ignore the TTL and re-extract anyway.
+
+    Raises:
+        RuntimeError if the `overturemaps` Python client isn't installed.
+        Any exception the client raises (network failures, DuckDB errors,
+        etc.) propagates up - refresh.py will log it and continue, since
+        a missing buildings layer shouldn't break alert generation.
+    """
+    output_dir = Path(output_dir)
+    output_path = _overture_output_path(output_dir)
+
+    if not force_refresh and _overture_cache_is_fresh(output_dir):
+        age_days = (datetime.now().timestamp() - output_path.stat().st_mtime) / 86400
+        print(f"  Buildings cache is fresh ({age_days:.1f} days old, "
+              f"TTL {OVERTURE_BUILDINGS_CACHE_TTL_DAYS}d). Skipping extraction.")
+        return None
+
+    print(f"  Extracting Overture buildings for bbox {WNC_BBOX}...")
+    print(f"  This typically takes 5-15 minutes (DuckDB query against "
+          f"Overture's hosted GeoParquet on AWS).")
+
+    # Lazy import: overturemaps + duckdb are heavy dependencies and we
+    # only need them when actually extracting. Importing at module load
+    # would slow every refresh.py invocation, including the 99% that
+    # hit the cache and skip this work.
+    try:
+        # The top-level `geodataframe` function is the canonical API per
+        # Overture's docs and README examples. Internally it uses DuckDB
+        # to query Overture's hosted GeoParquet on AWS S3 (bbox-filtered
+        # streaming), then returns a GeoPandas GeoDataFrame directly.
+        from overturemaps import geodataframe as _overture_geodataframe
+    except ImportError as exc:
+        raise RuntimeError(
+            "The overturemaps Python client is required for the buildings "
+            "phase. Install it with: pip install overturemaps"
+        ) from exc
+
+    # WNC_BBOX is (minx, miny, maxx, maxy) in WGS84 - same format the
+    # overturemaps client expects for its bbox parameter.
+    minx, miny, maxx, maxy = WNC_BBOX
+
+    # The 'building' type within the 'buildings' theme is the primary
+    # footprints dataset. We do NOT pull 'building_part' here - those
+    # are sub-parts (architectural details like wings on a building),
+    # not full footprints, and would inflate the file without adding
+    # value for a reference layer.
+    print(f"  Querying Overture (theme=buildings, type=building)...")
+    table = _overture_geodataframe(
+        "building",
+        bbox=(minx, miny, maxx, maxy),
+    )
+    n_raw = len(table)
+    print(f"  Raw extract: {n_raw:,} buildings.")
+
+    if n_raw == 0:
+        print(f"  WARNING: 0 buildings returned. Check Overture release "
+              f"availability for this bbox.")
+        return table
+
+    # Subset to columns we keep. We aggressively minimize per-feature
+    # bytes because the WNC bbox contains ~2-3 million buildings and
+    # even 40 bytes per feature adds up to 100+ MB.
+    #
+    #   id        - Overture GERS UUID (stable across releases). KEPT
+    #               because it's the join key for future spatial-join
+    #               work between buildings and flagged debris flows.
+    #   class     - Overture's building classification enum. DROPPED
+    #               (2026-07-14) - not used by the frontend today, and
+    #               saves ~20 bytes per feature.
+    #   height    - Height in meters, often null for ML-derived
+    #               footprints. DROPPED (2026-07-14) - not used, and
+    #               most values are null anyway.
+    #   geometry  - the polygon footprint
+    keep_cols = [c for c in ["id", "geometry"] if c in table.columns]
+    if "geometry" not in keep_cols:
+        raise RuntimeError("Overture extract has no 'geometry' column; "
+                           "cannot produce a spatial output.")
+    if "id" not in keep_cols:
+        print(f"  Note: 'id' column not in Overture extract - future "
+              f"spatial joins will need a different join key.")
+    gdf = table[keep_cols].copy()
+
+    # Ensure WGS84 - Overture publishes in 4326 but be defensive
+    if gdf.crs is None:
+        gdf = gdf.set_crs("EPSG:4326")
+    elif str(gdf.crs).upper() not in ("EPSG:4326", "WGS 84"):
+        gdf = gdf.to_crs("EPSG:4326")
+
+    # Filter by minimum building area. Overture includes every structure
+    # regardless of size (sheds, gazebos, small outbuildings) - not all
+    # of which matter for a reference layer on a debris flow dashboard.
+    # We compute area in an equal-area projection (EPSG:5070, Albers
+    # CONUS - the same projection we use for debris flow area math) so
+    # the filter threshold is meaningful in square meters, not squared
+    # degrees.
+    if OVERTURE_BUILDINGS_MIN_AREA_SQM > 0:
+        print(f"  Filtering to buildings >= "
+              f"{OVERTURE_BUILDINGS_MIN_AREA_SQM} sq meters...")
+        # Reproject a temporary copy just for area computation; keep the
+        # main gdf in 4326 for the output.
+        areas_sqm = gdf.geometry.to_crs("EPSG:5070").area
+        keep_mask = areas_sqm >= OVERTURE_BUILDINGS_MIN_AREA_SQM
+        n_before = len(gdf)
+        gdf = gdf[keep_mask].copy()
+        n_after = len(gdf)
+        pct_dropped = (n_before - n_after) / n_before * 100 if n_before else 0
+        print(f"  Filtered: {n_before:,} -> {n_after:,} buildings "
+              f"({pct_dropped:.1f}% dropped as too-small).")
+
+    # Simplify geometries for file-size savings. Bumped from 10m to 25m
+    # tolerance (2026-07-14) - buildings look slightly boxier when
+    # zoomed to street level but the file is dramatically smaller,
+    # which matters more for a reference layer that has to load in the
+    # browser as static GeoJSON.
+    print(f"  Simplifying geometries at {OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG} deg "
+          f"(~25m) tolerance...")
+    gdf["geometry"] = gdf.geometry.simplify(
+        tolerance=OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
+        preserve_topology=True,
+    )
+    # Drop any rows where simplification produced empty geometries
+    gdf = gdf[~gdf.geometry.is_empty & gdf.geometry.notna()].copy()
+
+    # Write to GeoJSON. Coord precision at 5 decimals (~1.1 m) instead
+    # of 6 (~11 cm) - still visually correct at any zoom, saves ~10%
+    # on file size.
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()  # GeoPandas append-mode pitfalls; explicit fresh write
+
+    # to_file with COORDINATE_PRECISION layer option for size reduction.
+    # This requires GeoPandas >= 0.14 / fiona >= 1.9 which our reqs pin.
+    print(f"  Writing {len(gdf):,} buildings to {output_path}...")
+    gdf.to_file(
+        output_path,
+        driver="GeoJSON",
+        COORDINATE_PRECISION=OVERTURE_BUILDINGS_COORD_PRECISION,
+    )
+    size_mb = output_path.stat().st_size / (1024 * 1024)
+    print(f"  Wrote buildings_wnc.geojson: {size_mb:.1f} MB ({len(gdf):,} features).")
+
+    return gdf
