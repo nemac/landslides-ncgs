@@ -13,7 +13,8 @@
  *   setRadarVisible(bool)
  *   setReferenceVisible(bool)    -> NCGS debris flow reference (AGOL)
  *   setParcelsVisible(bool)      -> NC OneMap statewide parcels (clickable)
- *   setBuildingsVisible(bool)    -> Overture building footprints (PMTiles)
+ *   setBuildingsVisible(bool)    -> Overture building footprints (GeoJSON,
+ *                                   lazy-loaded from data/buildings_wnc.geojson)
  *
  * Lessons encoded here from the Streamlit version:
  *   - Each non-basemap layer goes in its own pane with explicit zIndex.
@@ -474,14 +475,27 @@ window.DEFNS_MAP = (function () {
   }
 
   // ---- Overture building footprints layer (visual reference) --------------
-  // Toggleable PMTiles layer fetched from Overture's public CDN. Visual
-  // only - no popups or click interaction (the protomaps-leaflet plugin
-  // renders to canvas, not real DOM features, so it can't carry feature
-  // attributes through to a click handler the way a Feature Server can).
+  // Toggleable layer rendering all-black building footprints across the
+  // multi-state WNC bbox (NC + TN + GA + SC + VA wherever they fall
+  // inside the bbox). Source is Overture Maps Foundation, extracted by
+  // scripts/refresh.py into a static GeoJSON at data/buildings_wnc.geojson.
   //
-  // Styled as muted gray fills with thin outlines, intentionally
-  // subordinated to the alert-driving layers above it. We don't want
-  // building footprints visually competing with debris flow polygons.
+  // Loading strategy: lazy. The first time the user toggles this layer
+  // on, we fetch the GeoJSON (typically 30-100 MB after simplification)
+  // and stash it in a module-scoped cache. Subsequent toggle-on/offs
+  // just add/remove the cached layer object without re-fetching.
+  //
+  // Rendering: Canvas renderer (not SVG). Buildings can be hundreds of
+  // thousands of polygons at this scale; canvas handles that volume
+  // significantly better than SVG, at the cost of per-feature click
+  // events (which we don't need - this is a visual reference layer).
+  //
+  // Visual styling: all-black fill, no stroke. Intentionally simple so
+  // buildings recede visually behind the precipitation and alert layers,
+  // which are the primary signal on the dashboard.
+  let _buildingsGeojsonCache = null;  // hold the fetched FeatureCollection
+  let _buildingsFetchInFlight = null; // dedupe overlapping requests
+
   function setBuildingsVisible(visible) {
     if (!visible) {
       if (layers.buildings) {
@@ -491,65 +505,79 @@ window.DEFNS_MAP = (function () {
       return;
     }
     if (layers.buildings) return;  // already on
-    if (typeof protomapsL === 'undefined'
-        || typeof protomapsL.leafletLayer !== 'function') {
-      console.warn('[DEFNS] protomaps-leaflet not loaded; '
-                 + 'buildings layer unavailable');
+
+    // If we already have the GeoJSON cached from a previous toggle-on,
+    // just rebuild the Leaflet layer from cache instead of re-fetching.
+    if (_buildingsGeojsonCache) {
+      layers.buildings = _buildLeafletBuildingsLayer(_buildingsGeojsonCache);
+      layers.buildings.addTo(map);
       return;
     }
-    console.log('[DEFNS] Loading building footprints from',
-                CFG.OVERTURE_BUILDINGS_PMTILES_URL);
-    layers.buildings = protomapsL.leafletLayer({
-      url:  CFG.OVERTURE_BUILDINGS_PMTILES_URL,
+
+    // Dedupe: if a fetch is already in flight (user toggled on, then off,
+    // then on quickly), don't start a second fetch.
+    if (_buildingsFetchInFlight) return;
+
+    console.log('[DEFNS] Fetching building footprints from',
+                CFG.OVERTURE_BUILDINGS_GEOJSON_URL);
+    _buildingsFetchInFlight = fetch(CFG.OVERTURE_BUILDINGS_GEOJSON_URL, {
+      cache: 'default',   // OK to use browser cache; file changes monthly
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          throw new Error('HTTP ' + resp.status + ' fetching buildings');
+        }
+        return resp.json();
+      })
+      .then(function (geojson) {
+        const n = (geojson.features || []).length;
+        console.log('[DEFNS] Building footprints loaded: ' + n.toLocaleString()
+                  + ' features.');
+        _buildingsGeojsonCache = geojson;
+        _buildingsFetchInFlight = null;
+        // Only actually add the layer if the user still has the toggle
+        // on. They may have toggled off during the fetch.
+        const stillRequested =
+          document.getElementById('layer-buildings') &&
+          document.getElementById('layer-buildings').checked;
+        if (stillRequested) {
+          layers.buildings = _buildLeafletBuildingsLayer(geojson);
+          layers.buildings.addTo(map);
+        }
+      })
+      .catch(function (err) {
+        _buildingsFetchInFlight = null;
+        console.error('[DEFNS] Failed to load building footprints:', err);
+        console.error('[DEFNS] Tip: ensure scripts/refresh.py has been run '
+                    + 'at least once so data/buildings_wnc.geojson exists.');
+      });
+  }
+
+  // Build a Leaflet GeoJSON layer from a cached FeatureCollection. Pulled
+  // out as a helper because we call this from two places: after the
+  // initial fetch, and on subsequent toggle-ons that hit the cache.
+  function _buildLeafletBuildingsLayer(geojson) {
+    return L.geoJSON(geojson, {
       pane: 'buildingsPane',
       attribution: CFG.OVERTURE_BUILDINGS_ATTRIBUTION,
-      // IMPORTANT: protomaps-leaflet's option keys are snake_case
-      // (paint_rules, label_rules), NOT camelCase. Using camelCase
-      // means the plugin gets no rules, draws nothing, and never even
-      // initiates tile fetches - so the layer appears "broken" with
-      // no errors. Verified against the plugin's GitHub examples.
-      //
-      // Paint rules: all-black fill, no stroke. Overture's PMTiles use
-      // the FEATURE TYPE name as the dataLayer key inside the tiles,
-      // not the theme name. Per Overture's docs, the buildings theme
-      // has two feature types: "building" (footprints) and
-      // "building_part" (sub-parts). We paint both. We also include
-      // a "buildings" plural fallback in case a future release ever
-      // switches to theme-name layers - the plugin silently no-ops on
-      // dataLayer names that aren't in the tiles, so listing extras
-      // is harmless.
-      paint_rules: [
-        {
-          dataLayer: 'building',
-          symbolizer: new protomapsL.PolygonSymbolizer({
-            fill:    '#000000',
-            opacity: 1,
-            stroke:  '#000000',
-            width:   0,
-          }),
-        },
-        {
-          dataLayer: 'building_part',
-          symbolizer: new protomapsL.PolygonSymbolizer({
-            fill:    '#000000',
-            opacity: 1,
-            stroke:  '#000000',
-            width:   0,
-          }),
-        },
-        {
-          dataLayer: 'buildings',
-          symbolizer: new protomapsL.PolygonSymbolizer({
-            fill:    '#000000',
-            opacity: 1,
-            stroke:  '#000000',
-            width:   0,
-          }),
-        },
-      ],
-      label_rules: [],   // no labels - keeps the map uncluttered
+      // Canvas renderer is essential here - rendering 100K+ building
+      // footprints as SVG would tank performance. Canvas trades per-
+      // feature DOM access (which we don't need) for fast bulk drawing.
+      renderer: L.canvas({ padding: 0.1, pane: 'buildingsPane' }),
+      style: {
+        // All-black fill, no stroke. Reference layer should recede
+        // visually behind the precipitation and alert layers.
+        fillColor:   '#000000',
+        fillOpacity: 1.0,
+        color:       '#000000',
+        weight:      0,
+        stroke:      false,
+      },
+      // We're a visual layer - no popups, no interactivity. Skip the
+      // event-listener overhead Leaflet would otherwise attach to each
+      // feature.
+      interactive: false,
     });
-    layers.buildings.addTo(map);
   }
 
   // ---- Public API ---------------------------------------------------------

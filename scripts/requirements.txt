@@ -19,3 +19,12 @@ geopandas>=0.14
 shapely>=2.0
 pandas>=2.0
 rasterio>=1.3
+
+# overturemaps + duckdb: required for the buildings extraction phase. The
+# overturemaps Python client uses DuckDB under the hood to query Overture's
+# hosted GeoParquet files on AWS, returning WNC-bbox-filtered building
+# footprints. Pulled in lazily by scripts/data.py only when the buildings
+# cache is stale (~once a month). DuckDB ships native binaries via pip and
+# typically installs cleanly on Windows/macOS/Linux without compiler steps.
+overturemaps>=0.13
+duckdb>=1.0

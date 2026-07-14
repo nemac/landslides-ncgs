@@ -123,14 +123,24 @@ window.DEFNS_CONFIG = (function () {
 
   // NC OneMap statewide parcels - all 100 NC counties + Eastern Band of
   // Cherokee Indians lands, with standardized cadastral attributes
-  // (siteadd, parno, scity, szip, cntyname, gisacres, ...). Queryable
-  // Feature Server; we use esri-leaflet's bbox-bounded feature layer so
-  // only visible parcels are fetched. The /secure/ in the URL is
-  // NC OneMap's URL convention - no authentication required.
-  // Fields we expose in popups: see _bindParcelsPopup in map.js.
+  // (siteadd, parno, scity, szip, cntyname, gisacres, ...).
+  //
+  // Endpoint change (2026-07): NCGS team requested we switch from the
+  // FeatureServer URL to the equivalent MapServer sublayer. Both point at
+  // the same underlying dataset and expose the same /query operation with
+  // the same field schema; esri-leaflet's featureLayer() works
+  // transparently against either service type as long as Query is a
+  // supported operation. Confirmed on the MapServer endpoint:
+  //   Supported Operations: Query, Query Attachments, Query Analytic, ...
+  //   MaxRecordCount: 5000
+  //   Supports Pagination: true
+  //
+  // The /secure/ in the URL is NC OneMap's URL convention - no
+  // authentication required. Fields we expose in popups: see
+  // _buildParcelPopup in map.js.
   const NCONEMAP_PARCELS_URL =
     'https://services.nconemap.gov/secure/rest/services/' +
-    'NC1Map_Parcels/FeatureServer/1';
+    'NC1Map_Parcels/MapServer/1';
   const NCONEMAP_PARCELS_ATTRIBUTION =
     'NC OneMap statewide parcels (NC counties + EBCI)';
   // Minimum map zoom level at which the parcels layer fetches features.
@@ -139,27 +149,33 @@ window.DEFNS_CONFIG = (function () {
   // shows a hint to zoom in when below this level.
   const NCONEMAP_PARCELS_MIN_ZOOM = 14;
 
-  // Overture Maps Foundation - building footprints distributed as PMTiles.
-  // Free public CDN at AWS S3, monthly releases. Visual-only reference
-  // layer (no popup interactivity in the PMTiles format we use).
+  // Overture Maps Foundation - building footprints distributed as GeoJSON.
   //
-  // URL pattern: overturemaps-extras-us-west-2.s3.amazonaws.com/tiles/{RELEASE}/buildings.pmtiles
-  // Release tags follow Overture's YYYY-MM-DD.N naming. Not every
-  // calendar month has a release, and the S3 bucket returns 403 for
-  // non-existent releases (NOT 404 - so the request "succeeds" but
-  // serves no data, which made this hard to diagnose).
+  // ARCHITECTURE NOTE: this is NOT streamed live from Overture's CDN.
+  // Instead, scripts/refresh.py uses Overture's official Python client
+  // (overturemaps + DuckDB) to query Overture's hosted GeoParquet for
+  // the WNC bbox, simplifies the geometry, and writes a static GeoJSON
+  // here. The frontend then loads it like any other same-origin GeoJSON
+  // (lazy: only fetched on first toggle-on of the buildings layer).
   //
-  // To pick up a fresher release: visit
-  //   https://docs.overturemaps.org/examples/overture-tiles/
-  // and copy the release tag they reference in their working example.
-  // Their docs are the canonical place to confirm a release is live.
+  // Multi-state coverage is automatic - the WNC bbox spans NC + TN + GA
+  // + SC + VA, and Overture is global, so buildings in all 5 states are
+  // captured by a single bbox extract. See scripts/data.py's
+  // fetch_overture_buildings for the extraction logic and config.py's
+  // OVERTURE_BUILDINGS_* constants for tuning (TTL, simplification, etc).
   //
-  // The buildings theme contains the feature types "building" (footprints)
-  // and "building_part" (sub-parts) - both are painted by paint_rules in
-  // map.js so users see complete coverage, not just bare outer shapes.
-  const OVERTURE_BUILDINGS_PMTILES_URL =
-    'https://overturemaps-extras-us-west-2.s3.amazonaws.com/' +
-    'tiles/2026-05-20.0/buildings.pmtiles';
+  // Update cadence: monthly. The Python-side cache check skips extraction
+  // when the file is less than ~30 days old, so most refresh.py runs are
+  // near-instant no-ops for this phase.
+  //
+  // Why GeoJSON rather than PMTiles streaming:
+  //   - Same-origin static file = no CORS / network variability
+  //   - Standard L.geoJSON() pattern, matches the rest of the dashboard
+  //   - Future intersect-with-flagged-DFPs work reuses the same file
+  //     for Python-side spatial joins (one source feeds both)
+  //   - Doesn't depend on protomaps-leaflet (in maintenance mode per
+  //     its own authors) or any specific vector-tile renderer
+  const OVERTURE_BUILDINGS_GEOJSON_URL = 'data/buildings_wnc.geojson';
   const OVERTURE_BUILDINGS_ATTRIBUTION =
     '\u00a9 Overture Maps Foundation';
 
@@ -219,7 +235,7 @@ window.DEFNS_CONFIG = (function () {
     NEXRAD_TILES_URL, NEXRAD_ATTRIBUTION,
     NCONEMAP_PARCELS_URL, NCONEMAP_PARCELS_ATTRIBUTION,
     NCONEMAP_PARCELS_MIN_ZOOM,
-    OVERTURE_BUILDINGS_PMTILES_URL, OVERTURE_BUILDINGS_ATTRIBUTION,
+    OVERTURE_BUILDINGS_GEOJSON_URL, OVERTURE_BUILDINGS_ATTRIBUTION,
     ESRI_GEOCODER_URL,
     AUTO_REFRESH_MS,
     PANE_ZINDEX

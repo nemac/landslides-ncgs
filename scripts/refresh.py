@@ -115,6 +115,14 @@ def _main_live() -> int:
             f"MRMS observed ({hrs}h)",
         )
 
+    # ---- Phase 1.5: Overture buildings (independent reference layer) ---
+    # Runs regardless of precip success because buildings are a reference
+    # layer, not part of the alert pipeline. The cache check inside
+    # fetch_overture_buildings means this is a near-instant no-op on
+    # most runs - the slow extraction only fires when the file is
+    # missing or older than ~30 days.
+    buildings_ok = _safely(_refresh_overture_buildings, "Buildings (Overture)")
+
     # ---- Phase 2: load debris flows once for all intersections ---------
     any_precip_ok = any(ndfd_window_ok.values()) or any(mrms_window_ok.values())
     if not any_precip_ok:
@@ -295,6 +303,25 @@ def _refresh_flagged_mrms(window_hours: int = 1) -> None:
         out_path=DATA_DIR / f"flagged_mrms_{window_hours}h.geojson",
         source_label="MRMS",
     )
+
+
+def _refresh_overture_buildings() -> None:
+    """Extract WNC building footprints from Overture Maps Foundation.
+
+    Delegates to defns_data.fetch_overture_buildings, which handles the
+    cache TTL check internally. On most runs (cache fresh), this returns
+    in milliseconds with a "skipping extraction" log message. When the
+    cache is stale or missing, this is the slow phase: 5-15 minutes of
+    DuckDB-against-Overture-S3 work.
+
+    Writes alerts/data/buildings_wnc.geojson which the frontend loads
+    lazily when the user toggles the "Building footprints" layer on.
+
+    Failures here are non-fatal - _safely() in the orchestrator will log
+    the exception and continue. A missing buildings file just means the
+    layer toggle does nothing client-side; it doesn't affect alerts.
+    """
+    defns_data.fetch_overture_buildings(output_dir=DATA_DIR)
 
 
 def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None:

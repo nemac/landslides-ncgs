@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Data Tour Guide | Landslides in Western North Carolina</title>
-  <meta name="description" content="Browse the landslide hazard data layers for Western North Carolina, including landslide points, outlines, deposits, debris flow pathways, and probability of sliding." />
+  <meta name="description" content="Browse the landslide hazard data layers for Western North Carolina: the Landslide Inventory (Landslide Features, Observation Points, Ground Ruptures) and Landslide Susceptibility (Potential Channelized Debris Flow Pathways, Probability of Sliding)." />
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/images/shared/ncgs-seal.png" />
   <link rel="apple-touch-icon" href="assets/images/shared/ncgs-seal.png" />
@@ -159,6 +159,22 @@
     .tab-btn:hover { background: var(--clr-surface-2); color: var(--clr-text); border-left-color: var(--clr-accent); }
     .tab-btn[aria-selected="true"] { background: var(--clr-surface-2); color: var(--clr-text); border-left-color: var(--clr-primary); }
 
+    /* Static group label — looks like a button but is non-interactive */
+    .tab-group-label {
+      padding: 0.75rem 1.25rem;
+      background: var(--clr-bg);
+      border-bottom: 1px solid var(--clr-border);
+      color: var(--clr-accent);
+      font-family: var(--font-main);
+      font-weight: 700;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      user-select: none;
+    }
+    /* Nested (indented) child tab under a group label */
+    .tab-btn--nested { padding-left: 2.25rem; }
+
     /* ============================================================
        MAP AREA — RIGHT COLUMN (top)
     ============================================================ */
@@ -252,6 +268,12 @@
         padding: 0.75rem 1rem; font-size: 0.85rem;
       }
       .tab-btn[aria-selected="true"] { border-bottom-color: var(--clr-primary); border-left: none; }
+      .tab-btn--nested { padding-left: 1.5rem; }
+      .tab-group-label {
+        flex-basis: 100%;
+        padding: 0.55rem 1rem;
+        font-size: 0.75rem;
+      }
       .site-header { padding: 1rem; }
       .site-header__logo { width: 60px; height: 60px; }
     }
@@ -299,14 +321,17 @@
     <div class="page-intro">
       <h2>Data Description</h2>
       <p>
-        The intent of the landslide hazard mapping program is to provide the public, local government,
-        and local and state emergency agencies with a description and the location of areas where slope
-        movements have occurred, or are likely to occur, and the general areas that may potentially be
-        exposed to these slope movements.
+        The North Carolina Geological Survey&rsquo;s Landslide Hazard Mapping Program helps people across
+        western North Carolina understand where landslides have happened in the past, where they are
+        more likely to occur, and which communities, roads, and natural areas could be most at risk.
+        This information supports safer planning, stronger communities, and better preparedness during
+        emergencies.
       </p>
       <p style="margin-top:0.5rem;">
-        The data produced by the landslide hazard mapping program are described below. Browse the data
-        to learn how they contribute to understanding landslide events in western North Carolina.
+        Below you&rsquo;ll find descriptions of the Landslide Inventory and Landslide Susceptibility map
+        layers. These layers give residents, planners, and emergency responders an easy way to explore
+        past landslide activity and make informed decisions that support long-term resilience in western
+        North Carolina.
       </p>
     </div>
 
@@ -319,28 +344,34 @@
       <!-- LEFT: Tab list -->
       <div class="tab-list-wrap" role="presentation">
         <ul class="tab-list" role="tablist" aria-label="Landslide data layers" aria-orientation="vertical">
+
+          <!-- Group 1: Landslide Inventory -->
+          <li class="tab-group-label" role="presentation" aria-hidden="true">Landslide Inventory</li>
           <li role="presentation">
-            <button class="tab-btn" role="tab" id="tab-points"
-              aria-controls="panel-points" aria-selected="true" data-layer="points"
-            >Landslide Points</button>
+            <button class="tab-btn tab-btn--nested" role="tab" id="tab-features"
+              aria-controls="panel-features" aria-selected="true" data-layer="features"
+            >Landslide Features</button>
           </li>
           <li role="presentation">
-            <button class="tab-btn" role="tab" id="tab-outlines"
-              aria-controls="panel-outlines" aria-selected="false" data-layer="outlines"
-            >Landslide Outlines</button>
+            <button class="tab-btn tab-btn--nested" role="tab" id="tab-observation"
+              aria-controls="panel-observation" aria-selected="false" data-layer="observation"
+            >Observation Points</button>
           </li>
           <li role="presentation">
-            <button class="tab-btn" role="tab" id="tab-deposits"
-              aria-controls="panel-deposits" aria-selected="false" data-layer="deposits"
-            >Landslide Deposits</button>
+            <button class="tab-btn tab-btn--nested" role="tab" id="tab-ruptures"
+              aria-controls="panel-ruptures" aria-selected="false" data-layer="ruptures"
+            >Ground Ruptures</button>
           </li>
+
+          <!-- Group 2: Landslide Susceptibility -->
+          <li class="tab-group-label" role="presentation" aria-hidden="true">Landslide Susceptibility</li>
           <li role="presentation">
-            <button class="tab-btn" role="tab" id="tab-debris"
+            <button class="tab-btn tab-btn--nested" role="tab" id="tab-debris"
               aria-controls="panel-debris" aria-selected="false" data-layer="debris"
-            >Potential Debris Flows</button>
+            >Potential Channelized Debris Flow Pathways</button>
           </li>
           <li role="presentation">
-            <button class="tab-btn" role="tab" id="tab-sliding"
+            <button class="tab-btn tab-btn--nested" role="tab" id="tab-sliding"
               aria-controls="panel-sliding" aria-selected="false" data-layer="sliding"
             >Probability of Sliding</button>
           </li>
@@ -357,107 +388,133 @@
           aria-label="Landslide data map for Western North Carolina. Use arrow keys to pan, plus and minus to zoom.">
         </div>
         <div class="map-sr-note" aria-live="polite" id="mapStatus">
-          Map showing: <strong id="currentLayerName">Landslide Points</strong>
+          Map showing: <strong id="currentLayerName">Landslide Features</strong>
         </div>
       </div>
 
       <!-- RIGHT BOTTOM: Description panels -->
       <div class="desc-panels">
 
-        <!-- Panel: Landslide Points -->
-        <div id="panel-points" role="tabpanel" aria-labelledby="tab-points"
+        <!-- Panel: Landslide Features (Inventory) — DEFAULT ACTIVE -->
+        <div id="panel-features" role="tabpanel" aria-labelledby="tab-features"
           aria-hidden="false" class="tab-panel">
-          <div class="tab-panel__legend">
-            <div class="legend-swatch" style="background:#E8001C;" aria-hidden="true"></div>
-            <span class="tab-panel__legend-label">Landslide Points</span>
+          <div class="tab-panel__legend" style="align-items:flex-start;gap:1.25rem;flex-wrap:wrap;">
+            <!-- Column 1: Deposit / Outline -->
+            <div style="display:flex;flex-direction:column;gap:.4rem;">
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #1079ff;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Deposit</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #FFFF00;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Outline</span>
+              </div>
+            </div>
+            <!-- Column 2: Prehistoric Deposit / Source Area -->
+            <div style="display:flex;flex-direction:column;gap:.4rem;">
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #734C00;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Prehistoric Deposit</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #FF0000;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Source Area</span>
+              </div>
+            </div>
+            <!-- Column 3: Source Area Reactivated / Transport Zone -->
+            <div style="display:flex;flex-direction:column;gap:.4rem;">
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #FF0000;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Source Area Reactivated</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px solid #C70BFF;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Transport Zone</span>
+              </div>
+            </div>
+            <!-- Column 4: Null (standalone) -->
+            <div style="display:flex;flex-direction:column;gap:.4rem;">
+              <div style="display:flex;align-items:center;gap:.4rem;">
+                <div class="legend-swatch" style="background:transparent;border:2px dashed #000000;border-radius:2px;" aria-hidden="true"></div>
+                <span class="tab-panel__legend-label">Null</span>
+              </div>
+            </div>
           </div>
           <p>
-            Landslide points identify the initiation (source) areas of slope movements. Attributes of
-            this layer include descriptions of slope movement type, location, dimensions, movement dates,
-            and geomorphic, hydrologic, and other site data for individual slope movements, where known.
+            The Landslide Features layer shows the observed extent of mapped landslides. When possible,
+            each landslide is divided into three parts: the initial slide area (Source Area), the zone
+            where material moves downhill (Transport Zone), and the area where the material comes to
+            rest (Deposit).
           </p>
         </div>
 
-        <!-- Panel: Landslide Outlines -->
-        <div id="panel-outlines" role="tabpanel" aria-labelledby="tab-outlines"
+        <!-- Panel: Observation Points (Inventory) -->
+        <div id="panel-observation" role="tabpanel" aria-labelledby="tab-observation"
           aria-hidden="true" class="tab-panel">
           <div class="tab-panel__legend">
-            <div class="legend-swatch" style="background:transparent;border:2px solid #FFFF00;border-radius:2px;" aria-hidden="true"></div>
-            <span class="tab-panel__legend-label">Landslide Outlines</span>
+            <div class="legend-swatch" style="background:#55FF00;border:1px solid #000000;" aria-hidden="true"></div>
+            <span class="tab-panel__legend-label">Observation Points</span>
           </div>
           <p>
-            Landslide Outlines show the approximate areal extents of relatively recent, individual slope
-            movements where their initiation (source) areas are known. Outlines were determined from field
-            investigations, features visible in various vintages (1940&ndash;most current) of aerial
-            photography and orthophotography, and a variety of digital maps derived from LiDAR digital
-            elevation models.
+            Observation Points mark locations where landslides have affected roads or structures, as well
+            as places where photos or notes about the landslide have been collected.
           </p>
         </div>
 
-        <!-- Panel: Landslide Deposits — CHANGE 3: dual swatches -->
-        <div id="panel-deposits" role="tabpanel" aria-labelledby="tab-deposits"
+        <!-- Panel: Ground Ruptures (Inventory) -->
+        <div id="panel-ruptures" role="tabpanel" aria-labelledby="tab-ruptures"
           aria-hidden="true" class="tab-panel">
-          <div class="tab-panel__legend" style="flex-direction:column;align-items:flex-start;">
-            <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;">
-              <div class="legend-swatch" style="background:#FFAA00;border-radius:2px;" aria-hidden="true"></div>
-              <span class="tab-panel__legend-label">Not Field Verified</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:.4rem;">
-              <div class="legend-swatch" style="background:#FFAA00;border:2px solid #9fe671;border-radius:2px;" aria-hidden="true"></div>
-              <span class="tab-panel__legend-label">Field Verified</span>
-            </div>
+          <div class="tab-panel__legend">
+            <div class="legend-swatch" style="background:transparent;border:2px solid #FF0000;border-radius:2px;" aria-hidden="true"></div>
+            <span class="tab-panel__legend-label">Ground Ruptures</span>
           </div>
           <p>
-            Landslide Deposits represent the areal extents of significant volumes of earth, debris, and
-            rock fragments that have accumulated primarily because of past debris flows and debris slides
-            and, to a lesser extent, rock falls and rockslides. These deposits indicate areas that can be
-            affected by future landslides and can be unstable in some circumstances. Debris flow deposits
-            mainly occur in valleys and can transition upslope into debris slide, rock fall, and rockslide
-            deposits nearer steep source areas.
+            Ground Ruptures are shown as lines that represent cracks and breaks in the ground. These
+            features often appear before a landslide and can serve as early warning signs.
           </p>
         </div>
 
-        <!-- Panel: Potential Debris Flows — CHANGE 4: swatch color updated -->
+        <!-- Panel: Potential Channelized Debris Flow Pathways (Susceptibility) -->
         <div id="panel-debris" role="tabpanel" aria-labelledby="tab-debris"
           aria-hidden="true" class="tab-panel">
           <div class="tab-panel__legend">
-            <div class="legend-swatch" style="background:#fcecc2;border:2px solid transparent;border-radius:2px;" aria-hidden="true"></div>
-            <span class="tab-panel__legend-label">Potential Debris Flow Pathways</span>
+            <div class="legend-swatch" style="background:#E69800;border:none;border-radius:2px;" aria-hidden="true"></div>
+            <span class="tab-panel__legend-label">Potential Channelized Debris Flow Pathways</span>
           </div>
           <p>
-            The Potential Debris Flow Pathways layer shows where landslides might go if a slope movement
-            occurs from a high landslide susceptibility area. Changes in the landscape as a result from
-            human activity, future debris flows, and other types of landslides can alter the potential
-            pathways of subsequent debris flows; therefore, this data represents general areas that could
-            potentially be affected by future landslide impacts.
+            The Potential Debris Flow Pathways layer highlights areas where debris from a landslide could
+            travel if a slope failure occurs in a high susceptibility area. Because landscapes can change
+            over time through development, natural processes, or future landslides, the exact paths of
+            debris flows may also change. For this reason, the layer represents broad areas that could
+            potentially be affected by future landslide impacts, rather than precise predicted paths.
           </p>
         </div>
 
-        <!-- Panel: Probability of Sliding — CHANGE 5: dual swatches High/Moderate -->
+        <!-- Panel: Probability of Sliding (Susceptibility) -->
         <div id="panel-sliding" role="tabpanel" aria-labelledby="tab-sliding"
           aria-hidden="true" class="tab-panel">
           <div class="tab-panel__legend" style="flex-direction:column;align-items:flex-start;">
             <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem;">
-              <div class="legend-swatch" style="background:#FF0000;border-radius:2px;" aria-hidden="true"></div>
+              <div class="legend-swatch" style="background:#E64C00;border:none;border-radius:2px;" aria-hidden="true"></div>
               <span class="tab-panel__legend-label">High</span>
             </div>
             <div style="display:flex;align-items:center;gap:.4rem;">
-              <div class="legend-swatch" style="background:#FFAA00;border-radius:2px;" aria-hidden="true"></div>
+              <div class="legend-swatch" style="background:#FFAA00;border:none;border-radius:2px;" aria-hidden="true"></div>
               <span class="tab-panel__legend-label">Moderate</span>
             </div>
           </div>
           <p>
-            This layer shows areas where debris flows and debris slides might start on unmodified slopes.
-            Landslides happen under specific conditions; therefore, the likelihood of occurrence is
-            relatively small. Debris flows and debris slides originating on unmodified slopes become more
-            frequent in Western North Carolina when precipitation is 5 inches or more in a 24-hour period.
-            Be aware of High and Moderate Probability of Sliding areas during extreme precipitation events.
-            Use caution when modifying High and Moderate slopes because they may be unstable with or
-            without extreme rain events.
+            The Probability of Sliding layer shows areas where debris flows and debris slides could begin
+            on natural slopes &mdash; meaning hillsides that haven&rsquo;t been reshaped or altered by
+            people. Landslides don&rsquo;t happen often and require specific conditions, but they become
+            more likely in western North Carolina when the region receives 5 inches or more of rain in
+            24 hours. This rainfall threshold is the basis for the Probability of Sliding layer. If you
+            plan to build on or modify slopes labeled as High or Moderate Probability of Sliding, use
+            extra caution, these areas can be unstable even without heavy rainfall.
           </p>
         </div>
 
-        <!-- CHANGE 6: "Did you know?" box (hidden — restore by removing display:none) -->
+        <!-- "Did you know?" box (hidden — restore by removing display:none) -->
         <div class="county-note" role="note" style="display:none;">
           <strong>Did you know?:</strong> Lorem ipsum dolor sit amet, consectetur adipiscing elit,
           sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
@@ -491,43 +548,49 @@
       "esri/layers/MapImageLayer"
     ], function(Map, MapView, FeatureLayer, MapImageLayer) {
 
-      const BASE_URL = "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/NCGS_Landslide_Read_Vector/FeatureServer";
+      // Landslide Inventory layers (hosted feature services)
+      const INVENTORY_URL = "https://services2.arcgis.com/kCu40SDxsCGcuUWO/ArcGIS/rest/services/NC_Landslide_Inventory/FeatureServer";
+      // Landslide Susceptibility layers (DEQ map image services)
+      const DEBRIS_URL   = "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Model/MapServer";
+      const SLIDING_URL  = "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Probability_of_Sliding_Model/MapServer";
 
-      // All 5 layers loaded explicitly — full visibility control, no ID guesswork
+      // All 5 layers loaded explicitly — Landslide Features is the default visible layer
       const layers = {
-        points: new FeatureLayer({
-          url: BASE_URL + "/0",
+        features: new FeatureLayer({
+          url: INVENTORY_URL + "/2",
           visible: true,
-          title: "Landslide Points"
+          title: "Landslide Features"
         }),
-        outlines: new FeatureLayer({
-          url: BASE_URL + "/1",
+        observation: new FeatureLayer({
+          url: INVENTORY_URL + "/0",
           visible: false,
-          title: "Landslide Outlines"
+          title: "Observation Points"
         }),
-        deposits: new FeatureLayer({
-          url: BASE_URL + "/2",
+        ruptures: new FeatureLayer({
+          url: INVENTORY_URL + "/1",
           visible: false,
-          title: "Landslide Deposits"
+          title: "Ground Ruptures"
         }),
         debris: new MapImageLayer({
-          url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/North_Carolina_Channelized_Debris_Flow_Susceptibility_Model/MapServer",
+          url: DEBRIS_URL,
+          sublayers: [{ id: 0 }],
           visible: false,
-          title: "Potential Debris Flow Pathways"
+          title: "Potential Channelized Debris Flow Pathways"
         }),
         sliding: new MapImageLayer({
-          url: "https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/Landslide_Susceptibility/MapServer",
+          url: SLIDING_URL,
+          sublayers: [{ id: 0 }],
           visible: false,
           title: "Probability of Sliding"
         })
       };
 
       const LAYER_LABELS = {
-        points:  "Landslide Points",
-        outlines:"Landslide Outlines",
-        deposits:"Landslide Deposits",
-        debris:  "Potential Debris Flow Pathways",
-        sliding: "Probability of Sliding"
+        features:    "Landslide Features",
+        observation: "Observation Points",
+        ruptures:    "Ground Ruptures",
+        debris:      "Potential Channelized Debris Flow Pathways",
+        sliding:     "Probability of Sliding"
       };
 
       const map = new Map({
@@ -543,7 +606,7 @@
         ui: { components: ["zoom", "attribution"] }
       });
 
-      let activeLayer = "points";
+      let activeLayer = "features";
 
       view.when(() => {
         document.getElementById("mapLoading").classList.add("hidden");
