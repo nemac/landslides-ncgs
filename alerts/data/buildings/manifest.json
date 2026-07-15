@@ -1,0 +1,1095 @@
+{
+  "generated_at": "2026-07-14T20:10:49.878708+00:00",
+  "source": "Overture Maps Foundation",
+  "bbox": [
+    -84.5,
+    34.8,
+    -81.0,
+    36.7
+  ],
+  "simplify_tolerance_deg": 2.7e-05,
+  "min_area_sqm": 20.0,
+  "county_count": 77,
+  "total_features": 2797341,
+  "total_size_mb": 754.14,
+  "counties": [
+    {
+      "geoid": "13111",
+      "name": "Fannin County",
+      "state": "13",
+      "bbox": [
+        -84.4993,
+        34.79983,
+        -84.11138,
+        34.98846
+      ],
+      "count": 19347,
+      "file": "buildings/13111.geojson",
+      "size_mb": 5.2
+    },
+    {
+      "geoid": "13123",
+      "name": "Gilmer County",
+      "state": "13",
+      "bbox": [
+        -84.47199,
+        34.79992,
+        -84.33163,
+        34.85679
+      ],
+      "count": 682,
+      "file": "buildings/13123.geojson",
+      "size_mb": 0.18
+    },
+    {
+      "geoid": "13137",
+      "name": "Habersham County",
+      "state": "13",
+      "bbox": [
+        -83.62984,
+        34.80106,
+        -83.58916,
+        34.82007
+      ],
+      "count": 33,
+      "file": "buildings/13137.geojson",
+      "size_mb": 0.01
+    },
+    {
+      "geoid": "13241",
+      "name": "Rabun County",
+      "state": "13",
+      "bbox": [
+        -83.59909,
+        34.7999,
+        -83.14945,
+        34.99866
+      ],
+      "count": 12732,
+      "file": "buildings/13241.geojson",
+      "size_mb": 3.46
+    },
+    {
+      "geoid": "13281",
+      "name": "Towns County",
+      "state": "13",
+      "bbox": [
+        -83.94376,
+        34.82361,
+        -83.5491,
+        34.98782
+      ],
+      "count": 11535,
+      "file": "buildings/13281.geojson",
+      "size_mb": 3.12
+    },
+    {
+      "geoid": "13291",
+      "name": "Union County",
+      "state": "13",
+      "bbox": [
+        -84.17706,
+        34.79982,
+        -83.82435,
+        34.98743
+      ],
+      "count": 17616,
+      "file": "buildings/13291.geojson",
+      "size_mb": 4.76
+    },
+    {
+      "geoid": "37003",
+      "name": "Alexander County",
+      "state": "37",
+      "bbox": [
+        -81.34215,
+        35.77823,
+        -81.00451,
+        36.03748
+      ],
+      "count": 28907,
+      "file": "buildings/37003.geojson",
+      "size_mb": 7.75
+    },
+    {
+      "geoid": "37005",
+      "name": "Alleghany County",
+      "state": "37",
+      "bbox": [
+        -81.35274,
+        36.36682,
+        -80.99966,
+        36.57477
+      ],
+      "count": 9256,
+      "file": "buildings/37005.geojson",
+      "size_mb": 2.45
+    },
+    {
+      "geoid": "37009",
+      "name": "Ashe County",
+      "state": "37",
+      "bbox": [
+        -81.73957,
+        36.24433,
+        -81.24435,
+        36.58723
+      ],
+      "count": 24501,
+      "file": "buildings/37009.geojson",
+      "size_mb": 6.45
+    },
+    {
+      "geoid": "37011",
+      "name": "Avery County",
+      "state": "37",
+      "bbox": [
+        -82.066,
+        35.92387,
+        -81.75277,
+        36.28297
+      ],
+      "count": 18168,
+      "file": "buildings/37011.geojson",
+      "size_mb": 4.88
+    },
+    {
+      "geoid": "37021",
+      "name": "Buncombe County",
+      "state": "37",
+      "bbox": [
+        -82.87361,
+        35.42359,
+        -82.1702,
+        35.81778
+      ],
+      "count": 161834,
+      "file": "buildings/37021.geojson",
+      "size_mb": 43.58
+    },
+    {
+      "geoid": "37023",
+      "name": "Burke County",
+      "state": "37",
+      "bbox": [
+        -81.94514,
+        35.55959,
+        -81.3658,
+        35.99696
+      ],
+      "count": 58244,
+      "file": "buildings/37023.geojson",
+      "size_mb": 15.59
+    },
+    {
+      "geoid": "37027",
+      "name": "Caldwell County",
+      "state": "37",
+      "bbox": [
+        -81.77644,
+        35.75868,
+        -81.33236,
+        36.12259
+      ],
+      "count": 50076,
+      "file": "buildings/37027.geojson",
+      "size_mb": 13.41
+    },
+    {
+      "geoid": "37035",
+      "name": "Catawba County",
+      "state": "37",
+      "bbox": [
+        -81.52444,
+        35.54808,
+        -80.99971,
+        35.8259
+      ],
+      "count": 85043,
+      "file": "buildings/37035.geojson",
+      "size_mb": 23.0
+    },
+    {
+      "geoid": "37039",
+      "name": "Cherokee County",
+      "state": "37",
+      "bbox": [
+        -84.3212,
+        34.98705,
+        -83.7006,
+        35.25177
+      ],
+      "count": 23768,
+      "file": "buildings/37039.geojson",
+      "size_mb": 6.33
+    },
+    {
+      "geoid": "37043",
+      "name": "Clay County",
+      "state": "37",
+      "bbox": [
+        -84.00452,
+        34.98704,
+        -83.5538,
+        35.13817
+      ],
+      "count": 11315,
+      "file": "buildings/37043.geojson",
+      "size_mb": 3.04
+    },
+    {
+      "geoid": "37045",
+      "name": "Cleveland County",
+      "state": "37",
+      "bbox": [
+        -81.7662,
+        35.16368,
+        -81.32243,
+        35.56899
+      ],
+      "count": 62946,
+      "file": "buildings/37045.geojson",
+      "size_mb": 16.9
+    },
+    {
+      "geoid": "37071",
+      "name": "Gaston County",
+      "state": "37",
+      "bbox": [
+        -81.45382,
+        35.15045,
+        -80.99956,
+        35.41979
+      ],
+      "count": 108339,
+      "file": "buildings/37071.geojson",
+      "size_mb": 29.03
+    },
+    {
+      "geoid": "37075",
+      "name": "Graham County",
+      "state": "37",
+      "bbox": [
+        -83.99579,
+        35.2261,
+        -83.58736,
+        35.45255
+      ],
+      "count": 7319,
+      "file": "buildings/37075.geojson",
+      "size_mb": 1.95
+    },
+    {
+      "geoid": "37087",
+      "name": "Haywood County",
+      "state": "37",
+      "bbox": [
+        -83.18772,
+        35.32035,
+        -82.75236,
+        35.77481
+      ],
+      "count": 45010,
+      "file": "buildings/37087.geojson",
+      "size_mb": 12.09
+    },
+    {
+      "geoid": "37089",
+      "name": "Henderson County",
+      "state": "37",
+      "bbox": [
+        -82.65958,
+        35.15426,
+        -82.2639,
+        35.49763
+      ],
+      "count": 63003,
+      "file": "buildings/37089.geojson",
+      "size_mb": 17.23
+    },
+    {
+      "geoid": "37097",
+      "name": "Iredell County",
+      "state": "37",
+      "bbox": [
+        -81.10611,
+        35.70968,
+        -80.99918,
+        36.0493
+      ],
+      "count": 5621,
+      "file": "buildings/37097.geojson",
+      "size_mb": 1.5
+    },
+    {
+      "geoid": "37099",
+      "name": "Jackson County",
+      "state": "37",
+      "bbox": [
+        -83.36291,
+        35.01587,
+        -82.91964,
+        35.52438
+      ],
+      "count": 30738,
+      "file": "buildings/37099.geojson",
+      "size_mb": 8.38
+    },
+    {
+      "geoid": "37109",
+      "name": "Lincoln County",
+      "state": "37",
+      "bbox": [
+        -81.53667,
+        35.40357,
+        -80.99963,
+        35.5677
+      ],
+      "count": 53313,
+      "file": "buildings/37109.geojson",
+      "size_mb": 14.35
+    },
+    {
+      "geoid": "37111",
+      "name": "McDowell County",
+      "state": "37",
+      "bbox": [
+        -82.29108,
+        35.52689,
+        -81.83135,
+        35.95956
+      ],
+      "count": 29170,
+      "file": "buildings/37111.geojson",
+      "size_mb": 7.79
+    },
+    {
+      "geoid": "37113",
+      "name": "Macon County",
+      "state": "37",
+      "bbox": [
+        -83.69801,
+        34.99389,
+        -83.14401,
+        35.32411
+      ],
+      "count": 31675,
+      "file": "buildings/37113.geojson",
+      "size_mb": 8.63
+    },
+    {
+      "geoid": "37115",
+      "name": "Madison County",
+      "state": "37",
+      "bbox": [
+        -82.95688,
+        35.68306,
+        -82.41079,
+        36.03612
+      ],
+      "count": 21867,
+      "file": "buildings/37115.geojson",
+      "size_mb": 5.78
+    },
+    {
+      "geoid": "37119",
+      "name": "Mecklenburg County",
+      "state": "37",
+      "bbox": [
+        -81.05637,
+        35.04687,
+        -80.99947,
+        35.29661
+      ],
+      "count": 7930,
+      "file": "buildings/37119.geojson",
+      "size_mb": 2.17
+    },
+    {
+      "geoid": "37121",
+      "name": "Mitchell County",
+      "state": "37",
+      "bbox": [
+        -82.34476,
+        35.82455,
+        -81.98073,
+        36.15104
+      ],
+      "count": 13299,
+      "file": "buildings/37121.geojson",
+      "size_mb": 3.54
+    },
+    {
+      "geoid": "37149",
+      "name": "Polk County",
+      "state": "37",
+      "bbox": [
+        -82.35887,
+        35.18625,
+        -81.96318,
+        35.4087
+      ],
+      "count": 16473,
+      "file": "buildings/37149.geojson",
+      "size_mb": 4.49
+    },
+    {
+      "geoid": "37161",
+      "name": "Rutherford County",
+      "state": "37",
+      "bbox": [
+        -82.27549,
+        35.18102,
+        -81.69366,
+        35.59306
+      ],
+      "count": 50291,
+      "file": "buildings/37161.geojson",
+      "size_mb": 13.43
+    },
+    {
+      "geoid": "37173",
+      "name": "Swain County",
+      "state": "37",
+      "bbox": [
+        -83.9289,
+        35.28491,
+        -83.17415,
+        35.69387
+      ],
+      "count": 12538,
+      "file": "buildings/37173.geojson",
+      "size_mb": 3.35
+    },
+    {
+      "geoid": "37175",
+      "name": "Transylvania County",
+      "state": "37",
+      "bbox": [
+        -83.05384,
+        35.04367,
+        -82.58661,
+        35.40342
+      ],
+      "count": 23122,
+      "file": "buildings/37175.geojson",
+      "size_mb": 6.32
+    },
+    {
+      "geoid": "37189",
+      "name": "Watauga County",
+      "state": "37",
+      "bbox": [
+        -81.9112,
+        36.11595,
+        -81.4594,
+        36.38726
+      ],
+      "count": 32608,
+      "file": "buildings/37189.geojson",
+      "size_mb": 8.72
+    },
+    {
+      "geoid": "37193",
+      "name": "Wilkes County",
+      "state": "37",
+      "bbox": [
+        -81.54067,
+        36.01372,
+        -80.99843,
+        36.43405
+      ],
+      "count": 36161,
+      "file": "buildings/37193.geojson",
+      "size_mb": 9.6
+    },
+    {
+      "geoid": "37199",
+      "name": "Yancey County",
+      "state": "37",
+      "bbox": [
+        -82.50405,
+        35.70388,
+        -82.14107,
+        36.07425
+      ],
+      "count": 16605,
+      "file": "buildings/37199.geojson",
+      "size_mb": 4.42
+    },
+    {
+      "geoid": "45007",
+      "name": "Anderson County",
+      "state": "45",
+      "bbox": [
+        -82.52374,
+        34.79983,
+        -82.47112,
+        34.81809
+      ],
+      "count": 893,
+      "file": "buildings/45007.geojson",
+      "size_mb": 0.25
+    },
+    {
+      "geoid": "45021",
+      "name": "Cherokee County",
+      "state": "45",
+      "bbox": [
+        -81.87318,
+        34.87174,
+        -81.37888,
+        35.18377
+      ],
+      "count": 35224,
+      "file": "buildings/45021.geojson",
+      "size_mb": 9.43
+    },
+    {
+      "geoid": "45023",
+      "name": "Chester County",
+      "state": "45",
+      "bbox": [
+        -81.46498,
+        34.79973,
+        -80.99978,
+        34.82252
+      ],
+      "count": 1122,
+      "file": "buildings/45023.geojson",
+      "size_mb": 0.3
+    },
+    {
+      "geoid": "45045",
+      "name": "Greenville County",
+      "state": "45",
+      "bbox": [
+        -82.69366,
+        34.79854,
+        -82.1643,
+        35.19805
+      ],
+      "count": 163806,
+      "file": "buildings/45045.geojson",
+      "size_mb": 44.95
+    },
+    {
+      "geoid": "45073",
+      "name": "Oconee County",
+      "state": "45",
+      "bbox": [
+        -83.30505,
+        34.79912,
+        -82.90226,
+        35.02278
+      ],
+      "count": 10510,
+      "file": "buildings/45073.geojson",
+      "size_mb": 2.89
+    },
+    {
+      "geoid": "45077",
+      "name": "Pickens County",
+      "state": "45",
+      "bbox": [
+        -82.91569,
+        34.79976,
+        -82.4777,
+        35.08329
+      ],
+      "count": 48643,
+      "file": "buildings/45077.geojson",
+      "size_mb": 13.19
+    },
+    {
+      "geoid": "45083",
+      "name": "Spartanburg County",
+      "state": "45",
+      "bbox": [
+        -82.22611,
+        34.79975,
+        -81.71714,
+        35.19576
+      ],
+      "count": 165262,
+      "file": "buildings/45083.geojson",
+      "size_mb": 44.22
+    },
+    {
+      "geoid": "45087",
+      "name": "Union County",
+      "state": "45",
+      "bbox": [
+        -81.79106,
+        34.7984,
+        -81.47136,
+        34.90931
+      ],
+      "count": 3197,
+      "file": "buildings/45087.geojson",
+      "size_mb": 0.84
+    },
+    {
+      "geoid": "45091",
+      "name": "York County",
+      "state": "45",
+      "bbox": [
+        -81.48495,
+        34.821,
+        -80.99879,
+        35.16391
+      ],
+      "count": 113246,
+      "file": "buildings/45091.geojson",
+      "size_mb": 31.12
+    },
+    {
+      "geoid": "47001",
+      "name": "Anderson County",
+      "state": "47",
+      "bbox": [
+        -84.41856,
+        35.93452,
+        -83.94196,
+        36.29474
+      ],
+      "count": 43656,
+      "file": "buildings/47001.geojson",
+      "size_mb": 11.87
+    },
+    {
+      "geoid": "47009",
+      "name": "Blount County",
+      "state": "47",
+      "bbox": [
+        -84.18677,
+        35.48751,
+        -83.67961,
+        35.8865
+      ],
+      "count": 73074,
+      "file": "buildings/47009.geojson",
+      "size_mb": 19.91
+    },
+    {
+      "geoid": "47013",
+      "name": "Campbell County",
+      "state": "47",
+      "bbox": [
+        -84.3477,
+        36.19802,
+        -83.90491,
+        36.59144
+      ],
+      "count": 27292,
+      "file": "buildings/47013.geojson",
+      "size_mb": 7.31
+    },
+    {
+      "geoid": "47019",
+      "name": "Carter County",
+      "state": "47",
+      "bbox": [
+        -82.3343,
+        36.11768,
+        -81.93507,
+        36.47403
+      ],
+      "count": 36705,
+      "file": "buildings/47019.geojson",
+      "size_mb": 9.8
+    },
+    {
+      "geoid": "47025",
+      "name": "Claiborne County",
+      "state": "47",
+      "bbox": [
+        -83.97941,
+        36.33473,
+        -83.37071,
+        36.60058
+      ],
+      "count": 25717,
+      "file": "buildings/47025.geojson",
+      "size_mb": 6.83
+    },
+    {
+      "geoid": "47029",
+      "name": "Cocke County",
+      "state": "47",
+      "bbox": [
+        -83.2979,
+        35.75197,
+        -82.90126,
+        36.17498
+      ],
+      "count": 28397,
+      "file": "buildings/47029.geojson",
+      "size_mb": 7.55
+    },
+    {
+      "geoid": "47057",
+      "name": "Grainger County",
+      "state": "47",
+      "bbox": [
+        -83.73033,
+        36.09363,
+        -83.26469,
+        36.41604
+      ],
+      "count": 20637,
+      "file": "buildings/47057.geojson",
+      "size_mb": 5.49
+    },
+    {
+      "geoid": "47059",
+      "name": "Greene County",
+      "state": "47",
+      "bbox": [
+        -83.1643,
+        35.95537,
+        -82.61645,
+        36.41861
+      ],
+      "count": 54893,
+      "file": "buildings/47059.geojson",
+      "size_mb": 14.61
+    },
+    {
+      "geoid": "47063",
+      "name": "Hamblen County",
+      "state": "47",
+      "bbox": [
+        -83.46488,
+        36.08634,
+        -83.08351,
+        36.33329
+      ],
+      "count": 37901,
+      "file": "buildings/47063.geojson",
+      "size_mb": 10.15
+    },
+    {
+      "geoid": "47067",
+      "name": "Hancock County",
+      "state": "47",
+      "bbox": [
+        -83.46111,
+        36.39786,
+        -82.85062,
+        36.59774
+      ],
+      "count": 7422,
+      "file": "buildings/47067.geojson",
+      "size_mb": 1.94
+    },
+    {
+      "geoid": "47073",
+      "name": "Hawkins County",
+      "state": "47",
+      "bbox": [
+        -83.28614,
+        36.24248,
+        -82.60151,
+        36.59379
+      ],
+      "count": 42616,
+      "file": "buildings/47073.geojson",
+      "size_mb": 11.32
+    },
+    {
+      "geoid": "47089",
+      "name": "Jefferson County",
+      "state": "47",
+      "bbox": [
+        -83.70501,
+        35.905,
+        -83.23817,
+        36.191
+      ],
+      "count": 38455,
+      "file": "buildings/47089.geojson",
+      "size_mb": 10.34
+    },
+    {
+      "geoid": "47091",
+      "name": "Johnson County",
+      "state": "47",
+      "bbox": [
+        -82.04266,
+        36.27532,
+        -81.65081,
+        36.61336
+      ],
+      "count": 15923,
+      "file": "buildings/47091.geojson",
+      "size_mb": 4.23
+    },
+    {
+      "geoid": "47093",
+      "name": "Knox County",
+      "state": "47",
+      "bbox": [
+        -84.26605,
+        35.797,
+        -83.65117,
+        36.18632
+      ],
+      "count": 198443,
+      "file": "buildings/47093.geojson",
+      "size_mb": 54.11
+    },
+    {
+      "geoid": "47105",
+      "name": "Loudon County",
+      "state": "47",
+      "bbox": [
+        -84.50019,
+        35.61072,
+        -84.13454,
+        35.89562
+      ],
+      "count": 31081,
+      "file": "buildings/47105.geojson",
+      "size_mb": 8.62
+    },
+    {
+      "geoid": "47107",
+      "name": "McMinn County",
+      "state": "47",
+      "bbox": [
+        -84.5003,
+        35.30033,
+        -84.40082,
+        35.57088
+      ],
+      "count": 3361,
+      "file": "buildings/47107.geojson",
+      "size_mb": 0.9
+    },
+    {
+      "geoid": "47123",
+      "name": "Monroe County",
+      "state": "47",
+      "bbox": [
+        -84.50019,
+        35.20649,
+        -84.02987,
+        35.67213
+      ],
+      "count": 32246,
+      "file": "buildings/47123.geojson",
+      "size_mb": 8.69
+    },
+    {
+      "geoid": "47129",
+      "name": "Morgan County",
+      "state": "47",
+      "bbox": [
+        -84.5002,
+        35.98953,
+        -84.34294,
+        36.13336
+      ],
+      "count": 2640,
+      "file": "buildings/47129.geojson",
+      "size_mb": 0.71
+    },
+    {
+      "geoid": "47139",
+      "name": "Polk County",
+      "state": "47",
+      "bbox": [
+        -84.50006,
+        34.98791,
+        -84.30012,
+        35.26216
+      ],
+      "count": 4475,
+      "file": "buildings/47139.geojson",
+      "size_mb": 1.19
+    },
+    {
+      "geoid": "47145",
+      "name": "Roane County",
+      "state": "47",
+      "bbox": [
+        -84.50024,
+        35.72091,
+        -84.28139,
+        36.04796
+      ],
+      "count": 13960,
+      "file": "buildings/47145.geojson",
+      "size_mb": 3.8
+    },
+    {
+      "geoid": "47151",
+      "name": "Scott County",
+      "state": "47",
+      "bbox": [
+        -84.50052,
+        36.21111,
+        -84.26427,
+        36.59607
+      ],
+      "count": 6063,
+      "file": "buildings/47151.geojson",
+      "size_mb": 1.62
+    },
+    {
+      "geoid": "47155",
+      "name": "Sevier County",
+      "state": "47",
+      "bbox": [
+        -83.79365,
+        35.56426,
+        -83.26176,
+        36.04187
+      ],
+      "count": 65633,
+      "file": "buildings/47155.geojson",
+      "size_mb": 17.73
+    },
+    {
+      "geoid": "47163",
+      "name": "Sullivan County",
+      "state": "47",
+      "bbox": [
+        -82.69454,
+        36.39367,
+        -81.88689,
+        36.61601
+      ],
+      "count": 88233,
+      "file": "buildings/47163.geojson",
+      "size_mb": 23.74
+    },
+    {
+      "geoid": "47171",
+      "name": "Unicoi County",
+      "state": "47",
+      "bbox": [
+        -82.61423,
+        35.96042,
+        -82.22506,
+        36.25954
+      ],
+      "count": 12014,
+      "file": "buildings/47171.geojson",
+      "size_mb": 3.21
+    },
+    {
+      "geoid": "47173",
+      "name": "Union County",
+      "state": "47",
+      "bbox": [
+        -84.00574,
+        36.16332,
+        -83.6761,
+        36.43232
+      ],
+      "count": 15188,
+      "file": "buildings/47173.geojson",
+      "size_mb": 4.04
+    },
+    {
+      "geoid": "47179",
+      "name": "Washington County",
+      "state": "47",
+      "bbox": [
+        -82.67646,
+        36.11915,
+        -82.29989,
+        36.44414
+      ],
+      "count": 67910,
+      "file": "buildings/47179.geojson",
+      "size_mb": 18.35
+    },
+    {
+      "geoid": "51077",
+      "name": "Grayson County",
+      "state": "51",
+      "bbox": [
+        -81.66854,
+        36.56583,
+        -80.99986,
+        36.70016
+      ],
+      "count": 8502,
+      "file": "buildings/51077.geojson",
+      "size_mb": 2.23
+    },
+    {
+      "geoid": "51105",
+      "name": "Lee County",
+      "state": "51",
+      "bbox": [
+        -83.66822,
+        36.59377,
+        -82.92017,
+        36.70017
+      ],
+      "count": 10312,
+      "file": "buildings/51105.geojson",
+      "size_mb": 2.72
+    },
+    {
+      "geoid": "51169",
+      "name": "Scott County",
+      "state": "51",
+      "bbox": [
+        -82.98049,
+        36.59357,
+        -82.29427,
+        36.70024
+      ],
+      "count": 13101,
+      "file": "buildings/51169.geojson",
+      "size_mb": 3.45
+    },
+    {
+      "geoid": "51173",
+      "name": "Smyth County",
+      "state": "51",
+      "bbox": [
+        -81.63634,
+        36.63873,
+        -81.55436,
+        36.68852
+      ],
+      "count": 286,
+      "file": "buildings/51173.geojson",
+      "size_mb": 0.07
+    },
+    {
+      "geoid": "51191",
+      "name": "Washington County",
+      "state": "51",
+      "bbox": [
+        -82.32756,
+        36.5943,
+        -81.61506,
+        36.70033
+      ],
+      "count": 19541,
+      "file": "buildings/51191.geojson",
+      "size_mb": 5.23
+    },
+    {
+      "geoid": "51520",
+      "name": "Bristol city",
+      "state": "51",
+      "bbox": [
+        -82.23563,
+        36.59455,
+        -82.10709,
+        36.67128
+      ],
+      "count": 8676,
+      "file": "buildings/51520.geojson",
+      "size_mb": 2.34
+    }
+  ]
+}

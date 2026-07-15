@@ -405,8 +405,17 @@ window.DEFNS_MAP = (function () {
       // Pull only the attributes our popup uses - smaller payload, faster
       // rendering, and lets us be explicit about which fields the popup
       // can rely on existing.
+      //
+      // Owner names (ownfrst / ownlast) are included as PARSED components
+      // rather than the concatenated ownname field. In NC, parcel
+      // ownership records are public information per the Public Records
+      // Act - it's legitimate to display them on a public-facing
+      // dashboard. Displaying parsed components is easier to format
+      // consistently than the raw ownname (which mixes individual and
+      // company records in varying formats).
       fields:  ['OBJECTID', 'parno', 'siteadd', 'scity', 'szip',
-                'cntyname', 'gisacres', 'transfdate'],
+                'cntyname', 'gisacres', 'transfdate',
+                'ownfrst', 'ownlast'],
       style: {
         // Red outline (#ff0909) at thin weight, no fill so debris flows
         // underneath remain visible. Keeps the layer present but visually
@@ -433,6 +442,17 @@ window.DEFNS_MAP = (function () {
     const acres  = (typeof p.gisacres === 'number' && isFinite(p.gisacres))
                    ? p.gisacres.toFixed(2) + ' ac'
                    : '\u2014';
+    // Compose owner name from parsed first/last fields. Handles:
+    //  - both present: "Jane Doe"
+    //  - only last present (common for company records): "Doe Enterprises LLC"
+    //  - only first present (rare, but graceful): "Jane"
+    //  - both missing/blank: em-dash
+    // Trim each part defensively - source data occasionally has stray
+    // whitespace from the aggregation pipeline.
+    const ownfrst = (p.ownfrst || '').trim();
+    const ownlast = (p.ownlast || '').trim();
+    const ownerParts = [ownfrst, ownlast].filter(Boolean);
+    const owner = ownerParts.length > 0 ? ownerParts.join(' ') : '\u2014';
     // transfdate is an Esri epoch-ms timestamp; if present, format as date
     let updated = '\u2014';
     if (p.transfdate) {
@@ -450,6 +470,7 @@ window.DEFNS_MAP = (function () {
             ? '<div class="parcel-popup-city">' + _escape(cityZ) + '</div>'
             : '')
       +   '<dl class="parcel-popup-fields">'
+      +     '<dt>Owner</dt><dd>'    + _escape(owner) + '</dd>'
       +     '<dt>Parcel #</dt><dd>' + _escape(parno) + '</dd>'
       +     '<dt>County</dt><dd>'   + _escape(county) + '</dd>'
       +     '<dt>Acres</dt><dd>'    + _escape(acres) + '</dd>'
@@ -475,109 +496,300 @@ window.DEFNS_MAP = (function () {
   }
 
   // ---- Overture building footprints layer (visual reference) --------------
-  // Toggleable layer rendering all-black building footprints across the
-  // multi-state WNC bbox (NC + TN + GA + SC + VA wherever they fall
-  // inside the bbox). Source is Overture Maps Foundation, extracted by
-  // scripts/refresh.py into a static GeoJSON at data/buildings_wnc.geojson.
+  // Toggleable layer rendering all-black building footprints. Sourced from
+  // Overture Maps Foundation, extracted by scripts/refresh.py into per-
+  // county GeoJSONs at data/buildings/{GEOID}.geojson plus a manifest at
+  // data/buildings/manifest.json.
   //
-  // Loading strategy: lazy. The first time the user toggles this layer
-  // on, we fetch the GeoJSON (typically 30-100 MB after simplification)
-  // and stash it in a module-scoped cache. Subsequent toggle-on/offs
-  // just add/remove the cached layer object without re-fetching.
+  // ARCHITECTURE (2026-07-14, replacing the earlier single-file approach):
+  // The full WNC dataset is ~2M buildings across ~30 counties = way too
+  // big to ship as a single GeoJSON. Instead:
   //
-  // Rendering: Canvas renderer (not SVG). Buildings can be hundreds of
-  // thousands of polygons at this scale; canvas handles that volume
-  // significantly better than SVG, at the cost of per-feature click
-  // events (which we don't need - this is a visual reference layer).
+  //   1. On first toggle-on, fetch the small manifest (~5 KB).
+  //   2. Register moveend + zoomend listeners.
+  //   3. On each viewport change, figure out which counties intersect
+  //      the visible bounds AND we're above min-zoom. Fetch any that
+  //      aren't yet in memory; add them to the rendered layer.
+  //   4. Keep an LRU cache of loaded counties bounded at CACHE_MAX
+  //      (~20 counties, ~100-300 MB browser RAM). Evict least-recently-
+  //      used when full.
   //
-  // Visual styling: all-black fill, no stroke. Intentionally simple so
-  // buildings recede visually behind the precipitation and alert layers,
-  // which are the primary signal on the dashboard.
-  let _buildingsGeojsonCache = null;  // hold the fetched FeatureCollection
-  let _buildingsFetchInFlight = null; // dedupe overlapping requests
+  // Below the min-zoom (CFG.OVERTURE_BUILDINGS_MIN_ZOOM), we don't fetch
+  // new counties, but existing loaded counties stay rendered (canvas
+  // renderer skips off-screen features so there's no visual downside).
+  // The "(zoom in to load)" hint next to the toggle updates accordingly.
+  //
+  // Failure behavior: silent-skip + console log. If one county file fails
+  // to load (404 or network error), other counties render as normal;
+  // the failed county appears blank. This isolates buildings failures
+  // from the alert-driving layers.
+  //
+  // Rendering perf: ALL county sub-layers share a single L.canvas
+  // renderer (_buildingsCanvas). This means (a) toggling on/off is a
+  // single-element DOM operation regardless of how many counties are
+  // loaded, and (b) the browser only paints one canvas per frame instead
+  // of one-per-county.
+  let _buildingsManifest      = null;    // loaded once, kept for the session
+  let _buildingsLayerGroup    = null;    // container in map for county sub-layers
+  let _buildingsCounties      = null;    // Map<GEOID, {layer, lastAccessed}>
+  let _buildingsInFlight      = null;    // Set<GEOID> - dedupe overlapping fetches
+  let _buildingsListenersOn   = false;   // whether moveend/zoomend are wired
+  let _buildingsManifestFetch = null;    // in-flight manifest promise (dedupe)
+  let _buildingsCanvas        = null;    // shared canvas renderer for all counties
 
   function setBuildingsVisible(visible) {
+    const pane = panes.buildings;  // the DOM element for buildingsPane
+
     if (!visible) {
-      if (layers.buildings) {
-        map.removeLayer(layers.buildings);
-        layers.buildings = null;
-      }
+      // Hide by CSS visibility rather than display. `visibility: hidden`
+      // keeps the pane in the layout tree (no reflow triggered) and
+      // just skips paint. Combined with pointer-events:none it becomes
+      // fully invisible and inert. This is meaningfully faster than
+      // display:none for panes containing heavy canvas content, since
+      // display:none forces the browser to un-composite the canvas's
+      // GPU layer.
+      //
+      // The LayerGroup stays on the map, the canvas stays cached,
+      // everything is ready for instant re-show. The gating on the
+      // checkbox state in _updateBuildingsForViewport prevents wasted
+      // fetches while the layer is hidden.
+      //
+      // Perf timing wraps this to help diagnose the reported toggle-off
+      // lag - if our JS timing is fast (<10ms) but the perceived lag is
+      // longer, the delay is browser-side (repaint of hidden canvas)
+      // and not something we can shorten further from JavaScript.
+      console.time('[DEFNS] buildings toggle-off');
+      if (pane) pane.style.visibility = 'hidden';
+      _updateBuildingsZoomHint();
+      console.timeEnd('[DEFNS] buildings toggle-off');
       return;
     }
-    if (layers.buildings) return;  // already on
 
-    // If we already have the GeoJSON cached from a previous toggle-on,
-    // just rebuild the Leaflet layer from cache instead of re-fetching.
-    if (_buildingsGeojsonCache) {
-      layers.buildings = _buildLeafletBuildingsLayer(_buildingsGeojsonCache);
-      layers.buildings.addTo(map);
+    // Turning on: initialize state if needed
+    if (!_buildingsCounties) _buildingsCounties = new Map();
+    if (!_buildingsInFlight) _buildingsInFlight = new Set();
+
+    if (!_buildingsLayerGroup) {
+      _buildingsLayerGroup = L.layerGroup([]);
+    }
+    if (!map.hasLayer(_buildingsLayerGroup)) {
+      _buildingsLayerGroup.addTo(map);
+    }
+    // Un-hide the pane (may be visibility:hidden from a previous toggle-off).
+    // The pane's pointer-events property is set to 'none' at pane creation
+    // (buildings isn't in the CLICKABLE_PANES list) so we don't touch it here.
+    if (pane) pane.style.visibility = '';
+
+    // First toggle-on ever: fetch the manifest, then wire the viewport
+    // listeners. Subsequent toggle-ons skip straight to updating.
+    if (_buildingsManifest) {
+      _wireBuildingsViewportListeners();
+      _updateBuildingsForViewport();
+      _updateBuildingsZoomHint();
       return;
     }
+    if (_buildingsManifestFetch) return;  // dedupe: manifest fetch already in flight
 
-    // Dedupe: if a fetch is already in flight (user toggled on, then off,
-    // then on quickly), don't start a second fetch.
-    if (_buildingsFetchInFlight) return;
-
-    console.log('[DEFNS] Fetching building footprints from',
-                CFG.OVERTURE_BUILDINGS_GEOJSON_URL);
-    _buildingsFetchInFlight = fetch(CFG.OVERTURE_BUILDINGS_GEOJSON_URL, {
-      cache: 'default',   // OK to use browser cache; file changes monthly
+    console.log('[DEFNS] Fetching buildings manifest from',
+                CFG.OVERTURE_BUILDINGS_MANIFEST_URL);
+    _buildingsManifestFetch = fetch(CFG.OVERTURE_BUILDINGS_MANIFEST_URL, {
+      cache: 'default',   // manifest changes ~monthly; browser cache is fine
     })
       .then(function (resp) {
         if (!resp.ok) {
-          throw new Error('HTTP ' + resp.status + ' fetching buildings');
+          throw new Error('HTTP ' + resp.status + ' fetching buildings manifest');
+        }
+        return resp.json();
+      })
+      .then(function (manifest) {
+        _buildingsManifest = manifest;
+        _buildingsManifestFetch = null;
+        console.log('[DEFNS] Buildings manifest loaded: '
+                  + manifest.counties.length + ' counties, '
+                  + (manifest.total_features || 0).toLocaleString()
+                  + ' features, '
+                  + (manifest.total_size_mb || 0) + ' MB total.');
+        // Confirm the user still wants the layer (they may have toggled
+        // off during the manifest fetch).
+        const stillRequested =
+          document.getElementById('layer-buildings') &&
+          document.getElementById('layer-buildings').checked;
+        if (!stillRequested) return;
+        _wireBuildingsViewportListeners();
+        _updateBuildingsForViewport();
+        _updateBuildingsZoomHint();
+      })
+      .catch(function (err) {
+        _buildingsManifestFetch = null;
+        console.error('[DEFNS] Failed to load buildings manifest:', err);
+        console.error('[DEFNS] Tip: ensure scripts/refresh.py has been run '
+                    + 'at least once so data/buildings/manifest.json exists.');
+      });
+  }
+
+  // Wire moveend + zoomend listeners the FIRST time the layer is toggled
+  // on. Idempotent: only registers once per session. Listeners keep
+  // running for the rest of the page life even when the layer is off,
+  // but they no-op unless the LayerGroup is on the map.
+  function _wireBuildingsViewportListeners() {
+    if (_buildingsListenersOn) return;
+    map.on('moveend', _updateBuildingsForViewport);
+    map.on('zoomend', function () {
+      _updateBuildingsForViewport();
+      _updateBuildingsZoomHint();
+    });
+    _buildingsListenersOn = true;
+  }
+
+  // Called on every viewport change (moveend/zoomend) while the buildings
+  // layer is on. Figures out which counties intersect the visible
+  // viewport, starts fetches for any not yet cached, and evicts LRU
+  // counties if the cache is over its limit.
+  //
+  // No-ops if:
+  //   - the layer-buildings checkbox is unchecked (user toggled off)
+  //   - manifest not loaded yet (still fetching)
+  //   - current zoom is below the min-zoom threshold
+  //
+  // The LayerGroup stays on the map even when the layer is toggled off
+  // (we use pane visibility to hide it), so we can't gate on
+  // map.hasLayer() - the checkbox is the source of truth.
+  function _updateBuildingsForViewport() {
+    const cb = document.getElementById('layer-buildings');
+    if (!cb || !cb.checked) return;
+    if (!_buildingsManifest || !_buildingsLayerGroup) return;
+    if (map.getZoom() < CFG.OVERTURE_BUILDINGS_MIN_ZOOM) return;
+
+    const bounds = map.getBounds();
+    const west  = bounds.getWest();
+    const east  = bounds.getEast();
+    const south = bounds.getSouth();
+    const north = bounds.getNorth();
+
+    // Find counties whose bbox intersects the viewport
+    const now = Date.now();
+    let fetched = 0;
+    for (const county of _buildingsManifest.counties) {
+      const b = county.bbox;   // [minX, minY, maxX, maxY]
+      const intersects =
+        !(west > b[2] || east < b[0] || south > b[3] || north < b[1]);
+      if (!intersects) continue;
+
+      // Already cached? Touch its LRU timestamp and move on.
+      if (_buildingsCounties.has(county.geoid)) {
+        _buildingsCounties.get(county.geoid).lastAccessed = now;
+        continue;
+      }
+      // Already fetching? Dedupe.
+      if (_buildingsInFlight.has(county.geoid)) continue;
+
+      // Not yet cached and not yet fetching - kick off the fetch.
+      _fetchAndRenderCounty(county);
+      fetched++;
+    }
+
+    _evictLruCountiesIfNeeded();
+  }
+
+  // Fetch one county's GeoJSON, build a Leaflet layer from it, add it to
+  // the LayerGroup, and record it in the LRU cache. Failure = silent
+  // skip + console log (per team's decision - buildings are reference-
+  // only, alert layers are unaffected).
+  function _fetchAndRenderCounty(countyMeta) {
+    const geoid = countyMeta.geoid;
+    _buildingsInFlight.add(geoid);
+    const url = 'data/' + countyMeta.file;
+    fetch(url, { cache: 'default' })
+      .then(function (resp) {
+        if (!resp.ok) {
+          throw new Error('HTTP ' + resp.status + ' for ' + geoid);
         }
         return resp.json();
       })
       .then(function (geojson) {
-        const n = (geojson.features || []).length;
-        console.log('[DEFNS] Building footprints loaded: ' + n.toLocaleString()
-                  + ' features.');
-        _buildingsGeojsonCache = geojson;
-        _buildingsFetchInFlight = null;
-        // Only actually add the layer if the user still has the toggle
-        // on. They may have toggled off during the fetch.
-        const stillRequested =
-          document.getElementById('layer-buildings') &&
-          document.getElementById('layer-buildings').checked;
-        if (stillRequested) {
-          layers.buildings = _buildLeafletBuildingsLayer(geojson);
-          layers.buildings.addTo(map);
+        _buildingsInFlight.delete(geoid);
+        // The user may have toggled off, evicted this county, or
+        // otherwise made this fetch's result no longer wanted.
+        if (!_buildingsLayerGroup || !_buildingsCounties) return;
+        const cb = document.getElementById('layer-buildings');
+        if (!cb || !cb.checked) return;
+
+        // Lazy-create the shared canvas renderer once. All county sub-
+        // layers reuse it so toggling the LayerGroup is a single-element
+        // DOM op and the browser only paints one canvas per frame.
+        if (!_buildingsCanvas) {
+          _buildingsCanvas = L.canvas({ padding: 0.1, pane: 'buildingsPane' });
         }
+        const countyLayer = L.geoJSON(geojson, {
+          pane: 'buildingsPane',
+          attribution: CFG.OVERTURE_BUILDINGS_ATTRIBUTION,
+          renderer: _buildingsCanvas,
+          style: {
+            // All-black fill, no stroke - same styling as before, just
+            // now applied per-county
+            fillColor:   '#000000',
+            fillOpacity: 1.0,
+            color:       '#000000',
+            weight:      0,
+            stroke:      false,
+          },
+          interactive: false,
+        });
+        _buildingsLayerGroup.addLayer(countyLayer);
+        _buildingsCounties.set(geoid, {
+          layer: countyLayer,
+          lastAccessed: Date.now(),
+        });
       })
       .catch(function (err) {
-        _buildingsFetchInFlight = null;
-        console.error('[DEFNS] Failed to load building footprints:', err);
-        console.error('[DEFNS] Tip: ensure scripts/refresh.py has been run '
-                    + 'at least once so data/buildings_wnc.geojson exists.');
+        _buildingsInFlight.delete(geoid);
+        // Silent skip per team's failure-behavior decision: log to
+        // console but don't show a user-visible warning. Other
+        // counties keep rendering; alert-driving layers are unaffected.
+        console.warn('[DEFNS] Failed to load buildings for county '
+                   + geoid + ' (' + (countyMeta.name || 'unknown') + '):',
+                   err);
       });
   }
 
-  // Build a Leaflet GeoJSON layer from a cached FeatureCollection. Pulled
-  // out as a helper because we call this from two places: after the
-  // initial fetch, and on subsequent toggle-ons that hit the cache.
-  function _buildLeafletBuildingsLayer(geojson) {
-    return L.geoJSON(geojson, {
-      pane: 'buildingsPane',
-      attribution: CFG.OVERTURE_BUILDINGS_ATTRIBUTION,
-      // Canvas renderer is essential here - rendering 100K+ building
-      // footprints as SVG would tank performance. Canvas trades per-
-      // feature DOM access (which we don't need) for fast bulk drawing.
-      renderer: L.canvas({ padding: 0.1, pane: 'buildingsPane' }),
-      style: {
-        // All-black fill, no stroke. Reference layer should recede
-        // visually behind the precipitation and alert layers.
-        fillColor:   '#000000',
-        fillOpacity: 1.0,
-        color:       '#000000',
-        weight:      0,
-        stroke:      false,
-      },
-      // We're a visual layer - no popups, no interactivity. Skip the
-      // event-listener overhead Leaflet would otherwise attach to each
-      // feature.
-      interactive: false,
-    });
+  // Enforce the LRU cache cap. Called after every viewport update. If
+  // we're over the limit, drop the least-recently-touched counties from
+  // both the LayerGroup and the cache Map.
+  function _evictLruCountiesIfNeeded() {
+    const cap = CFG.OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES;
+    while (_buildingsCounties.size > cap) {
+      // Find the LRU entry. Small cache (~20 entries) makes a linear
+      // scan fine; no need for a fancier data structure.
+      let lruGeoid = null;
+      let lruTime = Infinity;
+      for (const [geoid, entry] of _buildingsCounties) {
+        if (entry.lastAccessed < lruTime) {
+          lruTime = entry.lastAccessed;
+          lruGeoid = geoid;
+        }
+      }
+      if (!lruGeoid) break;   // shouldn't happen, defensive
+      const entry = _buildingsCounties.get(lruGeoid);
+      if (_buildingsLayerGroup && entry && entry.layer) {
+        _buildingsLayerGroup.removeLayer(entry.layer);
+      }
+      _buildingsCounties.delete(lruGeoid);
+    }
+  }
+
+  // Show or hide the "(zoom in to load)" hint next to the Buildings
+  // toggle. Same UX pattern as the parcels layer. Updated whenever
+  // zoom changes or the layer is toggled.
+  function _updateBuildingsZoomHint() {
+    const hint = document.getElementById('buildings-zoom-hint');
+    if (!hint) return;
+    const layerOn =
+      document.getElementById('layer-buildings') &&
+      document.getElementById('layer-buildings').checked;
+    const tooFarOut = map.getZoom() < CFG.OVERTURE_BUILDINGS_MIN_ZOOM;
+    // Hint is visible only when the layer is toggled on AND the current
+    // zoom is below the load-threshold. Hidden otherwise.
+    hint.classList.toggle('is-hidden', !(layerOn && tooFarOut));
   }
 
   // ---- Public API ---------------------------------------------------------

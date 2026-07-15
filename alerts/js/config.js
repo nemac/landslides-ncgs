@@ -149,35 +149,44 @@ window.DEFNS_CONFIG = (function () {
   // shows a hint to zoom in when below this level.
   const NCONEMAP_PARCELS_MIN_ZOOM = 14;
 
-  // Overture Maps Foundation - building footprints distributed as GeoJSON.
+  // Overture Maps Foundation - building footprints, chunked by county.
   //
-  // ARCHITECTURE NOTE: this is NOT streamed live from Overture's CDN.
-  // Instead, scripts/refresh.py uses Overture's official Python client
-  // (overturemaps + DuckDB) to query Overture's hosted GeoParquet for
-  // the WNC bbox, simplifies the geometry, and writes a static GeoJSON
-  // here. The frontend then loads it like any other same-origin GeoJSON
-  // (lazy: only fetched on first toggle-on of the buildings layer).
+  // ARCHITECTURE (2026-07-14): the frontend loads a small manifest file
+  // once, then fetches per-county GeoJSONs on demand as the user pans
+  // and zooms. This replaces the earlier single-file approach which
+  // produced an 800+ MB file that browsers couldn't load reliably.
   //
-  // Multi-state coverage is automatic - the WNC bbox spans NC + TN + GA
-  // + SC + VA, and Overture is global, so buildings in all 5 states are
-  // captured by a single bbox extract. See scripts/data.py's
-  // fetch_overture_buildings for the extraction logic and config.py's
-  // OVERTURE_BUILDINGS_* constants for tuning (TTL, simplification, etc).
+  // Data flow:
+  //   1. scripts/refresh.py runs the Python-side extraction: it pulls
+  //      buildings from Overture, size-filters them, simplifies, then
+  //      spatial-joins with counties to chunk into per-county GeoJSONs
+  //      plus a manifest.json describing them.
+  //   2. Frontend loads manifest.json on first toggle-on of the layer.
+  //   3. On each viewport change, frontend figures out which counties
+  //      intersect the visible bounds, fetches any not already cached,
+  //      and merges them into a single Leaflet layer.
+  //   4. Least-recently-used counties get evicted when cache is full,
+  //      keeping browser memory bounded regardless of pan history.
   //
-  // Update cadence: monthly. The Python-side cache check skips extraction
-  // when the file is less than ~30 days old, so most refresh.py runs are
-  // near-instant no-ops for this phase.
-  //
-  // Why GeoJSON rather than PMTiles streaming:
-  //   - Same-origin static file = no CORS / network variability
-  //   - Standard L.geoJSON() pattern, matches the rest of the dashboard
-  //   - Future intersect-with-flagged-DFPs work reuses the same file
-  //     for Python-side spatial joins (one source feeds both)
-  //   - Doesn't depend on protomaps-leaflet (in maintenance mode per
-  //     its own authors) or any specific vector-tile renderer
-  const OVERTURE_BUILDINGS_GEOJSON_URL = 'data/buildings_wnc.geojson';
-  const OVERTURE_BUILDINGS_ATTRIBUTION =
+  // Multi-state coverage is automatic - the manifest includes counties
+  // from all 5 states (NC + TN + GA + SC + VA) that fall inside the
+  // WNC bbox. See scripts/data.py's fetch_overture_buildings for the
+  // extraction logic and scripts/config.py's OVERTURE_BUILDINGS_*
+  // constants for tuning (TTL, simplification, min area, etc).
+  const OVERTURE_BUILDINGS_MANIFEST_URL = 'data/buildings/manifest.json';
+  const OVERTURE_BUILDINGS_ATTRIBUTION  =
     '\u00a9 Overture Maps Foundation';
+  // Minimum map zoom at which building footprints are fetched. Below
+  // this, the layer toggle shows a "(zoom in to load)" hint (same as
+  // parcels does). 12 = neighborhood-scale view where individual
+  // buildings become visually meaningful.
+  const OVERTURE_BUILDINGS_MIN_ZOOM = 12;
+  // Maximum number of counties held in the frontend memory cache. When
+  // this cap is exceeded, the least-recently-used county gets evicted.
+  // With counties averaging 5-15 MB each, 20 = ~100-300 MB memory
+  // ceiling. Bump higher for power users with lots of RAM; bump lower
+  // if end users are on low-end machines.
+  const OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES = 20;
 
   // Esri World Geocoder - used by the map's search box for address +
   // place lookup. Free tier is generous (~1M queries/year for non-
@@ -235,7 +244,10 @@ window.DEFNS_CONFIG = (function () {
     NEXRAD_TILES_URL, NEXRAD_ATTRIBUTION,
     NCONEMAP_PARCELS_URL, NCONEMAP_PARCELS_ATTRIBUTION,
     NCONEMAP_PARCELS_MIN_ZOOM,
-    OVERTURE_BUILDINGS_GEOJSON_URL, OVERTURE_BUILDINGS_ATTRIBUTION,
+    OVERTURE_BUILDINGS_MANIFEST_URL,
+    OVERTURE_BUILDINGS_ATTRIBUTION,
+    OVERTURE_BUILDINGS_MIN_ZOOM,
+    OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES,
     ESRI_GEOCODER_URL,
     AUTO_REFRESH_MS,
     PANE_ZINDEX

@@ -861,6 +861,39 @@
     };
   }
 
+  // Format a Date as "HH:MM UTC, H:MM AM/PM ET" combined display.
+  //
+  // UTC is the source-of-truth for weather data timestamps - upstream
+  // NDFD forecasts and MRMS observations publish in UTC, and keeping it
+  // visible lets meteorologists cross-reference the raw source.
+  //
+  // ET (Eastern Time) is what stakeholders in North Carolina actually
+  // read on their wall clock. "ET" is the umbrella term - technically
+  // it's EDT (UTC-4) during Daylight Saving and EST (UTC-5) the rest of
+  // the year, but "ET" is correct year-round without needing users to
+  // know which flavor is currently in effect. AM/PM is used because
+  // 24-hour time isn't the everyday US format - "3:51 PM" is instant
+  // recognition, "15:51" is a mental-translation step.
+  //
+  // The formatter uses timeZone: America/New_York which automatically
+  // applies whichever offset (EDT or EST) is in effect for the date
+  // shown - so it always matches the wall clock. We append " ET"
+  // ourselves rather than using timeZoneName so the label stays "ET"
+  // regardless of DST state.
+  const _ET_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour:     'numeric',
+    minute:   '2-digit',
+    hour12:   true,
+  });
+  function _formatTimeUtcAndEt(date) {
+    const utcPart = date.toUTCString().slice(17, 22) + ' UTC';
+    // e.g. "3:51 PM" - Intl.DateTimeFormat handles AM/PM formatting
+    // and single-digit hours (no leading zero) automatically.
+    const etTime = _ET_FORMATTER.format(date);
+    return utcPart + ', ' + etTime + ' ET';
+  }
+
   function _updateHeader(activeFC, summary) {
     const m = activeFC.meta || {};
 
@@ -873,8 +906,7 @@
       els.metricWindowSub.textContent  = 'accumulation';
     } else if (state.mode === 'mrms') {
       const obs = m.observed_at ? new Date(m.observed_at) : new Date();
-      els.metricIssuedTime.textContent =
-        obs.toUTCString().slice(17, 22) + ' UTC';
+      els.metricIssuedTime.textContent = _formatTimeUtcAndEt(obs);
       els.metricIssuedDate.textContent =
         obs.toUTCString().slice(5, 16);
       els.metricWindow.textContent     =
@@ -884,8 +916,7 @@
     } else {
       const issued = m.issued ? new Date(m.issued) : new Date();
       const ends   = m.window_end ? new Date(m.window_end) : new Date();
-      els.metricIssuedTime.textContent =
-        issued.toUTCString().slice(17, 22) + ' UTC';
+      els.metricIssuedTime.textContent = _formatTimeUtcAndEt(issued);
       els.metricIssuedDate.textContent =
         issued.toUTCString().slice(5, 16);
       els.metricWindow.textContent    = (m.window_hours || state.window) + ' hr';
@@ -899,7 +930,7 @@
 
     els.metricFlagged.textContent = String(summary.flagged);
     els.metricFlaggedSub.textContent =
-      'of ' + summary.total + ' debris flow polygons';
+      'of ' + summary.total + ' debris flow pathways';
 
     if (summary.flagged > 0) {
       els.metricFlaggedCard.classList.add('has-alerts');

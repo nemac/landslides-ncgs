@@ -25,7 +25,8 @@ from config import (
     DEBRIS_CACHE_FILENAME,
     CACHE_TTL_DAYS,
     WNC_BBOX,
-    OVERTURE_BUILDINGS_FILENAME,
+    OVERTURE_BUILDINGS_SUBDIR,
+    OVERTURE_BUILDINGS_MANIFEST_NAME,
     OVERTURE_BUILDINGS_CACHE_TTL_DAYS,
     OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
     OVERTURE_BUILDINGS_COORD_PRECISION,
@@ -1220,21 +1221,30 @@ def _polygonize_stage_iv_inches(
 # triggers a fresh extract about once a month, while the file feeds the
 # frontend on every page load in between.
 
-def _overture_output_path(output_dir: Path) -> Path:
-    """Where the buildings GeoJSON lives. Same alerts/data/ directory the
-    frontend reads from - the frontend fetches this file directly."""
-    return Path(output_dir) / OVERTURE_BUILDINGS_FILENAME
+def _overture_output_dir(output_dir: Path) -> Path:
+    """Where the per-county building GeoJSONs and their manifest live.
+    A subdirectory under alerts/data/ so buildings-related files stay
+    together and don't clutter the top level."""
+    return Path(output_dir) / OVERTURE_BUILDINGS_SUBDIR
+
+
+def _overture_manifest_path(output_dir: Path) -> Path:
+    """The manifest file describes all per-county files produced by the
+    most recent extraction. The frontend fetches this once to know which
+    counties exist and what their bboxes are."""
+    return _overture_output_dir(output_dir) / OVERTURE_BUILDINGS_MANIFEST_NAME
 
 
 def _overture_cache_is_fresh(output_dir: Path) -> bool:
-    """Return True if the buildings GeoJSON exists AND is younger than
+    """Return True if the buildings manifest exists AND is younger than
     OVERTURE_BUILDINGS_CACHE_TTL_DAYS. Skip the extraction in that case.
 
-    Note this looks at the OUTPUT file rather than a separate cache file,
-    because the output IS what we'd hand to the frontend; no need to
-    maintain two copies.
+    The manifest is the authoritative freshness signal - if it exists,
+    a full extraction ran to completion (we write the manifest LAST).
+    A partial extraction that failed mid-way leaves some county files
+    but no manifest, so the next refresh will retry the extraction.
     """
-    p = _overture_output_path(output_dir)
+    p = _overture_manifest_path(output_dir)
     if not p.exists():
         return False
     age_days = (datetime.now().timestamp() - p.stat().st_mtime) / 86400
@@ -1245,16 +1255,29 @@ def fetch_overture_buildings(
     output_dir: Path,
     force_refresh: bool = False,
 ) -> gpd.GeoDataFrame | None:
-    """Extract Overture building footprints for the WNC bbox, write to
-    a static GeoJSON in `output_dir`, and return the GeoDataFrame.
+    """Extract Overture building footprints for the WNC bbox, chunk by
+    county, and write per-county GeoJSON files + a manifest describing
+    them.
 
-    Returns the GeoDataFrame on success. Returns None if the cache was
-    fresh (no extraction needed) - callers can check existence on disk
-    instead.
+    Output structure:
+        alerts/data/buildings/
+            manifest.json          - lists all counties + their bboxes
+            37021.geojson          - Buncombe (NC)
+            37199.geojson          - Yancey (NC)
+            47155.geojson          - Sevier (TN)
+            ...
+
+    The frontend loads manifest.json once, then loads individual county
+    files on demand as the user pans/zooms. See alerts/js/map.js
+    setBuildingsVisible for the viewport-triggered loading logic.
+
+    Returns the combined GeoDataFrame on success. Returns None if the
+    cache was fresh (no extraction needed). Callers can check existence
+    of the manifest file on disk instead.
 
     Args:
-        output_dir: where to write `buildings_wnc.geojson`. Typically
-            the same alerts/data/ directory the frontend serves from.
+        output_dir: parent directory (typically alerts/data). The
+            "buildings" subdirectory is created inside it.
         force_refresh: if True, ignore the TTL and re-extract anyway.
 
     Raises:
@@ -1264,10 +1287,11 @@ def fetch_overture_buildings(
         a missing buildings layer shouldn't break alert generation.
     """
     output_dir = Path(output_dir)
-    output_path = _overture_output_path(output_dir)
+    buildings_dir = _overture_output_dir(output_dir)
+    manifest_path = _overture_manifest_path(output_dir)
 
     if not force_refresh and _overture_cache_is_fresh(output_dir):
-        age_days = (datetime.now().timestamp() - output_path.stat().st_mtime) / 86400
+        age_days = (datetime.now().timestamp() - manifest_path.stat().st_mtime) / 86400
         print(f"  Buildings cache is fresh ({age_days:.1f} days old, "
               f"TTL {OVERTURE_BUILDINGS_CACHE_TTL_DAYS}d). Skipping extraction.")
         return None
@@ -1301,11 +1325,40 @@ def fetch_overture_buildings(
     # are sub-parts (architectural details like wings on a building),
     # not full footprints, and would inflate the file without adding
     # value for a reference layer.
+    #
+    # The overturemaps client streams Parquet parts from Overture's S3
+    # bucket via DuckDB. It has NO built-in retry logic - a transient
+    # network hiccup on any single Parquet part ("AWS Error
+    # NETWORK_CONNECTION: Response body length doesn't match the
+    # content-length header") kills the whole extraction. We wrap the
+    # call in a retry-with-backoff loop to survive these.
     print(f"  Querying Overture (theme=buildings, type=building)...")
-    table = _overture_geodataframe(
-        "building",
-        bbox=(minx, miny, maxx, maxy),
-    )
+    import time
+    max_attempts = 4
+    table = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            table = _overture_geodataframe(
+                "building",
+                bbox=(minx, miny, maxx, maxy),
+            )
+            break
+        except (OSError, IOError) as exc:
+            # AWS network errors, Parquet read errors - all typically
+            # transient. Log, wait, retry.
+            if attempt < max_attempts:
+                wait_s = 2 ** (attempt - 1)  # 1, 2, 4 seconds
+                print(f"  [retry {attempt}/{max_attempts - 1}] Overture "
+                      f"extract failed transiently ({type(exc).__name__}). "
+                      f"Waiting {wait_s}s before retry...")
+                time.sleep(wait_s)
+            else:
+                print(f"  [failed] Overture extract exhausted "
+                      f"{max_attempts} attempts. Last error was:")
+                print(f"    {type(exc).__name__}: {str(exc)[:200]}")
+                raise
+    if table is None:
+        raise RuntimeError("Overture extract returned no data after retries")
     n_raw = len(table)
     print(f"  Raw extract: {n_raw:,} buildings.")
 
@@ -1314,20 +1367,9 @@ def fetch_overture_buildings(
               f"availability for this bbox.")
         return table
 
-    # Subset to columns we keep. We aggressively minimize per-feature
-    # bytes because the WNC bbox contains ~2-3 million buildings and
-    # even 40 bytes per feature adds up to 100+ MB.
-    #
-    #   id        - Overture GERS UUID (stable across releases). KEPT
-    #               because it's the join key for future spatial-join
-    #               work between buildings and flagged debris flows.
-    #   class     - Overture's building classification enum. DROPPED
-    #               (2026-07-14) - not used by the frontend today, and
-    #               saves ~20 bytes per feature.
-    #   height    - Height in meters, often null for ML-derived
-    #               footprints. DROPPED (2026-07-14) - not used, and
-    #               most values are null anyway.
-    #   geometry  - the polygon footprint
+    # Subset to minimal columns: id + geometry only. Every extra field
+    # adds tens of bytes per feature; across ~2M features that's real
+    # money in file size for a visual reference layer.
     keep_cols = [c for c in ["id", "geometry"] if c in table.columns]
     if "geometry" not in keep_cols:
         raise RuntimeError("Overture extract has no 'geometry' column; "
@@ -1343,18 +1385,11 @@ def fetch_overture_buildings(
     elif str(gdf.crs).upper() not in ("EPSG:4326", "WGS 84"):
         gdf = gdf.to_crs("EPSG:4326")
 
-    # Filter by minimum building area. Overture includes every structure
-    # regardless of size (sheds, gazebos, small outbuildings) - not all
-    # of which matter for a reference layer on a debris flow dashboard.
-    # We compute area in an equal-area projection (EPSG:5070, Albers
-    # CONUS - the same projection we use for debris flow area math) so
-    # the filter threshold is meaningful in square meters, not squared
-    # degrees.
+    # Filter by minimum building area (drops sheds, gazebos, small
+    # outbuildings). Uses EPSG:5070 for square-meter area math.
     if OVERTURE_BUILDINGS_MIN_AREA_SQM > 0:
         print(f"  Filtering to buildings >= "
               f"{OVERTURE_BUILDINGS_MIN_AREA_SQM} sq meters...")
-        # Reproject a temporary copy just for area computation; keep the
-        # main gdf in 4326 for the output.
         areas_sqm = gdf.geometry.to_crs("EPSG:5070").area
         keep_mask = areas_sqm >= OVERTURE_BUILDINGS_MIN_AREA_SQM
         n_before = len(gdf)
@@ -1364,13 +1399,9 @@ def fetch_overture_buildings(
         print(f"  Filtered: {n_before:,} -> {n_after:,} buildings "
               f"({pct_dropped:.1f}% dropped as too-small).")
 
-    # Simplify geometries for file-size savings. Bumped from 10m to 25m
-    # tolerance (2026-07-14) - buildings look slightly boxier when
-    # zoomed to street level but the file is dramatically smaller,
-    # which matters more for a reference layer that has to load in the
-    # browser as static GeoJSON.
+    # Simplify geometries for file-size savings.
     print(f"  Simplifying geometries at {OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG} deg "
-          f"(~25m) tolerance...")
+          f"(~3m) tolerance...")
     gdf["geometry"] = gdf.geometry.simplify(
         tolerance=OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
         preserve_topology=True,
@@ -1378,22 +1409,135 @@ def fetch_overture_buildings(
     # Drop any rows where simplification produced empty geometries
     gdf = gdf[~gdf.geometry.is_empty & gdf.geometry.notna()].copy()
 
-    # Write to GeoJSON. Coord precision at 5 decimals (~1.1 m) instead
-    # of 6 (~11 cm) - still visually correct at any zoom, saves ~10%
-    # on file size.
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    if output_path.exists():
-        output_path.unlink()  # GeoPandas append-mode pitfalls; explicit fresh write
+    # ---- Spatial-join with counties for chunking -----------------------
+    # Fetch counties (same function used by the debris flow augmentation).
+    # Returns a GDF with columns NAME, GEOID, STATE across NC + TN + GA +
+    # SC + VA. GEOID is the 5-digit state+county FIPS code, unique across
+    # states. We use GEOID as the county file basename.
+    print(f"  Fetching county boundaries for building spatial join...")
+    counties = _fetch_nc_counties()
+    if len(counties) == 0:
+        raise RuntimeError("County fetch returned 0 records; cannot "
+                           "chunk buildings by county.")
 
-    # to_file with COORDINATE_PRECISION layer option for size reduction.
-    # This requires GeoPandas >= 0.14 / fiona >= 1.9 which our reqs pin.
-    print(f"  Writing {len(gdf):,} buildings to {output_path}...")
-    gdf.to_file(
-        output_path,
-        driver="GeoJSON",
-        COORDINATE_PRECISION=OVERTURE_BUILDINGS_COORD_PRECISION,
+    # Reproject counties to 4326 if needed (matches our building CRS)
+    if str(counties.crs).upper() not in ("EPSG:4326", "WGS 84"):
+        counties = counties.to_crs("EPSG:4326")
+
+    # Spatial join: point-in-polygon test between building centroids
+    # and county boundaries. Using centroid rather than intersects
+    # because a building might cross a county line at the boundary
+    # (rare but happens near rivers etc); centroid gives a definite
+    # assignment to exactly one county.
+    #
+    # We compute centroids in EPSG:5070 (Albers Equal Area CONUS) rather
+    # than raw WGS84 because GeoPandas rightly warns that geographic-CRS
+    # centroids can be inaccurate. For building-sized polygons the error
+    # is negligible in practice, but a correct computation costs almost
+    # nothing here and silences the warning.
+    print(f"  Spatial-joining {len(gdf):,} buildings to "
+          f"{len(counties):,} counties (centroid-in-county)...")
+    centroids_projected = gdf.geometry.to_crs("EPSG:5070").centroid
+    centroids_gdf = gdf.copy()
+    centroids_gdf["geometry"] = centroids_projected.to_crs("EPSG:4326")
+    joined = gpd.sjoin(
+        centroids_gdf,
+        counties[["GEOID", "NAME", "STATE", "geometry"]],
+        how="left",
+        predicate="within",
     )
-    size_mb = output_path.stat().st_size / (1024 * 1024)
-    print(f"  Wrote buildings_wnc.geojson: {size_mb:.1f} MB ({len(gdf):,} features).")
+    # Attach original polygon geometries back (sjoin used centroids; we
+    # want the actual footprints in the output).
+    joined["geometry"] = gdf.geometry.values
+    # Drop the sjoin's index_right column
+    if "index_right" in joined.columns:
+        joined = joined.drop(columns=["index_right"])
 
-    return gdf
+    # Count buildings that didn't match any county (edge cases: buildings
+    # inside WNC bbox but outside all 5 states' county coverage)
+    n_orphans = joined["GEOID"].isna().sum()
+    n_matched = len(joined) - n_orphans
+    if n_orphans > 0:
+        print(f"  Note: {n_orphans:,} buildings ({100*n_orphans/len(joined):.1f}%) "
+              f"did not match any county - dropping.")
+    joined = joined[joined["GEOID"].notna()].copy()
+
+    # ---- Write per-county GeoJSON files --------------------------------
+    # Clean out the buildings subdirectory before writing new files -
+    # otherwise an old county file from a previous release (e.g. a
+    # county boundary that shifted, dropping some buildings) would
+    # persist as stale data. Fresh directory = fresh state.
+    buildings_dir.mkdir(parents=True, exist_ok=True)
+    for old_file in buildings_dir.glob("*.geojson"):
+        old_file.unlink()
+    if manifest_path.exists():
+        manifest_path.unlink()
+
+    print(f"  Writing per-county GeoJSON files to {buildings_dir}...")
+    manifest_counties: list[dict] = []
+    total_size_mb = 0.0
+
+    for geoid, county_group in joined.groupby("GEOID"):
+        # Keep only id + geometry in the output; GEOID/NAME/STATE go
+        # into the manifest entry, not the individual features
+        county_out = county_group[["id", "geometry"]].copy() \
+            if "id" in county_group.columns \
+            else county_group[["geometry"]].copy()
+
+        # Compute the bbox in a stable order for manifest storage
+        b = county_out.total_bounds  # [minx, miny, maxx, maxy]
+        bbox = [round(float(b[0]), 5), round(float(b[1]), 5),
+                round(float(b[2]), 5), round(float(b[3]), 5)]
+
+        county_file = buildings_dir / f"{geoid}.geojson"
+        county_out.to_file(
+            county_file,
+            driver="GeoJSON",
+            COORDINATE_PRECISION=OVERTURE_BUILDINGS_COORD_PRECISION,
+        )
+        size_mb = county_file.stat().st_size / (1024 * 1024)
+        total_size_mb += size_mb
+
+        # Get county name + state from any row (all rows in group share these)
+        first_row = county_group.iloc[0]
+        manifest_counties.append({
+            "geoid": str(geoid),
+            "name":  str(first_row.get("NAME", "")),
+            "state": str(first_row.get("STATE", "")),
+            "bbox":  bbox,
+            "count": int(len(county_out)),
+            "file":  f"{OVERTURE_BUILDINGS_SUBDIR}/{geoid}.geojson",
+            "size_mb": round(size_mb, 2),
+        })
+
+    # Sort manifest for stable ordering (helps diffs and manual inspection)
+    manifest_counties.sort(key=lambda c: c["geoid"])
+
+    # ---- Write manifest ------------------------------------------------
+    # Manifest is the frontend's index into the per-county files. It's
+    # what tells the browser "these are the counties with buildings and
+    # here are their bboxes." Small file (~30 counties x ~200 bytes each
+    # = ~6 KB total).
+    import json
+    manifest = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source":       "Overture Maps Foundation",
+        "bbox":         list(WNC_BBOX),
+        "simplify_tolerance_deg": OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
+        "min_area_sqm":          OVERTURE_BUILDINGS_MIN_AREA_SQM,
+        "county_count":          len(manifest_counties),
+        "total_features":        int(sum(c["count"] for c in manifest_counties)),
+        "total_size_mb":         round(total_size_mb, 2),
+        "counties":              manifest_counties,
+    }
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"  Wrote {len(manifest_counties)} per-county files, "
+          f"total {total_size_mb:.1f} MB "
+          f"({n_matched:,} buildings). Avg "
+          f"{total_size_mb / max(len(manifest_counties), 1):.1f} MB per county.")
+    print(f"  Manifest: {manifest_path.name} "
+          f"(loaded first by the frontend to know which counties exist).")
+
+    return joined

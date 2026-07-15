@@ -224,9 +224,8 @@
   <nav class="site-nav" aria-label="Main navigation">
     <ul class="site-nav__list" role="list">
       <li class="site-nav__item"><a href="index.html" aria-current="page">Home</a></li>
-      <li class="site-nav__item"><a href="data-tour.html">Data Tour Guide</a></li>
+      <li class="site-nav__item"><a href="learn-more.html#reducing-risk">Reducing Landslide Risk</a></li>
       <li class="site-nav__item"><a href="learn-more.html">Learn More</a></li>
-      <li class="site-nav__item"><a href="downloads.html">Downloads</a></li>
       <li class="site-nav__item"><a href="about.html">About</a></li>
     </ul>
   </nav>
@@ -235,38 +234,22 @@
     <h2 class="sr-only">Site Navigation Cards</h2>
     <nav class="card-grid" aria-label="Site sections">
 
-      <!-- 1. DEFNS: Debris Flow Early Notification System (Coming Soon) -->
+      <!-- 1. An Introduction to Landslides in Western North Carolina (Coming Soon)
+           TO ENABLE: (1) change href="#" to href="intro_landslides.html" (or the storymap URL);
+           (2) remove the nav-card--coming-soon class; (3) remove aria-disabled and tabindex;
+           (4) delete the coming-soon-badge span; (5) remove the --muted suffix from
+           nav-card__title--muted and nav-card__desc--muted. -->
       <a class="nav-card nav-card--coming-soon" href="#" aria-disabled="true" tabindex="-1">
-        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/DFNSE_banner.png');" aria-hidden="true"></div>
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/banner-intro-landslides.jpg');" aria-hidden="true"></div>
         <span class="coming-soon-badge" aria-hidden="true">Coming Soon</span>
         <div class="nav-card__content">
-          <div class="nav-card__title nav-card__title--muted">DEFNS: Debris Flow Early Notification System</div>
-          <div class="nav-card__desc nav-card__desc--muted">Observe real-time weather events that can potentially cause debris flows in WNC</div>
+          <div class="nav-card__title nav-card__title--muted">An Introduction to Landslides in Western North Carolina</div>
+          <div class="nav-card__desc nav-card__desc--muted">Explore the storymap</div>
         </div>
         <div class="nav-card__arrow" aria-hidden="true">›</div>
       </a>
 
-      <!-- 2. Explore Data in a Map Viewer -->
-      <a class="nav-card" href="https://unca.maps.arcgis.com/apps/webappviewer/index.html?id=e9f79de934f24e40a71bab8db8050612" target="_blank" rel="noopener noreferrer">
-        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/mapviewer_banner.png');" aria-hidden="true"></div>
-        <div class="nav-card__content">
-          <div class="nav-card__title">Explore Data in a Map Viewer</div>
-          <div class="nav-card__desc">Interact with landslide data in an online viewer</div>
-        </div>
-        <div class="nav-card__arrow" aria-hidden="true">›</div>
-      </a>
-
-      <!-- 3. Data Tour Guide -->
-      <a class="nav-card" href="data-tour.html">
-        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/datatour_banner.png');" aria-hidden="true"></div>
-        <div class="nav-card__content">
-          <div class="nav-card__title">Data Tour Guide</div>
-          <div class="nav-card__desc">Learn about the data</div>
-        </div>
-        <div class="nav-card__arrow" aria-hidden="true">›</div>
-      </a>
-
-      <!-- 4. Reducing Landslide Risk (moved from 1st to 4th) -->
+      <!-- 2. Reducing Landslide Risk -->
       <a class="nav-card" href="learn-more.html#reducing-risk">
         <div class="nav-card__bg" style="background-image:url('assets/images/main-site/reducing_landslide_risk_banner_3.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
@@ -276,7 +259,23 @@
         <div class="nav-card__arrow" aria-hidden="true">›</div>
       </a>
 
-      <!-- 5. Learn More -->
+      <!-- 3. Explore Data in the Landslide Inventory of North Carolina (Coming Soon)
+           TO ENABLE: (1) change href="#" to href="https://experience.arcgis.com/experience/cd122ec3a6414d8e80ca93f5efe6bcb5"
+           and add target="_blank" rel="noopener noreferrer" (external link);
+           (2) remove the nav-card--coming-soon class; (3) remove aria-disabled and tabindex;
+           (4) delete the coming-soon-badge span; (5) remove the --muted suffix from
+           nav-card__title--muted and nav-card__desc--muted. -->
+      <a class="nav-card nav-card--coming-soon" href="#" aria-disabled="true" tabindex="-1">
+        <div class="nav-card__bg" style="background-image:url('assets/images/main-site/mapviewer_banner.png');" aria-hidden="true"></div>
+        <span class="coming-soon-badge" aria-hidden="true">Coming Soon</span>
+        <div class="nav-card__content">
+          <div class="nav-card__title nav-card__title--muted">Explore Data in the Landslide Inventory of North Carolina</div>
+          <div class="nav-card__desc nav-card__desc--muted">Interact with the landslide inventory experience</div>
+        </div>
+        <div class="nav-card__arrow" aria-hidden="true">›</div>
+      </a>
+
+      <!-- 4. Learn More -->
       <a class="nav-card" href="learn-more.html">
         <div class="nav-card__bg" style="background-image:url('assets/images/main-site/learn_more_banner.png');" aria-hidden="true"></div>
         <div class="nav-card__content">
