@@ -305,30 +305,79 @@ http://localhost:8000/alerts/         (then Ctrl+F5 to hard-refresh)
 
 ## Building footprints (Overture Maps)
 
-The dashboard's "Building footprints" reference layer is sourced from Overture Maps Foundation via their official Python client. The pipeline:
+The dashboard's "Building footprints" reference layer is sourced from Overture Maps Foundation via their official Python client, chunked by county for viewport-aware loading. The pipeline:
 
 1. `scripts/refresh.py` runs the buildings phase as part of every refresh
-2. A cache check inside `defns_data.fetch_overture_buildings` skips the slow work if the file is < 30 days old (controlled by `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` in `scripts/config.py`)
-3. When stale or missing, the function queries Overture's hosted GeoParquet via DuckDB for the WNC bbox, simplifies geometries to 10m tolerance, and writes `alerts/data/buildings_wnc.geojson`
-4. The frontend lazy-loads this file when the user toggles the layer on
+2. A cache check inside `defns_data.fetch_overture_buildings` skips the slow work if the manifest file is < 30 days old (controlled by `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` in `scripts/config.py`)
+3. When stale or missing, the function queries Overture's hosted GeoParquet via DuckDB for the WNC bbox, applies size filtering (min 20 sq meters) and simplification (25m tolerance), then spatial-joins with counties and writes one GeoJSON per county plus a manifest
+4. The frontend loads the manifest once, then loads individual county GeoJSONs on demand as the user pans/zooms above min-zoom 12
+
+### Output structure
+
+```
+alerts/data/buildings/
+    manifest.json        - lists all counties + their bboxes + feature counts
+    37021.geojson        - Buncombe (NC)
+    37199.geojson        - Yancey (NC)
+    47155.geojson        - Sevier (TN)
+    ...                  - one file per county with buildings in the WNC bbox
+```
 
 ### First-run timing
 The first extraction takes **5-15 minutes** (it's a large DuckDB query against Overture's S3-hosted GeoParquet). After that, the cache check skips this phase for the next 30 days.
 
 ### When to force a fresh extract
-Delete `alerts/data/buildings_wnc.geojson` and run `python scripts/refresh.py`. The cache check will see no file and re-extract.
+Delete `alerts/data/buildings/manifest.json` (or the entire `alerts/data/buildings/` directory) and run `python scripts/refresh.py`. Since the freshness check keys off the manifest, deleting the manifest triggers a full re-extract and re-chunking. The extraction also cleans out old per-county files before writing new ones, so stale county files never accumulate.
 
 ### Output schema
-`buildings_wnc.geojson` features have these properties:
-- **id** — Overture GERS UUID (stable across releases)
-- **class** — Overture building classification (e.g., "residential", "commercial", "industrial")
-- **height** — Building height in meters (often null for ML-derived footprints)
+
+**Per-county feature files** (`{GEOID}.geojson`):
+- **id** — Overture GERS UUID (stable across releases; join key for future spatial-join work with flagged debris flows)
 - **geometry** — Polygon footprint, WGS84
 
-This schema is the contract for any future spatial-join work (e.g., flagged debris flows × buildings). The frontend currently uses only `geometry`; the other fields are pre-staged for future intersect features.
+Notes:
+- `class` and `height` fields from Overture are intentionally dropped to keep per-feature bytes minimal. If either is needed in the future, add to the `keep_cols` list in `fetch_overture_buildings`.
+
+**Manifest file** (`manifest.json`):
+- **generated_at** — ISO timestamp of the extraction
+- **source** — "Overture Maps Foundation"
+- **bbox** — the WNC bbox used
+- **county_count** — number of counties with buildings
+- **total_features** — sum of building counts across all counties
+- **total_size_mb** — sum of all per-county file sizes
+- **counties[]** — array of `{geoid, name, state, bbox, count, file, size_mb}` entries
+
+### Frontend loading behavior
+
+The buildings layer is off by default. When the user toggles it on:
+
+1. The manifest is fetched (~5 KB, near-instant)
+2. Viewport listeners are wired (`moveend` + `zoomend`)
+3. Below zoom 12, a "(zoom in to load)" hint appears next to the toggle and no counties are fetched
+4. Above zoom 12, counties intersecting the viewport are fetched on demand and rendered via a shared Leaflet `LayerGroup`
+5. A memory cache holds up to `OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES` (default 20) previously-loaded counties. When the cache overflows, least-recently-touched counties are evicted from the layer group
+6. If a county file fails to load, the failure is logged to console but doesn't affect other counties or any alert-driving layers
 
 ### Multi-state coverage
-Overture is a global dataset. The WNC bbox `(-84.5, 34.8, -81.0, 36.7)` captures buildings in NC, TN, GA, SC, and VA wherever they fall inside the bbox — same multi-state coverage we get for debris flows and county labels.
+Overture is a global dataset. The WNC bbox `(-84.5, 34.8, -81.0, 36.7)` captures buildings in NC, TN, GA, SC, and VA wherever they fall inside the bbox — same multi-state coverage we get for debris flows and county labels. Counties are identified by 5-digit FIPS GEOID codes (state + county), unique across states.
 
 ### Dependencies
 The buildings phase requires `overturemaps` and `duckdb` Python packages (see `scripts/requirements.txt`). Install via `pip install -r scripts/requirements.txt`. These are imported lazily inside `fetch_overture_buildings` so the rest of the pipeline runs even if these packages aren't installed — you'd just see a clean error message in the buildings phase.
+
+### Tuning knobs
+
+All in `scripts/config.py`:
+
+| Constant | Default | Effect |
+|---|---|---|
+| `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` | 30 | Days before re-extraction is triggered |
+| `OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG` | 0.000225 (~25m) | Geometry simplification; higher = smaller files, blockier buildings |
+| `OVERTURE_BUILDINGS_COORD_PRECISION` | 5 | Decimal places on coordinates; lower = smaller files, coarser |
+| `OVERTURE_BUILDINGS_MIN_AREA_SQM` | 20.0 | Minimum building footprint area in sq meters; higher drops more small structures |
+
+And in `alerts/js/config.js`:
+
+| Constant | Default | Effect |
+|---|---|---|
+| `OVERTURE_BUILDINGS_MIN_ZOOM` | 12 | Below this zoom, layer doesn't fetch |
+| `OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES` | 20 | Max counties held in browser memory |

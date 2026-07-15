@@ -123,7 +123,7 @@ window.DEFNS_ALERTS = (function () {
       tr.appendChild(td);
       tbody.appendChild(tr);
       if (summaryEl) {
-        summaryEl.textContent = 'No zones flagged at the current threshold.';
+        summaryEl.textContent = 'No pathways flagged at the current threshold.';
       }
       return;
     }

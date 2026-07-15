@@ -220,24 +220,33 @@ CACHE_TTL_DAYS = 30
 # below means the slow extraction (5-15 min) only runs ~once per month even
 # though refresh.py itself runs every ~15 min for weather data.
 #
-# Output schema: id, class, height, geometry. ID is Overture's GERS UUID -
-# stable across releases and useful for future spatial joins with flagged
-# debris flows. Class enumerates building types (residential, commercial,
-# industrial, etc.) per Overture's schema. Height is meters where known
-# (often null for ML-derived footprints).
-OVERTURE_BUILDINGS_FILENAME = "buildings_wnc.geojson"
+# Output schema per county file: id, geometry. ID is Overture's GERS UUID
+# (stable across releases, useful for future spatial joins with flagged
+# debris flows). We drop the other Overture attributes (class, height,
+# sources, etc.) for size - none are used by the frontend and each adds
+# tens of bytes per feature.
+#
+# ARCHITECTURE NOTE (2026-07-14): switched from single-file output to
+# per-county chunked output. A single WNC-wide GeoJSON was ~800 MB
+# (2.88M buildings) which browsers couldn't load reliably. Chunked
+# per-county means the frontend loads only counties in the current
+# viewport, at higher zoom levels. Each county file is ~1-15 MB;
+# frontend caches up to 20 counties at a time (LRU eviction).
+OVERTURE_BUILDINGS_SUBDIR = "buildings"          # subdirectory under alerts/data
+OVERTURE_BUILDINGS_MANIFEST_NAME = "manifest.json"  # inside that subdir
 OVERTURE_BUILDINGS_CACHE_TTL_DAYS = 30
-# Geometry simplification tolerance in degrees. ~0.000225 deg ~= 25 m at
-# WNC's latitude. Bumped from 10m to 25m (2026-07-14) after the first
-# real extraction produced an 827 MB file across 2.88M buildings - too
-# big for the browser to load reliably. 25m makes individual footprints
-# slightly boxier when zoomed to street level but for a REFERENCE
-# layer that's an acceptable tradeoff for a manageable file size.
-OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0.000225
+# Geometry simplification tolerance in degrees. ~0.000027 deg ~= 3 m at
+# WNC's latitude. Was 25m (2026-07-14) but that collapsed residential
+# building footprints (typical 10-15m per side) into 3-vertex triangles.
+# Bumped down to 3m (2026-07-14) to preserve recognizable building
+# shapes down to residential detail (e.g. garage bump-outs, bay windows).
+# Files are ~2-3x larger at this tolerance but stay manageable per-county
+# because we chunk by county and only load 4-6 counties at a time.
+OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0.000027
 # Coordinate decimal precision. 5 decimals ~= 1.1 m at the equator - still
 # well within visual accuracy for building footprints (buildings are
 # multiple meters across; sub-meter geometry precision is invisible on
-# any real-world map). Was 6 (11cm) - overkill for a reference layer.
+# any real-world map).
 OVERTURE_BUILDINGS_COORD_PRECISION = 5
 # Minimum building footprint area in square meters. Overture's "buildings"
 # dataset includes every structure - sheds, gazebos, garages, small
