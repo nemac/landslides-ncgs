@@ -126,13 +126,22 @@
 
     /* Resource Cards */
     .resources-section { margin-bottom: 3rem; }
-    .resources-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; }
+    .resources-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; list-style: none; padding-left: 0; }
+    /* Modifier: pair layout — 2 wide cards side by side, wrapping to 1 on narrow screens */
+    .resources-grid--pair { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
     .resource-card {
       display: flex; flex-direction: column; align-items: center; text-align: center;
       text-decoration: none; color: var(--clr-text); padding: 1.25rem 1rem 1.5rem;
       background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 8px;
       transition: background 0.2s, border-color 0.2s, transform 0.15s;
     }
+    /* Modifier: landscape card — image on left, text on right */
+    .resource-card--landscape {
+      flex-direction: row; align-items: center; text-align: left;
+      gap: 1.25rem; padding: 1.25rem;
+    }
+    .resource-card--landscape .resource-card__img-wrap { width: 120px; height: 120px; margin-bottom: 0; }
+    .resource-card--landscape .resource-card__content { flex: 1; min-width: 0; }
     .resource-card:not([aria-disabled="true"]):hover,
     .resource-card:not([aria-disabled="true"]):focus-visible {
       background: var(--clr-surface-2); border-color: var(--clr-primary); transform: translateY(-3px);
@@ -160,7 +169,7 @@
     .resource-card__desc { margin-bottom: 0.6rem; }
 
     /* PDF card grid + card style (imported from downloads.html) */
-    .resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1.5rem; margin-top: 1.25rem; }
+    .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.5rem; margin-top: 1.25rem; list-style: none; padding-left: 0; }
     .pdf-card { display: flex; flex-direction: column; background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 6px; overflow: hidden; text-decoration: none; color: var(--clr-text); transition: border-color 0.2s, transform 0.15s, background 0.2s; }
     .pdf-card:hover, .pdf-card:focus-visible { border-color: var(--clr-primary); background: var(--clr-surface-2); transform: translateY(-3px); }
     .pdf-card__thumb { width: 100%; aspect-ratio: 4/3; background: var(--clr-surface-2); overflow: hidden; flex-shrink: 0; }
@@ -243,8 +252,8 @@
 
   <main id="main-content" class="page-wrapper">
 
-    <section aria-labelledby="heading-intro-story">
-      <h2 class="sr-only" id="heading-intro-story">Featured Resource</h2>
+    <section class="resources-section" aria-labelledby="heading-storymaps">
+      <h2 class="section-heading" id="heading-storymaps">Select a resource below to explore selected landslide events, historical floods, regional geology, and more:</h2>
       <a class="featured-banner"
         href="intro-landslides.html"
         target="_blank" rel="noopener noreferrer"
@@ -258,38 +267,35 @@
           </span>
         </div>
       </a>
-    </section>
-
-    <hr class="section-divider" />
-
-    <section class="resources-section" aria-labelledby="heading-storymaps">
-      <h2 class="section-heading" id="heading-storymaps">Explore Storymaps</h2>
-      <p style="color:var(--clr-text-muted);font-size:0.95rem;margin-top:-0.5rem;margin-bottom:0.25rem;">Explore interactive storymaps about landslide events and historical floods. Links open in a new tab.</p>
-      <ul class="resources-grid" role="list">
+      <ul class="resources-grid resources-grid--pair" role="list">
 
         <li>
-          <a class="resource-card"
+          <a class="resource-card resource-card--landscape"
             href="https://storymaps.arcgis.com/stories/4bc6f7d4c1094f5c925a74ccf606be00"
             target="_blank" rel="noopener noreferrer"
             aria-label="Historical Landslides in WNC — interactive StoryMap, opens in a new tab">
             <div class="resource-card__img-wrap">
               <img src="assets/images/main-site/card-historical-wnc.jpg" alt="A waterfall surrounded by lush green vegetation in Western North Carolina" loading="lazy" />
             </div>
-            <div class="resource-card__title">Historical Landslides in WNC</div>
-            <div class="resource-card__desc">Explore selected landslide events from across the region</div>
+            <div class="resource-card__content">
+              <div class="resource-card__title">Historical Landslides in WNC</div>
+              <div class="resource-card__desc">Explore selected landslide events from across the region</div>
+            </div>
           </a>
         </li>
 
         <li>
-          <a class="resource-card"
+          <a class="resource-card resource-card--landscape"
             href="https://storymaps.arcgis.com/stories/bcb2e5373c21491c9e68e96a8156d92b"
             target="_blank" rel="noopener noreferrer"
             aria-label="The Great Flood of 1916 — interactive StoryMap, opens in a new tab">
             <div class="resource-card__img-wrap">
               <img src="assets/images/main-site/card-great-flood.jpg" alt="Historical photograph showing flood damage in western North Carolina, circa 1916" loading="lazy" />
             </div>
-            <div class="resource-card__title">The Great Flood of 1916</div>
-            <div class="resource-card__desc">Learn how the Great Flood of 1916 caused destruction in western North Carolina</div>
+            <div class="resource-card__content">
+              <div class="resource-card__title">The Great Flood of 1916</div>
+              <div class="resource-card__desc">Learn how the Great Flood of 1916 caused destruction in western North Carolina</div>
+            </div>
           </a>
         </li>
 
@@ -299,7 +305,7 @@
     <hr class="section-divider" />
 
     <section aria-labelledby="heading-resources">
-      <h2 class="section-heading" id="heading-resources">Resources</h2>
+      <h2 class="sr-only" id="heading-resources">Resources</h2>
       <ul class="resource-grid" role="list">
 
         <li>
