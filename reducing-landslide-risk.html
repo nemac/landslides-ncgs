@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reducing Landslide Risk | Landslides in Western North Carolina</title>
+  <meta name="description" content="Key messages, personal actions, and downloadable guides for reducing landslide risk in Western North Carolina." />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="assets/images/shared/ncgs-seal.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --clr-bg:         #122518;
+      --clr-primary:    #C04C00;
+      --clr-accent:     #3E8452;
+      --clr-text:       #FFFFFF;
+      --clr-text-muted: #D4E8D8;
+      --clr-surface:    #1C3521;
+      --clr-surface-2:  #243D29;
+      --clr-border:     #2E5438;
+      --clr-focus:      #FFD166;
+      --font-main: 'Source Sans 3', 'Source Sans Pro', Arial, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--clr-bg); color: var(--clr-text);
+      font-family: var(--font-main); font-size: 1rem; line-height: 1.6;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    .skip-nav {
+      position: absolute; top: -100%; left: 0;
+      background: var(--clr-focus); color: #000; font-weight: 700;
+      padding: 0.75rem 1.5rem; z-index: 9999; text-decoration: none;
+      border-radius: 0 0 4px 0; transition: top 0.2s;
+    }
+    .skip-nav:focus { top: 0; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0;
+      margin: -1px; overflow: hidden; clip: rect(0,0,0,0);
+      white-space: nowrap; border: 0;
+    }
+    :focus-visible { outline: 3px solid var(--clr-focus); outline-offset: 3px; }
+    :focus:not(:focus-visible) { outline: none; }
+
+    .site-header {
+      background: var(--clr-bg); padding: 1.25rem 2rem;
+      display: flex; align-items: center; gap: 1.25rem;
+      border-bottom: 3px solid var(--clr-accent); flex-shrink: 0;
+    }
+    .site-header__logo {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border-radius: 50%; overflow: hidden; border: 2px solid var(--clr-accent);
+    }
+    .site-header__logo img { width: 100%; height: 100%; object-fit: contain; }
+    .site-header__text h1 { font-size: clamp(1.3rem,3vw,2rem); font-weight: 700; color: var(--clr-text); line-height: 1.2; }
+    .site-header__text p  { font-size: clamp(0.85rem,1.4vw,0.95rem); color: var(--clr-text-muted); max-width: 65ch; margin-top: 0.3rem; }
+
+    .site-nav { background: var(--clr-surface); border-bottom: 1px solid var(--clr-border); position: sticky; top: 0; z-index: 100; flex-shrink: 0; }
+    .site-nav__list { list-style: none; display: flex; flex-wrap: wrap; padding: 0 1rem; max-width: 1200px; margin: 0 auto; }
+    .site-nav__item a {
+      display: block; padding: 1rem 1.5rem; color: var(--clr-text-muted); text-decoration: none;
+      font-weight: 700; font-size: 0.95rem; border-bottom: 3px solid transparent;
+      transition: color 0.2s, border-color 0.2s; white-space: nowrap;
+    }
+    .site-nav__item a:hover { color: var(--clr-text); border-bottom-color: var(--clr-accent); }
+    .site-nav__item a[aria-current="page"] { color: var(--clr-text); border-bottom-color: var(--clr-primary); }
+
+    .page-wrapper { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem 4rem; flex: 1; }
+
+    .section-heading {
+      font-size: 1.75rem; font-weight: 700; color: var(--clr-text);
+      margin-bottom: 1.1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--clr-border);
+    }
+    .section-divider { border: none; border-top: 1px solid var(--clr-border); margin: 2rem 0; }
+
+    /* Key Messages */
+    .key-messages { margin-bottom: 2.5rem; }
+    .key-messages__list { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+    .key-messages__list li {
+      display: flex; align-items: flex-start; gap: 0.75rem;
+      padding: 0.75rem 1rem; background: var(--clr-surface);
+      border-left: 4px solid var(--clr-accent); border-radius: 0 4px 4px 0;
+      color: var(--clr-text-muted); font-size: 0.975rem; line-height: 1.55;
+    }
+    .key-messages__list li::before {
+      content: ""; display: block; width: 10px; height: 10px; min-width: 10px;
+      border-radius: 50%; background: var(--clr-accent); margin-top: 0.38rem;
+    }
+
+    /* Featured Banner */
+    .featured-banner {
+      position: relative; display: flex; align-items: center; justify-content: center;
+      min-height: 180px; border-radius: 6px; overflow: hidden; margin-bottom: 2.5rem;
+      text-decoration: none; background: var(--clr-surface-2);
+    }
+    .featured-banner__bg {
+      position: absolute; inset: 0;
+      background-image: url('assets/images/main-site/banner-intro-landslides.jpg');
+      background-size: cover; background-position: center 40%;
+      opacity: 0.45; transition: opacity 0.3s;
+    }
+    .featured-banner:hover .featured-banner__bg,
+    .featured-banner:focus-visible .featured-banner__bg { opacity: 0.6; }
+    .featured-banner__content { position: relative; z-index: 1; text-align: center; padding: 2rem; }
+    .featured-banner__title {
+      font-size: clamp(1.3rem,3vw,1.9rem); font-weight: 700; color: var(--clr-text);
+      line-height: 1.25; text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+    .featured-banner__cta {
+      display: inline-block; margin-top: 0.85rem; padding: 0.55rem 1.4rem;
+      background: var(--clr-primary); color: var(--clr-text); font-weight: 700;
+      font-size: 0.9rem; border-radius: 4px; text-decoration: none;
+      border: 2px solid transparent; transition: background 0.2s, border-color 0.2s;
+    }
+    .featured-banner__cta:hover,
+    .featured-banner__cta:focus-visible { background: #a04000; border-color: var(--clr-focus); }
+
+    .ext-icon { display: inline-block; width: 0.8em; height: 0.8em; margin-left: 0.3em; vertical-align: middle; opacity: 0.8; }
+
+    /* Resource Cards */
+    .resources-section { margin-bottom: 3rem; }
+    .resources-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; }
+    .resource-card {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      text-decoration: none; color: var(--clr-text); padding: 1.25rem 1rem 1.5rem;
+      background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 8px;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+    .resource-card:not([aria-disabled="true"]):hover,
+    .resource-card:not([aria-disabled="true"]):focus-visible {
+      background: var(--clr-surface-2); border-color: var(--clr-primary); transform: translateY(-3px);
+    }
+    .resource-card[aria-disabled="true"] { opacity: 0.55; cursor: default; pointer-events: none; }
+    .resource-card__img-wrap {
+      width: 160px; height: 160px; border-radius: 50%; overflow: hidden;
+      border: 3px solid var(--clr-accent); margin-bottom: 1rem; flex-shrink: 0;
+      background: var(--clr-surface-2); transition: border-color 0.2s;
+    }
+    .resource-card:hover .resource-card__img-wrap,
+    .resource-card:focus-visible .resource-card__img-wrap { border-color: var(--clr-primary); }
+    .resource-card__img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .resource-card__img-placeholder {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: var(--clr-border); color: var(--clr-text-muted); font-size: 2.5rem;
+    }
+    .resource-card__title { font-size: 1.05rem; font-weight: 700; color: var(--clr-text); margin-bottom: 0.35rem; line-height: 1.3; }
+    .resource-card__desc  { font-size: 0.875rem; color: var(--clr-text-muted); line-height: 1.5; }
+    .resource-card__badge {
+      display: inline-block; margin-top: auto; padding: 0.2rem 0.7rem;
+      background: var(--clr-border); color: var(--clr-text-muted); font-size: 0.78rem;
+      font-weight: 700; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .resource-card__desc { margin-bottom: 0.6rem; }
+
+    /* Reducing Risk */
+    .reducing-risk { margin-bottom: 2.5rem; scroll-margin-top: 70px; }
+    .reducing-risk__content {
+      background: var(--clr-surface); border: 1px solid var(--clr-border);
+      border-top: 4px solid var(--clr-primary); border-radius: 0 0 6px 6px; padding: 1.5rem 1.75rem;
+    }
+    .reducing-risk__content p { color: var(--clr-text-muted); margin-bottom: 1rem; font-size: 0.975rem; }
+    .reducing-risk__content ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 0.6rem; }
+    .reducing-risk__content ul li {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      padding: 0.6rem 0.85rem; background: var(--clr-surface-2);
+      border-radius: 4px; color: var(--clr-text-muted); font-size: 0.9rem; line-height: 1.5;
+    }
+    .reducing-risk__content ul li::before { content: "✓"; color: var(--clr-accent); font-weight: 700; flex-shrink: 0; margin-top: 0.05rem; }
+    .btn-primary {
+      display: inline-block; margin-top: 1.25rem; padding: 0.7rem 1.6rem;
+      background: var(--clr-primary); color: var(--clr-text); font-family: var(--font-main);
+      font-weight: 700; font-size: 0.95rem; border-radius: 4px; text-decoration: none;
+      border: 2px solid transparent; transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-primary:hover, .btn-primary:focus-visible { background: #a04000; border-color: var(--clr-focus); }
+
+    .site-footer { background: var(--clr-surface); border-top: 3px solid var(--clr-primary); padding: 1.75rem 2rem; flex-shrink: 0; }
+    .site-footer__inner { max-width: 1200px; margin: 0 auto; }
+    .site-footer__org { font-size: 1rem; font-weight: 700; color: var(--clr-accent); }
+    .site-footer__detail { font-size: 0.9rem; color: var(--clr-text-muted); margin-top: 0.25rem; }
+    .site-footer__detail a { color: var(--clr-text-muted); text-decoration: underline; }
+    .site-footer__detail a:hover { color: var(--clr-text); }
+
+    @media (max-width: 600px) {
+      .site-header { padding: 1rem; }
+      .site-header__logo { width: 60px; height: 60px; }
+      .page-wrapper { padding: 1.25rem 1rem 3rem; }
+      .resources-grid { grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 1rem; }
+      .resource-card__img-wrap { width: 120px; height: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-nav" href="#main-content">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <div class="site-header__logo">
+      <a href="index.html" aria-label="Return to home page">
+        <img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey seal" />
+      </a>
+    </div>
+    <div class="site-header__text">
+      <h1>Landslides in Western North Carolina</h1>
+      <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
+    </div>
+  </header>
+
+  <nav class="site-nav" aria-label="Main navigation">
+    <ul class="site-nav__list" role="list">
+      <li class="site-nav__item"><a href="index.html">Home</a></li>
+      <li class="site-nav__item"><a href="reducing-landslide-risk.html" aria-current="page">Reducing Landslide Risk</a></li>
+      <li class="site-nav__item"><a href="learn-more.html">Learn More</a></li>
+      <li class="site-nav__item"><a href="about.html">About</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content" class="page-wrapper">
+
+    <section class="key-messages" aria-labelledby="heading-key-messages">
+      <h2 class="section-heading" id="heading-key-messages">Key Messages</h2>
+      <ul class="key-messages__list">
+        <li>Landslides pose significant risks to public health and safety, local economies, and home and business owners.</li>
+        <li>Extreme weather patterns—such as periods of above-normal rainfall or drought—are associated with a changing climate. They are already impacting people in western North Carolina.</li>
+        <li>These extreme weather patterns are also linked to landslide events.</li>
+        <li>Landslides and debris flows usually occur in areas where they've happened before.</li>
+        <li>Mapping where landslides have occurred in the past helps identify areas where they could happen again.</li>
+        <li>Landslide mapping and other resilience planning allow emergency responders, planners, and city and county staff to be better prepared to help protect people and assets from losses associated with landslide events.</li>
+      </ul>
+    </section>
+
+    <hr class="section-divider" />
+
+    <section class="reducing-risk" id="reducing-risk" aria-labelledby="heading-reducing-risk">
+      <h2 class="section-heading" id="heading-reducing-risk">Reducing Landslide Risk</h2>
+      <div class="reducing-risk__content">
+        <p>Understanding landslide hazards is the first step toward protecting yourself, your family, and your community. Below are key actions you can take to recognize and minimize landslide risk.</p>
+        <ul>
+          <li>Learn whether your property is in a landslide-prone area using the data and maps on this site</li>
+          <li>Watch for warning signs: unusual sounds, tilting trees, bulging ground surfaces, or new cracks in walls</li>
+          <li>Stay informed during periods of heavy or prolonged rainfall (5+ inches in 24 hours increases risk significantly)</li>
+          <li>Avoid modifying high- or moderate-probability-of-sliding slopes without consulting a geologist</li>
+          <li>Know your evacuation routes and have an emergency plan ready before severe weather arrives</li>
+          <li>Contact local emergency management to understand county-specific landslide planning and resources</li>
+        </ul>
+        <a class="btn-primary" href="https://drive.google.com/file/d/1CFu3dEj2A6srZrNOCLXGo-m8gdWjjKPC/view" target="_blank" rel="noopener noreferrer">
+          Download the Reducing Landslide Risk Brochure
+          <svg class="ext-icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 7l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </section>
+
+    <hr class="section-divider" />
+
+    <section class="resources-section" aria-labelledby="heading-pdf-resources">
+      <h2 class="section-heading" id="heading-pdf-resources">Downloadable Resources</h2>
+      <p style="color:var(--clr-text-muted);font-size:0.95rem;margin-top:-0.5rem;margin-bottom:0.25rem;">Additional PDF guides on landslide preparedness and risk reduction. Links open in a new tab.</p>
+      <ul class="resources-grid" role="list">
+
+        <li>
+          <a class="resource-card"
+            href="https://drive.google.com/file/d/1frUMhTR9jSOXNWzzs2ttewBdz_L0qNa8/view?usp=drive_link"
+            target="_blank" rel="noopener noreferrer"
+            aria-label="Guide for Homeowner Safety PDF — opens in a new tab">
+            <div class="resource-card__img-wrap">
+              <div class="resource-card__img-placeholder" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="resource-card__title">Guide for Homeowner Safety</div>
+            <div class="resource-card__desc">Safety guidance for homeowners in landslide-prone areas</div>
+            <span class="resource-card__badge">PDF</span>
+          </a>
+        </li>
+
+        <li>
+          <a class="resource-card"
+            href="https://drive.google.com/file/d/1zj2sdyLCAyeypV1u9WB5mQLtwowlTtH0/view?usp=drive_link"
+            target="_blank" rel="noopener noreferrer"
+            aria-label="Be Prepared for a Landslide, from Ready.gov PDF — opens in a new tab">
+            <div class="resource-card__img-wrap">
+              <div class="resource-card__img-placeholder" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="resource-card__title">Be Prepared for a Landslide — Ready.gov</div>
+            <div class="resource-card__desc">Federal emergency preparedness guidance for landslide events</div>
+            <span class="resource-card__badge">PDF</span>
+          </a>
+        </li>
+
+        <li>
+          <a class="resource-card"
+            href="https://drive.google.com/file/d/1CQ2diLNfy__z-tjIs9FPys321r2EzE4b/view?usp=drive_link"
+            target="_blank" rel="noopener noreferrer"
+            aria-label="NWS Weather-Ready Nation Landslide Resources PDF — opens in a new tab">
+            <div class="resource-card__img-wrap">
+              <div class="resource-card__img-placeholder" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="resource-card__title">NWS Weather-Ready Nation — Landslide Resources</div>
+            <div class="resource-card__desc">National Weather Service landslide awareness materials</div>
+            <span class="resource-card__badge">PDF</span>
+          </a>
+        </li>
+
+        <li>
+          <a class="resource-card"
+            href="https://drive.google.com/file/d/1Ydo9IQQh3_ewxEW-yC9hFXeT7L9ze6ZH/view?usp=drive_link"
+            target="_blank" rel="noopener noreferrer"
+            aria-label="Strategies — Actions you can take to Reduce Your Landslide Risk PDF — opens in a new tab">
+            <div class="resource-card__img-wrap">
+              <div class="resource-card__img-placeholder" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="resource-card__title">Strategies — Actions you can take to Reduce Your Landslide Risk</div>
+            <div class="resource-card__desc">Concrete actions and strategies to reduce landslide risk</div>
+            <span class="resource-card__badge">PDF</span>
+          </a>
+        </li>
+
+      </ul>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="site-footer__inner">
+      <div class="site-footer__org">
+        <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
+          target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;"
+          aria-label="North Carolina Geological Survey — opens in a new tab">
+          North Carolina Geological Survey
+        </a>
+      </div>
+      <div class="site-footer__detail">Asheville Regional Office</div>
+      <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
+    </div>
+  </footer>
+</body>
+</html>
