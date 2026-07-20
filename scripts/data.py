@@ -309,6 +309,15 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         "outFields": "OBJECTID",
         "outSR": 4326,
         "f": "geojson",
+        # REQUIRED for correct pagination. ArcGIS resultOffset/resultRecordCount
+        # paging is only deterministic with a stable sort on a UNIQUE key;
+        # without it the server returns pages in arbitrary per-request order, so
+        # pages overlap and some features are never returned (verified 2026-07-20:
+        # an unordered pull of all 113 pages surfaced only part of the layer).
+        # Sort by OBJECTID_1 - the layer's real system OID field. NOTE: the
+        # plain "OBJECTID" column on this WNC_Mosaic layer is NOT unique (many
+        # rows share a value), so it must NOT be used for paging or as a key.
+        "orderByFields": "OBJECTID_1",
         # Server-side spatial filter to WNC bbox
         "geometry":     bbox_str,
         "geometryType": "esriGeometryEnvelope",
