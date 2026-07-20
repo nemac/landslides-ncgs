@@ -31,11 +31,22 @@ jobs:
     # the ~monthly run when the Overture buildings layer re-extracts.
     timeout-minutes: 45
 
-    # Stream refresh.py's progress live. Python block-buffers stdout when it
-    # isn't a TTY (as in CI), so without this the logs stay dark until the
-    # process exits, making a slow run impossible to diagnose in real time.
     env:
+      # Stream refresh.py's progress live. Python block-buffers stdout when it
+      # isn't a TTY (as in CI), so without this the logs stay dark until the
+      # process exits, making a slow run impossible to diagnose in real time.
       PYTHONUNBUFFERED: "1"
+      # Bound GDAL's HTTP layer. The MRMS reader opens remote GRIB via
+      # rasterio "/vsigzip//vsicurl/<url>", which uses GDAL's HTTP client —
+      # and unlike the requests-based fetchers it has NO default timeout. A
+      # stalled connection to IEM's mtarchive server otherwise hangs the whole
+      # job until the 45-min step timeout kills it (observed 2026-07-20). These
+      # make a stuck read fail fast so the Pass1->RadarOnly->Pass2 fallback
+      # chain can move on.
+      GDAL_HTTP_TIMEOUT: "30"
+      GDAL_HTTP_CONNECTTIMEOUT: "15"
+      GDAL_HTTP_MAX_RETRY: "3"
+      GDAL_HTTP_RETRY_DELAY: "2"
 
     steps:
       - name: Checkout master
