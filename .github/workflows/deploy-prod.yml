@@ -1,0 +1,89 @@
+name: Deploy to production (S3 + CloudFront)
+
+# Fires on any push to `master`. Also runnable on demand from the Actions tab.
+# The site is plain static HTML/CSS/JS — there is no build step, so this just
+# syncs the repo to the S3 bucket and invalidates CloudFront.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Never let two prod deploys overlap. A push that arrives mid-deploy waits.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+# Required for GitHub OIDC: `id-token: write` lets the runner request a token
+# to assume the AWS role. No long-lived AWS keys are stored in this repo.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE: arn:aws:iam::104538610210:role/landslides-github-actions-prod
+  S3_BUCKET: landslides-ncgs
+  CF_DISTRIBUTION_ID: E139BPMQTMFRUH
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # The `production` environment is what the IAM role's trust policy is
+    # scoped to (sub = repo:nemac/landslides-ncgs:environment:production).
+    # It also gives you a place to add approval gates later without editing
+    # this file (Settings → Environments → production).
+    environment:
+      name: production
+      url: https://landslidesncgs.org
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Sync the repo root to the bucket. `--delete` removes files from the
+      # bucket that no longer exist in the repo. Excludes keep non-web files
+      # (git metadata, CI config, editor config, Python data scripts, docs)
+      # out of the public bucket.
+      - name: Sync to S3
+        run: |
+          aws s3 sync . "s3://${S3_BUCKET}" \
+            --delete \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude ".idea/*" \
+            --exclude "__pycache__/*" \
+            --exclude "*/__pycache__/*" \
+            --exclude "scripts/*" \
+            --exclude "docs/*" \
+            --exclude "cache/*" \
+            --exclude "*.py" \
+            --exclude "*.md" \
+            --exclude ".gitignore"
+
+      - name: Invalidate CloudFront
+        id: invalidate
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CF_DISTRIBUTION_ID" \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text)
+          echo "invalidation_id=$ID" >> "$GITHUB_OUTPUT"
+          echo "Created invalidation $ID for /*"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy summary"
+            echo "- Bucket: \`s3://${S3_BUCKET}\`"
+            echo "- CloudFront: \`${CF_DISTRIBUTION_ID}\` (invalidation \`${{ steps.invalidate.outputs.invalidation_id }}\`)"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
