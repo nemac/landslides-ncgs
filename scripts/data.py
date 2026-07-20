@@ -47,11 +47,12 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
     in seconds. We retry up to `max_attempts` times with exponential
     backoff (1s, 2s, 4s, 8s) before giving up.
 
-    ALSO detects AGOL's HTTP-200-but-JSON-error pattern: when you send an
-    invalid field name or unsupported parameter, AGOL frequently returns
-    {"error": {...}} with status 200. Without this check, the caller sees
-    no features and silently assumes "no results" - a confusing failure
-    mode. We raise on it so the real cause surfaces.
+    ALSO detects AGOL's HTTP-200-but-JSON-error pattern: AGOL returns
+    {"error": {...}} with status 200 for both real problems (bad field name)
+    and TRANSIENT ones - notably error 400 "Unable to perform query" when the
+    service is overwhelmed by concurrent requests. We route these through the
+    same retry/backoff loop; a genuine error simply exhausts the retries and
+    surfaces its message, while a transient overload recovers on a later try.
 
     Parameters
     ----------
@@ -72,8 +73,9 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
 
     Raises
     ------
-    requests.HTTPError on the final attempt if errors persist.
-    RuntimeError if AGOL returns an HTTP-200 error envelope.
+    requests.HTTPError on the final attempt if errors persist - including a
+    persistent AGOL HTTP-200 error envelope, which is retried like any other
+    transient failure.
     """
     import time
     headers = {"Accept-Encoding": accept_encoding}
@@ -98,25 +100,26 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
                     f"Non-JSON response (probably transient server issue): "
                     f"{snippet}", response=r
                 ) from je
-            # AGOL error envelope check
+            # AGOL error-envelope check (HTTP 200 with an {"error": ...} body).
+            # Raise a requests error (not RuntimeError) so it goes through the
+            # retry/backoff loop below - these are frequently transient under
+            # concurrent load (error 400 "Unable to perform query"). A genuine
+            # bad-parameter error just exhausts the retries and surfaces here.
             if isinstance(payload, dict) and "error" in payload:
                 err = payload["error"]
                 msg = err.get("message", "(no message)")
                 details = err.get("details") or []
                 code = err.get("code", "?")
-                raise RuntimeError(
+                raise requests.HTTPError(
                     f"AGOL returned error {code}: {msg}"
                     + (f" details={details!r}" if details else "")
                 )
             return payload
         # Retry any requests-level transport error. Besides HTTPError /
-        # Timeout / ConnectionError this crucially covers ChunkedEncodingError
-        # (server drops the connection mid-response) and ContentDecodingError
-        # (malformed gzip) - both observed against these AGOL services during
-        # large paginated pulls, and neither is a subclass of ConnectionError.
-        # The AGOL HTTP-200 error envelope above raises RuntimeError, which is
-        # NOT a RequestException, so a genuine service error still fails fast
-        # without burning retries.
+        # Timeout / ConnectionError this covers ChunkedEncodingError (server
+        # drops the connection mid-response) and ContentDecodingError (malformed
+        # gzip) - both observed against these AGOL services during large
+        # paginated pulls - as well as the AGOL error-envelope raised above.
         except requests.exceptions.RequestException as e:
             last_exc = e
             if attempt < max_attempts:
@@ -212,6 +215,18 @@ def _fetch_features_paginated(query_url: str, base_params: dict,
     all_features: list[dict] = []
     for off in offsets:
         all_features.extend(pages.get(off, []))
+
+    # Completeness guard. With a stable unique sort every page is a disjoint,
+    # full slice, so the concatenation must total exactly `total`. If it's
+    # short, a page came back with fewer rows than expected (e.g. a throttled
+    # response that slipped through) - fail loudly rather than silently
+    # shipping an incomplete layer downstream.
+    if len(all_features) != total:
+        raise RuntimeError(
+            f"{label}: fetched {len(all_features):,} features but the service "
+            f"reported {total:,}. Pagination is incomplete (likely dropped "
+            f"pages under load); aborting instead of shipping partial data."
+        )
     return all_features
 
 
@@ -324,11 +339,15 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         "inSR":         "4326",
         "spatialRel":   "esriSpatialRelIntersects",
     }
+    # page_size 1000 (below the 2000 server cap): smaller responses are lighter
+    # per request and less likely to trip AGOL's overload 400s. max_workers 4:
+    # 8-wide provably got throttled (dropped pages / overload 400s) - 4 keeps us
+    # under the service's rate limit while still ~4x faster than serial.
     all_features = _fetch_features_paginated(
         f"{DEBRIS_FLOW_SERVICE_URL}/query",
         base_params,
-        page_size=2000,
-        max_workers=8,
+        page_size=1000,
+        max_workers=4,
         label="debris flow",
     )
 
