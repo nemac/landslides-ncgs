@@ -27,9 +27,11 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    # Ample headroom: ~2-5 min most days; up to ~20 min plus a ~754 MB push on
-    # the ~monthly run when the Overture buildings layer re-extracts.
-    timeout-minutes: 45
+    # Most days the debris gpkg is a cache hit and the run is quick. Headroom
+    # is for the cold path: the first run of each month re-fetches the ~225k
+    # NCGS debris polygons + augments them (several minutes) before the cache
+    # repopulates, plus the ~monthly ~754 MB Overture buildings extract.
+    timeout-minutes: 60
 
     env:
       # Stream refresh.py's progress live. Python block-buffers stdout when it
@@ -52,6 +54,30 @@ jobs:
       - name: Checkout master
         uses: actions/checkout@v4
         # Default persist-credentials keeps GITHUB_TOKEN wired up for the push.
+
+      # The NCGS debris-flow layer is ~225k polygons for the WNC bbox and is
+      # essentially static (last edited 2026-03; a susceptibility model, not a
+      # feed). scripts/refresh.py caches it locally as cache/debris_flows.gpkg
+      # with a 30-day TTL, but CI starts cold every run, so without this the
+      # pipeline re-paginates all 225k features + re-runs the county/HUC12
+      # spatial joins on every run (the dominant cost, ~10-20 min).
+      #
+      # Key by calendar month so the cache rotates ~monthly (matching the code's
+      # 30-day TTL): within a month it's a hit and refresh.py skips the fetch;
+      # the first run of a new month misses, re-fetches, and repopulates.
+      - name: Compute cache month
+        id: cachemonth
+        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache debris-flow gpkg
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: debris-gpkg-v1-${{ steps.cachemonth.outputs.ym }}
+          # Fall back to the previous month's cache if this month hasn't been
+          # built yet — refresh.py's TTL check then decides whether it's stale.
+          restore-keys: |
+            debris-gpkg-v1-
 
       # scripts/refresh.py caches the ~754 MB Overture buildings layer for 30
       # days, keyed off the manifest file's mtime. A fresh checkout resets that
