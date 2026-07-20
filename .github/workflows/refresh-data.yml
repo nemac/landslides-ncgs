@@ -31,6 +31,12 @@ jobs:
     # the ~monthly run when the Overture buildings layer re-extracts.
     timeout-minutes: 45
 
+    # Stream refresh.py's progress live. Python block-buffers stdout when it
+    # isn't a TTY (as in CI), so without this the logs stay dark until the
+    # process exits, making a slow run impossible to diagnose in real time.
+    env:
+      PYTHONUNBUFFERED: "1"
+
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
