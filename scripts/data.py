@@ -109,8 +109,15 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
                     + (f" details={details!r}" if details else "")
                 )
             return payload
-        except (requests.HTTPError, requests.Timeout,
-                requests.ConnectionError) as e:
+        # Retry any requests-level transport error. Besides HTTPError /
+        # Timeout / ConnectionError this crucially covers ChunkedEncodingError
+        # (server drops the connection mid-response) and ContentDecodingError
+        # (malformed gzip) - both observed against these AGOL services during
+        # large paginated pulls, and neither is a subclass of ConnectionError.
+        # The AGOL HTTP-200 error envelope above raises RuntimeError, which is
+        # NOT a RequestException, so a genuine service error still fails fast
+        # without burning retries.
+        except requests.exceptions.RequestException as e:
             last_exc = e
             if attempt < max_attempts:
                 backoff_s = 2 ** (attempt - 1)
@@ -120,6 +127,92 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
             else:
                 print(f"  [give up] {label}: exhausted {max_attempts} attempts")
     raise last_exc  # type: ignore[misc]
+
+
+def _fetch_features_paginated(query_url: str, base_params: dict,
+                              page_size: int = 2000, max_workers: int = 8,
+                              label: str = "features") -> list[dict]:
+    """Fetch ALL features from an ArcGIS /query endpoint, paginating pages
+    in parallel.
+
+    ArcGIS caps every response at the service's maxRecordCount (2000 for the
+    NCGS debris service - requesting more per page is silently clamped), so a
+    large layer must be paged. The pages are independent, though: we first
+    probe the total via returnCountOnly, compute every offset, and fetch them
+    concurrently instead of one-at-a-time. For the ~225k-feature WNC debris
+    layer that turns ~113 serial round-trips into a handful of parallel batches.
+
+    Falls back to plain sequential pagination if the count probe fails, so a
+    flaky count query can't break the fetch. Every page still goes through
+    _agol_request_with_retry for 5xx/timeout backoff and the HTTP-200 error
+    envelope check.
+
+    base_params must carry everything except paging (where, outFields, f,
+    spatial filter, outSR, ...). Do NOT put resultOffset/resultRecordCount in
+    it; this function sets those per page.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def fetch_page(offset: int) -> tuple[int, list[dict]]:
+        params = dict(base_params)
+        params["resultOffset"] = offset
+        params["resultRecordCount"] = page_size
+        page = _agol_request_with_retry(
+            query_url, params, label=f"{label} @offset={offset:,}")
+        return offset, page.get("features", [])
+
+    # Probe the total up front so we can compute all offsets.
+    count_params = dict(base_params)
+    count_params.update({"returnCountOnly": "true", "f": "json"})
+    for k in ("outFields", "resultOffset", "resultRecordCount"):
+        count_params.pop(k, None)
+    try:
+        cp = _agol_request_with_retry(query_url, count_params,
+                                      label=f"{label} count")
+        total = int(cp.get("count"))
+    except Exception as e:
+        print(f"  count probe failed ({type(e).__name__}: {e}); "
+              f"falling back to sequential pagination")
+        total = None
+
+    # Sequential fallback: page until a short/empty page (the original loop).
+    if total is None:
+        all_features: list[dict] = []
+        offset = 0
+        while True:
+            _, feats = fetch_page(offset)
+            if not feats:
+                break
+            all_features.extend(feats)
+            if len(feats) < page_size:
+                break
+            offset += page_size
+        return all_features
+
+    if total == 0:
+        return []
+
+    offsets = list(range(0, total, page_size))
+    print(f"  {total:,} features across {len(offsets)} pages "
+          f"(fetching up to {max_workers} concurrently)...")
+    pages: dict[int, list[dict]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(fetch_page, off) for off in offsets]
+        done = 0
+        for fut in as_completed(futures):
+            offset, feats = fut.result()
+            pages[offset] = feats
+            done += 1
+            if done % 10 == 0 or done == len(offsets):
+                got = sum(len(v) for v in pages.values())
+                print(f"  {done}/{len(offsets)} pages done ({got:,} features)")
+
+    # Concatenate in offset order so output is deterministic regardless of the
+    # order futures completed in.
+    all_features: list[dict] = []
+    for off in offsets:
+        all_features.extend(pages.get(off, []))
+    return all_features
 
 
 # =============================================================================
@@ -141,9 +234,11 @@ def _cache_is_fresh() -> bool:
 def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     """Pull WNC-area debris flow polygons from the NCGS feature service.
 
-    Filtered server-side to the WNC bounding box (see config.WNC_BBOX) so
-    we don't pull all 228k CONUS-wide polygons; the precipitation data is
-    WNC-only anyway, so anything outside that bbox can't be flagged.
+    Filtered server-side to the WNC bounding box (see config.WNC_BBOX). This
+    is a Western NC model, so the bbox contains ~225k of its ~228k polygons -
+    the filter trims almost nothing; it just keeps the fetch aligned with the
+    WNC-only precipitation scope. Pages are fetched in parallel (see
+    _fetch_features_paginated) since that's ~113 pages at the 2000-record cap.
 
     Results are cached locally as a GeoPackage. Subsequent calls within
     the cache TTL load from disk instead of paginating against AGOL.
@@ -203,41 +298,30 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         return gdf
 
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
-    print(f"Fetching debris flow polygons from NCGS "
-          f"(WNC bbox = {bbox_str}, expect ~5-15k features)...")
+    print(f"Fetching debris flow polygons from NCGS (WNC bbox = {bbox_str})...")
 
-    all_features: list[dict] = []
-    offset = 0
-    page_size = 2000
-
-    while True:
-        params = {
-            "where": "1=1",
-            "outFields": "OBJECTID",
-            "outSR": 4326,
-            "resultOffset": offset,
-            "resultRecordCount": page_size,
-            "f": "geojson",
-            # Server-side spatial filter to WNC bbox
-            "geometry":     bbox_str,
-            "geometryType": "esriGeometryEnvelope",
-            "inSR":         "4326",
-            "spatialRel":   "esriSpatialRelIntersects",
-        }
-        page = _agol_request_with_retry(
-            f"{DEBRIS_FLOW_SERVICE_URL}/query",
-            params,
-            label=f"debris flow page @offset={offset:,}",
-        )
-        feats = page.get("features", [])
-        if not feats:
-            break
-        all_features.extend(feats)
-        if (offset // page_size) % 5 == 0:
-            print(f"  page @offset={offset:,}: running total {len(all_features):,}")
-        if len(feats) < page_size:
-            break
-        offset += page_size
+    # The debris model is a Western NC dataset, so ~225k of its ~228k polygons
+    # fall inside the WNC bbox - the spatial filter trims almost nothing, it
+    # just aligns the fetch with the WNC-only precipitation scope. That's a lot
+    # of pages at the service's 2000-record cap, so fetch them in parallel.
+    base_params = {
+        "where": "1=1",
+        "outFields": "OBJECTID",
+        "outSR": 4326,
+        "f": "geojson",
+        # Server-side spatial filter to WNC bbox
+        "geometry":     bbox_str,
+        "geometryType": "esriGeometryEnvelope",
+        "inSR":         "4326",
+        "spatialRel":   "esriSpatialRelIntersects",
+    }
+    all_features = _fetch_features_paginated(
+        f"{DEBRIS_FLOW_SERVICE_URL}/query",
+        base_params,
+        page_size=2000,
+        max_workers=8,
+        label="debris flow",
+    )
 
     if not all_features:
         return gpd.GeoDataFrame({"OBJECTID": []}, geometry=[], crs=DISPLAY_CRS)
