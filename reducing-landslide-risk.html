@@ -126,7 +126,7 @@
 
     /* Resource Cards */
     .resources-section { margin-bottom: 3rem; }
-    .resources-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; }
+    .resources-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; list-style: none; padding-left: 0; }
     .resource-card {
       display: flex; flex-direction: column; align-items: center; text-align: center;
       text-decoration: none; color: var(--clr-text); padding: 1.25rem 1rem 1.5rem;
@@ -145,7 +145,7 @@
     }
     .resource-card:hover .resource-card__img-wrap,
     .resource-card:focus-visible .resource-card__img-wrap { border-color: var(--clr-primary); }
-    .resource-card__img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .resource-card__img-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
     .resource-card__img-placeholder {
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
       background: var(--clr-border); color: var(--clr-text-muted); font-size: 2.5rem;
@@ -158,6 +158,18 @@
       font-weight: 700; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.05em;
     }
     .resource-card__desc { margin-bottom: 0.6rem; }
+
+    /* PDF card grid + card style (matches learn-more.html) */
+    .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.5rem; margin-top: 1.25rem; list-style: none; padding-left: 0; }
+    .pdf-card { display: flex; flex-direction: column; background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 6px; overflow: hidden; text-decoration: none; color: var(--clr-text); transition: border-color 0.2s, transform 0.15s, background 0.2s; }
+    .pdf-card:hover, .pdf-card:focus-visible { border-color: var(--clr-primary); background: var(--clr-surface-2); transform: translateY(-3px); }
+    .pdf-card__thumb { width: 100%; aspect-ratio: 4/3; background: var(--clr-surface-2); overflow: hidden; flex-shrink: 0; }
+    .pdf-card__thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; transition: transform 0.3s; }
+    .pdf-card:hover .pdf-card__thumb img, .pdf-card:focus-visible .pdf-card__thumb img { transform: scale(1.04); }
+    .pdf-card__body { padding: 1rem; flex: 1; display: flex; flex-direction: column; }
+    .pdf-card__title { font-size: 1rem; font-weight: 700; color: var(--clr-text); line-height: 1.3; margin-bottom: 0.4rem; }
+    .pdf-card__desc { font-size: 0.85rem; color: var(--clr-text-muted); line-height: 1.5; flex: 1; }
+    .pdf-card__badge { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.75rem; padding: 0.25rem 0.6rem; background: var(--clr-border); color: var(--clr-text-muted); font-size: 0.78rem; font-weight: 700; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; width: fit-content; }
 
     /* Reducing Risk */
     .reducing-risk { margin-bottom: 2.5rem; scroll-margin-top: 70px; }
@@ -260,82 +272,78 @@
 
     <section class="resources-section" aria-labelledby="heading-pdf-resources">
       <h2 class="section-heading" id="heading-pdf-resources">Downloadable Resources</h2>
-      <p style="color:var(--clr-text-muted);font-size:0.95rem;margin-top:-0.5rem;margin-bottom:0.25rem;">Additional PDF guides on landslide preparedness and risk reduction. Links open in a new tab.</p>
-      <ul class="resources-grid" role="list">
+      <p style="color:var(--clr-text-muted);font-size:0.95rem;margin-top:-0.5rem;margin-bottom:0.25rem;">Additional PDF guides on landslide preparedness and risk reduction.</p>
+      <ul class="resource-grid" role="list">
 
         <li>
-          <a class="resource-card"
+          <a class="pdf-card"
             href="https://drive.google.com/file/d/1frUMhTR9jSOXNWzzs2ttewBdz_L0qNa8/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
             aria-label="Guide for Homeowner Safety PDF — opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <div class="resource-card__img-placeholder" aria-hidden="true">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-              </div>
+            <div class="pdf-card__thumb">
+              <img src="assets/images/main-site/HomeownerSafety.png" alt="" loading="lazy" />
             </div>
-            <div class="resource-card__title">Guide for Homeowner Safety</div>
-            <div class="resource-card__desc">Safety guidance for homeowners in landslide-prone areas</div>
-            <span class="resource-card__badge">PDF</span>
+            <div class="pdf-card__body">
+              <div class="pdf-card__title">Guide for Homeowner Safety</div>
+              <div class="pdf-card__desc">Safety guidance for homeowners in landslide-prone areas</div>
+              <span class="pdf-card__badge" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+              </span>
+            </div>
           </a>
         </li>
 
         <li>
-          <a class="resource-card"
+          <a class="pdf-card"
             href="https://drive.google.com/file/d/1zj2sdyLCAyeypV1u9WB5mQLtwowlTtH0/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
             aria-label="Be Prepared for a Landslide, from Ready.gov PDF — opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <div class="resource-card__img-placeholder" aria-hidden="true">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-              </div>
+            <div class="pdf-card__thumb">
+              <img src="assets/images/main-site/BePrepraredforaLandslide.png" alt="" loading="lazy" />
             </div>
-            <div class="resource-card__title">Be Prepared for a Landslide — Ready.gov</div>
-            <div class="resource-card__desc">Federal emergency preparedness guidance for landslide events</div>
-            <span class="resource-card__badge">PDF</span>
+            <div class="pdf-card__body">
+              <div class="pdf-card__title">Be Prepared for a Landslide &mdash; Ready.gov</div>
+              <div class="pdf-card__desc">Federal emergency preparedness guidance for landslide events</div>
+              <span class="pdf-card__badge" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+              </span>
+            </div>
           </a>
         </li>
 
         <li>
-          <a class="resource-card"
+          <a class="pdf-card"
             href="https://drive.google.com/file/d/1CQ2diLNfy__z-tjIs9FPys321r2EzE4b/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
             aria-label="NWS Weather-Ready Nation Landslide Resources PDF — opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <div class="resource-card__img-placeholder" aria-hidden="true">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-              </div>
+            <div class="pdf-card__thumb">
+              <img src="assets/images/main-site/NWS_WeatherReadyNation.png" alt="" loading="lazy" />
             </div>
-            <div class="resource-card__title">NWS Weather-Ready Nation — Landslide Resources</div>
-            <div class="resource-card__desc">National Weather Service landslide awareness materials</div>
-            <span class="resource-card__badge">PDF</span>
+            <div class="pdf-card__body">
+              <div class="pdf-card__title">NWS Weather-Ready Nation &mdash; Landslide Resources</div>
+              <div class="pdf-card__desc">National Weather Service landslide awareness materials</div>
+              <span class="pdf-card__badge" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+              </span>
+            </div>
           </a>
         </li>
 
         <li>
-          <a class="resource-card"
+          <a class="pdf-card"
             href="https://drive.google.com/file/d/1Ydo9IQQh3_ewxEW-yC9hFXeT7L9ze6ZH/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
             aria-label="Strategies — Actions you can take to Reduce Your Landslide Risk PDF — opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <div class="resource-card__img-placeholder" aria-hidden="true">
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-              </div>
+            <div class="pdf-card__thumb">
+              <img src="assets/images/main-site/StrategiestoReduceLandslideRisk.png" alt="" loading="lazy" />
             </div>
-            <div class="resource-card__title">Strategies — Actions you can take to Reduce Your Landslide Risk</div>
-            <div class="resource-card__desc">Concrete actions and strategies to reduce landslide risk</div>
-            <span class="resource-card__badge">PDF</span>
+            <div class="pdf-card__body">
+              <div class="pdf-card__title">Strategies &mdash; Actions you can take to Reduce Your Landslide Risk</div>
+              <div class="pdf-card__desc">Concrete actions and strategies to reduce landslide risk</div>
+              <span class="pdf-card__badge" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+              </span>
+            </div>
           </a>
         </li>
 
