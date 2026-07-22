@@ -94,8 +94,9 @@ def _main_live() -> int:
     doesn't block the others.
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    run_started_at = datetime.now(timezone.utc)
     print(f"[defns-refresh] Output directory: {DATA_DIR}")
-    print(f"[defns-refresh] Started at:       {datetime.now(timezone.utc).isoformat()}")
+    print(f"[defns-refresh] Started at:       {run_started_at.isoformat()}")
     print(f"[defns-refresh] NDFD windows: {NDFD_WINDOWS_HOURS}")
     print(f"[defns-refresh] MRMS windows: {MRMS_WINDOWS_HOURS}")
 
@@ -157,7 +158,11 @@ def _main_live() -> int:
     precip_successes = sum(ndfd_window_ok.values()) + sum(mrms_window_ok.values())
     flagged_successes = sum(flagged_ok.values())
 
-    print(f"\n[defns-refresh] DONE - "
+    run_ended_at = datetime.now(timezone.utc)
+    total_elapsed = run_ended_at - run_started_at
+    print(f"\n[defns-refresh] Finished at:      {run_ended_at.isoformat()}")
+    print(f"[defns-refresh] Total elapsed:    {_format_duration(total_elapsed)}")
+    print(f"[defns-refresh] DONE - "
           f"{precip_successes}/{total_precip} precip files written, "
           f"{flagged_successes}/{total_flagged} flagged files written.")
 
@@ -177,15 +182,47 @@ NDFD_WINDOWS_HOURS = [12, 24, 48, 72]
 MRMS_WINDOWS_HOURS = [1, 24, 72]
 
 
+def _format_duration(td) -> str:
+    """Format a timedelta as a human-readable elapsed string.
+
+    Short durations (< 1 hour): "MMm SSs" e.g. "3m 42s"
+    Long durations (>= 1 hour): "Hh MMm SSs" e.g. "1h 18m 05s"
+
+    Used in refresh log output so operators can quickly scan which phase
+    is slow. Aggregate wall-clock across a full refresh is also formatted
+    with this to keep the format consistent.
+    """
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours > 0:
+        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+    return f"{minutes}m {seconds:02d}s"
+
+
 def _safely(fn, label: str) -> bool:
     """Run one of the refresh functions, capturing exceptions so a single
-    failure doesn't crash the whole script. Returns True on success."""
+    failure doesn't crash the whole script. Returns True on success.
+
+    Also times each phase: prints the phase header on entry, elapsed
+    duration on exit (both success and failure paths). Timing info goes
+    straight to stdout so it lands in the refresh log next to the phase's
+    own output - operators reviewing a slow run can pinpoint which
+    phase(s) took the time without any log-parsing tooling.
+    """
+    print(f"\n[defns-refresh] === {label} ===")
+    print(f"[defns-refresh]     started at {datetime.now(timezone.utc).isoformat()}")
+    t0 = datetime.now(timezone.utc)
     try:
-        print(f"\n[defns-refresh] === {label} ===")
         fn()
+        elapsed = datetime.now(timezone.utc) - t0
+        print(f"[defns-refresh]     done in {_format_duration(elapsed)}")
         return True
     except Exception as e:
-        print(f"[defns-refresh] {label} FAILED: {type(e).__name__}: {e}")
+        elapsed = datetime.now(timezone.utc) - t0
+        print(f"[defns-refresh] {label} FAILED after "
+              f"{_format_duration(elapsed)}: {type(e).__name__}: {e}")
         traceback.print_exc()
         return False
 
@@ -467,9 +504,10 @@ def _main_hindcast(which: str) -> int:
     import events as defns_events
 
     HISTORICAL_DIR.mkdir(parents=True, exist_ok=True)
+    hindcast_started_at = datetime.now(timezone.utc)
     print(f"[defns-refresh] Hindcast mode")
     print(f"[defns-refresh] Output directory: {HISTORICAL_DIR}")
-    print(f"[defns-refresh] Started at:       {datetime.now(timezone.utc).isoformat()}")
+    print(f"[defns-refresh] Started at:       {hindcast_started_at.isoformat()}")
 
     if which == "ALL":
         events_to_run = defns_events.HISTORICAL_EVENTS
@@ -495,14 +533,19 @@ def _main_hindcast(which: str) -> int:
     # forget about the others that exist on disk.
     _write_events_manifest(defns_events.HISTORICAL_EVENTS)
 
+    hindcast_ended_at = datetime.now(timezone.utc)
+    total_elapsed = hindcast_ended_at - hindcast_started_at
+    print(f"\n[defns-refresh] Finished at:      {hindcast_ended_at.isoformat()}")
+    print(f"[defns-refresh] Total elapsed:    {_format_duration(total_elapsed)}")
+
     if n_fail == 0:
-        print(f"\n[defns-refresh] DONE - {n_ok} event(s) processed.")
+        print(f"[defns-refresh] DONE - {n_ok} event(s) processed.")
         return 0
     elif n_ok > 0:
-        print(f"\n[defns-refresh] PARTIAL - {n_ok} ok, {n_fail} failed.")
+        print(f"[defns-refresh] PARTIAL - {n_ok} ok, {n_fail} failed.")
         return 2
     else:
-        print(f"\n[defns-refresh] ALL FAILED - {n_fail} events failed.")
+        print(f"[defns-refresh] ALL FAILED - {n_fail} events failed.")
         return 1
 
 

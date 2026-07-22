@@ -406,16 +406,18 @@ window.DEFNS_MAP = (function () {
       // rendering, and lets us be explicit about which fields the popup
       // can rely on existing.
       //
-      // Owner names (ownfrst / ownlast) are included as PARSED components
-      // rather than the concatenated ownname field. In NC, parcel
-      // ownership records are public information per the Public Records
-      // Act - it's legitimate to display them on a public-facing
-      // dashboard. Displaying parsed components is easier to format
-      // consistently than the raw ownname (which mixes individual and
-      // company records in varying formats).
+      // Owner name comes from the single `ownname` field (esriFieldTypeString,
+      // alias "Owner Name", length 200). Earlier attempts used ownfrst /
+      // ownlast as parsed subfields but those don't exist on this MapServer
+      // sublayer - the service silently returns undefined for unknown
+      // fields, so the popup was quietly showing em-dash for every parcel.
+      //
+      // In NC, parcel ownership records are public information per the
+      // Public Records Act, so displaying them on a public-facing dashboard
+      // is legitimate. See _parseOwnerName for the "LAST FIRST" -> "LAST,
+      // FIRST" transformation with entity detection.
       fields:  ['OBJECTID', 'parno', 'siteadd', 'scity', 'szip',
-                'cntyname', 'gisacres', 'transfdate',
-                'ownfrst', 'ownlast'],
+                'cntyname', 'gisacres', 'transfdate', 'ownname'],
       style: {
         // Red outline (#ff0909) at thin weight, no fill so debris flows
         // underneath remain visible. Keeps the layer present but visually
@@ -442,17 +444,13 @@ window.DEFNS_MAP = (function () {
     const acres  = (typeof p.gisacres === 'number' && isFinite(p.gisacres))
                    ? p.gisacres.toFixed(2) + ' ac'
                    : '\u2014';
-    // Compose owner name from parsed first/last fields. Handles:
-    //  - both present: "Jane Doe"
-    //  - only last present (common for company records): "Doe Enterprises LLC"
-    //  - only first present (rare, but graceful): "Jane"
-    //  - both missing/blank: em-dash
-    // Trim each part defensively - source data occasionally has stray
-    // whitespace from the aggregation pipeline.
-    const ownfrst = (p.ownfrst || '').trim();
-    const ownlast = (p.ownlast || '').trim();
-    const ownerParts = [ownfrst, ownlast].filter(Boolean);
-    const owner = ownerParts.length > 0 ? ownerParts.join(' ') : '\u2014';
+    // Owner name comes as a single `ownname` field in NC OneMap format,
+    // typically "LAST FIRST" or "LAST FIRST MIDDLE" (space-separated,
+    // last-name-first, often all caps). We parse to "LAST, FIRST MIDDLE"
+    // for cleaner reading, but skip parsing for common entity patterns
+    // like "SMITH ENTERPRISES LLC" where the "last name first" convention
+    // doesn't apply. See _parseOwnerName below.
+    const owner = _parseOwnerName(p.ownname) || '\u2014';
     // transfdate is an Esri epoch-ms timestamp; if present, format as date
     let updated = '\u2014';
     if (p.transfdate) {
@@ -493,6 +491,59 @@ window.DEFNS_MAP = (function () {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  // Parse an NC OneMap ownname string into a display-friendly form.
+  //
+  // NC parcel data typically stores ownname as "LAST FIRST" or
+  // "LAST FIRST MIDDLE" (space-separated, last name first, often all caps
+  // - this is the cadastral convention across most NC counties). Reading
+  // this order aloud sounds awkward ("SMITH JOHN A"), so we transform to
+  // "LAST, FIRST MIDDLE" ("SMITH, JOHN A") for the popup.
+  //
+  // The transformation is skipped when the record is an entity rather
+  // than a person - e.g., "SMITH ENTERPRISES LLC" would become the
+  // misleading "SMITH, ENTERPRISES LLC" under naive parsing. We detect
+  // entities by looking for common entity-suffix keywords as any token.
+  //
+  // Also passes through:
+  //   - Records that already contain a comma (assume they're pre-parsed)
+  //   - Single-token strings (mononyms, cropped values, unknown format)
+  //
+  // Returns the display string, or null if the input was empty/missing.
+  const _OWNER_ENTITY_KEYWORDS = new Set([
+    'LLC', 'L.L.C.', 'INC', 'INC.', 'CORP', 'CORP.', 'CORPORATION',
+    'LTD', 'LTD.', 'LP', 'LLP', 'PLLC',
+    'TRUST', 'ESTATE', 'FAMILY',
+    'CHURCH', 'MINISTRY', 'MINISTRIES', 'ASSOCIATION', 'ASSN', 'ASSOC',
+    'COMPANY', 'CO', 'CO.',
+    'PARTNERSHIP', 'PARTNERS', 'GROUP',
+    'FARMS', 'PROPERTIES', 'HOLDINGS', 'INVESTMENTS',
+    'ENTERPRISES', 'VENTURES', 'FOUNDATION',
+    'DEVELOPMENT', 'DEVELOPERS',
+    'AUTHORITY', 'DEPARTMENT', 'DEPT',
+  ]);
+  function _parseOwnerName(raw) {
+    const s = (raw || '').trim();
+    if (!s) return null;
+
+    // Already comma-formatted - trust the upstream format.
+    if (s.indexOf(',') !== -1) return s;
+
+    const tokens = s.split(/\s+/);
+    if (tokens.length < 2) return s;   // mononym / truncated / single-name
+
+    // Entity detection - any token matches a known entity suffix?
+    for (const t of tokens) {
+      if (_OWNER_ENTITY_KEYWORDS.has(t.toUpperCase())) {
+        return s;   // display raw for entities
+      }
+    }
+
+    // Individual: "LAST FIRST [MIDDLE...]" -> "LAST, FIRST MIDDLE"
+    const lastName = tokens[0];
+    const rest     = tokens.slice(1).join(' ');
+    return lastName + ', ' + rest;
   }
 
   // ---- Overture building footprints layer (visual reference) --------------
@@ -777,19 +828,16 @@ window.DEFNS_MAP = (function () {
     }
   }
 
-  // Show or hide the "(zoom in to load)" hint next to the Buildings
-  // toggle. Same UX pattern as the parcels layer. Updated whenever
-  // zoom changes or the layer is toggled.
+  // Keep the "(zoom in to load)" hint next to the Buildings toggle. We
+  // intentionally leave the hint always visible (rather than toggling
+  // it in/out based on current zoom) - hiding it made the row height
+  // shift, which caused the layer name to jump above the checkbox
+  // baseline when the hint disappeared. Always-visible = consistent
+  // row height in the layers panel.
   function _updateBuildingsZoomHint() {
     const hint = document.getElementById('buildings-zoom-hint');
     if (!hint) return;
-    const layerOn =
-      document.getElementById('layer-buildings') &&
-      document.getElementById('layer-buildings').checked;
-    const tooFarOut = map.getZoom() < CFG.OVERTURE_BUILDINGS_MIN_ZOOM;
-    // Hint is visible only when the layer is toggled on AND the current
-    // zoom is below the load-threshold. Hidden otherwise.
-    hint.classList.toggle('is-hidden', !(layerOn && tooFarOut));
+    hint.classList.remove('is-hidden');
   }
 
   // ---- Public API ---------------------------------------------------------
