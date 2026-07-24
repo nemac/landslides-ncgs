@@ -1,0 +1,162 @@
+name: Refresh alert data (daily)
+
+# Runs the DEFNS data pipeline (scripts/refresh.py) once a day, commits any
+# changed files under alerts/data/ to master, and triggers the prod deploy so
+# the refreshed data reaches the live S3 dashboard.
+#
+# Cost: $0 — public repo (unlimited Actions minutes). No secrets: every
+# upstream data source is public, the push uses the built-in GITHUB_TOKEN, and
+# the deploy it triggers assumes an OIDC role (no stored AWS keys).
+
+on:
+  schedule:
+    # 04:00 UTC daily. GitHub cron is best-effort: runs can be delayed a few
+    # minutes under load and are occasionally skipped. Fine for a daily refresh.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+# Never run two refreshes at once.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # commit + push refreshed data to master
+  actions: write    # dispatch deploy-prod.yml via workflow_dispatch
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # Most days the debris gpkg is a cache hit and the run is quick. Headroom
+    # is for the cold path: the first run of each month re-fetches the ~225k
+    # NCGS debris polygons + augments them (several minutes) before the cache
+    # repopulates, plus the ~monthly ~754 MB Overture buildings extract.
+    timeout-minutes: 60
+
+    env:
+      # Stream refresh.py's progress live. Python block-buffers stdout when it
+      # isn't a TTY (as in CI), so without this the logs stay dark until the
+      # process exits, making a slow run impossible to diagnose in real time.
+      PYTHONUNBUFFERED: "1"
+      # Bound GDAL's HTTP layer. The MRMS reader opens remote GRIB via
+      # rasterio "/vsigzip//vsicurl/<url>", which uses GDAL's HTTP client —
+      # and unlike the requests-based fetchers it has NO default timeout. A
+      # stalled connection to IEM's mtarchive server otherwise hangs the whole
+      # job until the 45-min step timeout kills it (observed 2026-07-20). These
+      # make a stuck read fail fast so the Pass1->RadarOnly->Pass2 fallback
+      # chain can move on.
+      GDAL_HTTP_TIMEOUT: "30"
+      GDAL_HTTP_CONNECTTIMEOUT: "15"
+      GDAL_HTTP_MAX_RETRY: "3"
+      GDAL_HTTP_RETRY_DELAY: "2"
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        # Default persist-credentials keeps GITHUB_TOKEN wired up for the push.
+
+      # The NCGS debris-flow layer is ~225k polygons for the WNC bbox and is
+      # essentially static (last edited 2026-03; a susceptibility model, not a
+      # feed). scripts/refresh.py caches it locally as cache/debris_flows.gpkg
+      # with a 30-day TTL, but CI starts cold every run, so without this the
+      # pipeline re-paginates all 225k features + re-runs the county/HUC12
+      # spatial joins on every run (the dominant cost, ~10-20 min).
+      #
+      # Key by calendar month so the cache rotates ~monthly (matching the code's
+      # 30-day TTL): within a month it's a hit and refresh.py skips the fetch;
+      # the first run of a new month misses, re-fetches, and repopulates.
+      - name: Compute cache month
+        id: cachemonth
+        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache debris-flow gpkg
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: debris-gpkg-v1-${{ steps.cachemonth.outputs.ym }}
+          # Fall back to the previous month's cache if this month hasn't been
+          # built yet — refresh.py's TTL check then decides whether it's stale.
+          restore-keys: |
+            debris-gpkg-v1-
+
+      # scripts/refresh.py caches the ~754 MB Overture buildings layer for 30
+      # days, keyed off the manifest file's mtime. A fresh checkout resets that
+      # mtime to "now", so the cache would look permanently fresh and never
+      # re-extract in CI. Restore the manifest's true age from its embedded
+      # `generated_at` timestamp so the 30-day TTL fires (~monthly) as designed.
+      # Failure-safe: we never delete the manifest, so a failed extraction just
+      # retries next run.
+      - name: Restore buildings manifest mtime
+        run: |
+          python3 - <<'PY'
+          import json, os, datetime, pathlib
+          p = pathlib.Path("alerts/data/buildings/manifest.json")
+          if p.exists():
+              ts = json.loads(p.read_text())["generated_at"]
+              t = datetime.datetime.fromisoformat(ts).timestamp()
+              os.utime(p, (t, t))
+              print(f"Restored {p} mtime -> {ts}")
+          else:
+              print("No buildings manifest present; extraction will run.")
+          PY
+
+      # conda-forge provides libgdal-grib (the GRIB2 driver rasterio needs to
+      # read MRMS), which plain pip rasterio wheels don't reliably include.
+      - name: Set up environment (micromamba)
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: defns-refresh
+          create-args: >-
+            python=3.11
+            geopandas
+            rasterio
+            libgdal-grib
+            requests
+          init-shell: bash
+          cache-environment: true
+
+      # overturemaps + duckdb are pip-only (used only by the ~monthly buildings
+      # extraction; pulled here so the env is complete).
+      - name: Install pip-only deps
+        shell: bash -el {0}
+        run: pip install overturemaps duckdb
+
+      - name: Run refresh pipeline
+        shell: bash -el {0}
+        run: python scripts/refresh.py
+
+      - name: Commit refreshed data
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add alerts/data
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No data changes; nothing to commit or deploy."
+          else
+            git commit -m "chore(data): daily alert refresh"
+            git push origin HEAD:master
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Pushed refreshed data to master."
+          fi
+
+      # A push made with GITHUB_TOKEN does NOT trigger deploy-prod.yml's `push`
+      # event (GitHub blocks that recursion), so dispatch it explicitly.
+      # workflow_dispatch IS allowed to be triggered by GITHUB_TOKEN.
+      - name: Trigger production deploy
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy-prod.yml --ref master
+          echo "Dispatched deploy-prod.yml (S3 sync + CloudFront invalidation)."
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Refresh summary"
+            echo "- Data changed: \`${{ steps.commit.outputs.changed }}\`"
+            echo "- Deploy dispatched: \`${{ steps.commit.outputs.changed == 'true' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
