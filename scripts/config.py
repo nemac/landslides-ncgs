@@ -235,14 +235,15 @@ CACHE_TTL_DAYS = 30
 OVERTURE_BUILDINGS_SUBDIR = "buildings"          # subdirectory under alerts/data
 OVERTURE_BUILDINGS_MANIFEST_NAME = "manifest.json"  # inside that subdir
 OVERTURE_BUILDINGS_CACHE_TTL_DAYS = 30
-# Geometry simplification tolerance in degrees. ~0.000027 deg ~= 3 m at
-# WNC's latitude. Was 25m (2026-07-14) but that collapsed residential
-# building footprints (typical 10-15m per side) into 3-vertex triangles.
-# Bumped down to 3m (2026-07-14) to preserve recognizable building
-# shapes down to residential detail (e.g. garage bump-outs, bay windows).
-# Files are ~2-3x larger at this tolerance but stay manageable per-county
-# because we chunk by county and only load 4-6 counties at a time.
-OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0.000027
+# Geometry simplification tolerance in degrees. Set to 0 (2026-07-22) to
+# preserve full source-fidelity building shapes. Coordinate precision below
+# still snaps vertices to a ~1.1m grid on write, which acts as a mild
+# implicit simplification without dropping vertices the way Douglas-Peucker
+# would. Rural WNC buildings look unchanged (Microsoft's ML pipeline
+# already regularizes them upstream); urban/OSM-mapped buildings gain back
+# the bay windows, angled porches, and courtyard detail our old 3m
+# simplification was smoothing away.
+OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0.0
 # Coordinate decimal precision. 5 decimals ~= 1.1 m at the equator - still
 # well within visual accuracy for building footprints (buildings are
 # multiple meters across; sub-meter geometry precision is invisible on

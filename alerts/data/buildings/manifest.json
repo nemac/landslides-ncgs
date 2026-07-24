@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-14T20:10:49.878708+00:00",
+  "generated_at": "2026-07-22T19:12:48.909374+00:00",
   "source": "Overture Maps Foundation",
   "bbox": [
     -84.5,
@@ -7,11 +7,11 @@
     -81.0,
     36.7
   ],
-  "simplify_tolerance_deg": 2.7e-05,
+  "simplify_tolerance_deg": 0.0,
   "min_area_sqm": 20.0,
   "county_count": 77,
   "total_features": 2797341,
-  "total_size_mb": 754.14,
+  "total_size_mb": 840.87,
   "counties": [
     {
       "geoid": "13111",
@@ -25,7 +25,7 @@
       ],
       "count": 19347,
       "file": "buildings/13111.geojson",
-      "size_mb": 5.2
+      "size_mb": 5.61
     },
     {
       "geoid": "13123",
@@ -67,7 +67,7 @@
       ],
       "count": 12732,
       "file": "buildings/13241.geojson",
-      "size_mb": 3.46
+      "size_mb": 3.78
     },
     {
       "geoid": "13281",
@@ -81,7 +81,7 @@
       ],
       "count": 11535,
       "file": "buildings/13281.geojson",
-      "size_mb": 3.12
+      "size_mb": 3.4
     },
     {
       "geoid": "13291",
@@ -95,7 +95,7 @@
       ],
       "count": 17616,
       "file": "buildings/13291.geojson",
-      "size_mb": 4.76
+      "size_mb": 5.18
     },
     {
       "geoid": "37003",
@@ -109,7 +109,7 @@
       ],
       "count": 28907,
       "file": "buildings/37003.geojson",
-      "size_mb": 7.75
+      "size_mb": 8.33
     },
     {
       "geoid": "37005",
@@ -123,7 +123,7 @@
       ],
       "count": 9256,
       "file": "buildings/37005.geojson",
-      "size_mb": 2.45
+      "size_mb": 2.59
     },
     {
       "geoid": "37009",
@@ -137,7 +137,7 @@
       ],
       "count": 24501,
       "file": "buildings/37009.geojson",
-      "size_mb": 6.45
+      "size_mb": 6.76
     },
     {
       "geoid": "37011",
@@ -151,21 +151,21 @@
       ],
       "count": 18168,
       "file": "buildings/37011.geojson",
-      "size_mb": 4.88
+      "size_mb": 5.27
     },
     {
       "geoid": "37021",
       "name": "Buncombe County",
       "state": "37",
       "bbox": [
-        -82.87361,
+        -82.87362,
         35.42359,
         -82.1702,
         35.81778
       ],
-      "count": 161834,
+      "count": 161832,
       "file": "buildings/37021.geojson",
-      "size_mb": 43.58
+      "size_mb": 52.0
     },
     {
       "geoid": "37023",
@@ -179,7 +179,7 @@
       ],
       "count": 58244,
       "file": "buildings/37023.geojson",
-      "size_mb": 15.59
+      "size_mb": 17.01
     },
     {
       "geoid": "37027",
@@ -193,7 +193,7 @@
       ],
       "count": 50076,
       "file": "buildings/37027.geojson",
-      "size_mb": 13.41
+      "size_mb": 14.41
     },
     {
       "geoid": "37035",
@@ -201,13 +201,13 @@
       "state": "37",
       "bbox": [
         -81.52444,
-        35.54808,
+        35.54807,
         -80.99971,
         35.8259
       ],
       "count": 85043,
       "file": "buildings/37035.geojson",
-      "size_mb": 23.0
+      "size_mb": 24.89
     },
     {
       "geoid": "37039",
@@ -221,7 +221,7 @@
       ],
       "count": 23768,
       "file": "buildings/37039.geojson",
-      "size_mb": 6.33
+      "size_mb": 6.81
     },
     {
       "geoid": "37043",
@@ -235,7 +235,7 @@
       ],
       "count": 11315,
       "file": "buildings/37043.geojson",
-      "size_mb": 3.04
+      "size_mb": 3.3
     },
     {
       "geoid": "37045",
@@ -249,7 +249,7 @@
       ],
       "count": 62946,
       "file": "buildings/37045.geojson",
-      "size_mb": 16.9
+      "size_mb": 18.07
     },
     {
       "geoid": "37071",
@@ -263,7 +263,7 @@
       ],
       "count": 108339,
       "file": "buildings/37071.geojson",
-      "size_mb": 29.03
+      "size_mb": 31.11
     },
     {
       "geoid": "37075",
@@ -273,11 +273,11 @@
         -83.99579,
         35.2261,
         -83.58736,
-        35.45255
+        35.45256
       ],
       "count": 7319,
       "file": "buildings/37075.geojson",
-      "size_mb": 1.95
+      "size_mb": 2.09
     },
     {
       "geoid": "37087",
@@ -291,7 +291,7 @@
       ],
       "count": 45010,
       "file": "buildings/37087.geojson",
-      "size_mb": 12.09
+      "size_mb": 13.15
     },
     {
       "geoid": "37089",
@@ -303,9 +303,9 @@
         -82.2639,
         35.49763
       ],
-      "count": 63003,
+      "count": 63005,
       "file": "buildings/37089.geojson",
-      "size_mb": 17.23
+      "size_mb": 19.07
     },
     {
       "geoid": "37097",
@@ -319,7 +319,7 @@
       ],
       "count": 5621,
       "file": "buildings/37097.geojson",
-      "size_mb": 1.5
+      "size_mb": 1.61
     },
     {
       "geoid": "37099",
@@ -333,7 +333,7 @@
       ],
       "count": 30738,
       "file": "buildings/37099.geojson",
-      "size_mb": 8.38
+      "size_mb": 9.21
     },
     {
       "geoid": "37109",
@@ -347,7 +347,7 @@
       ],
       "count": 53313,
       "file": "buildings/37109.geojson",
-      "size_mb": 14.35
+      "size_mb": 17.27
     },
     {
       "geoid": "37111",
@@ -361,7 +361,7 @@
       ],
       "count": 29170,
       "file": "buildings/37111.geojson",
-      "size_mb": 7.79
+      "size_mb": 8.4
     },
     {
       "geoid": "37113",
@@ -375,7 +375,7 @@
       ],
       "count": 31675,
       "file": "buildings/37113.geojson",
-      "size_mb": 8.63
+      "size_mb": 9.46
     },
     {
       "geoid": "37115",
@@ -389,7 +389,7 @@
       ],
       "count": 21867,
       "file": "buildings/37115.geojson",
-      "size_mb": 5.78
+      "size_mb": 6.43
     },
     {
       "geoid": "37119",
@@ -403,7 +403,7 @@
       ],
       "count": 7930,
       "file": "buildings/37119.geojson",
-      "size_mb": 2.17
+      "size_mb": 2.37
     },
     {
       "geoid": "37121",
@@ -417,7 +417,7 @@
       ],
       "count": 13299,
       "file": "buildings/37121.geojson",
-      "size_mb": 3.54
+      "size_mb": 3.82
     },
     {
       "geoid": "37149",
@@ -431,7 +431,7 @@
       ],
       "count": 16473,
       "file": "buildings/37149.geojson",
-      "size_mb": 4.49
+      "size_mb": 4.89
     },
     {
       "geoid": "37161",
@@ -445,7 +445,7 @@
       ],
       "count": 50291,
       "file": "buildings/37161.geojson",
-      "size_mb": 13.43
+      "size_mb": 14.42
     },
     {
       "geoid": "37173",
@@ -459,7 +459,7 @@
       ],
       "count": 12538,
       "file": "buildings/37173.geojson",
-      "size_mb": 3.35
+      "size_mb": 3.62
     },
     {
       "geoid": "37175",
@@ -467,13 +467,13 @@
       "state": "37",
       "bbox": [
         -83.05384,
-        35.04367,
+        35.04366,
         -82.58661,
         35.40342
       ],
-      "count": 23122,
+      "count": 23123,
       "file": "buildings/37175.geojson",
-      "size_mb": 6.32
+      "size_mb": 6.93
     },
     {
       "geoid": "37189",
@@ -487,7 +487,7 @@
       ],
       "count": 32608,
       "file": "buildings/37189.geojson",
-      "size_mb": 8.72
+      "size_mb": 9.57
     },
     {
       "geoid": "37193",
@@ -501,7 +501,7 @@
       ],
       "count": 36161,
       "file": "buildings/37193.geojson",
-      "size_mb": 9.6
+      "size_mb": 10.13
     },
     {
       "geoid": "37199",
@@ -515,7 +515,7 @@
       ],
       "count": 16605,
       "file": "buildings/37199.geojson",
-      "size_mb": 4.42
+      "size_mb": 4.77
     },
     {
       "geoid": "45007",
@@ -523,13 +523,13 @@
       "state": "45",
       "bbox": [
         -82.52374,
-        34.79983,
+        34.79982,
         -82.47112,
         34.81809
       ],
-      "count": 893,
+      "count": 892,
       "file": "buildings/45007.geojson",
-      "size_mb": 0.25
+      "size_mb": 0.27
     },
     {
       "geoid": "45021",
@@ -543,7 +543,7 @@
       ],
       "count": 35224,
       "file": "buildings/45021.geojson",
-      "size_mb": 9.43
+      "size_mb": 10.1
     },
     {
       "geoid": "45023",
@@ -557,7 +557,7 @@
       ],
       "count": 1122,
       "file": "buildings/45023.geojson",
-      "size_mb": 0.3
+      "size_mb": 0.31
     },
     {
       "geoid": "45045",
@@ -571,7 +571,7 @@
       ],
       "count": 163806,
       "file": "buildings/45045.geojson",
-      "size_mb": 44.95
+      "size_mb": 52.53
     },
     {
       "geoid": "45073",
@@ -585,7 +585,7 @@
       ],
       "count": 10510,
       "file": "buildings/45073.geojson",
-      "size_mb": 2.89
+      "size_mb": 3.14
     },
     {
       "geoid": "45077",
@@ -599,7 +599,7 @@
       ],
       "count": 48643,
       "file": "buildings/45077.geojson",
-      "size_mb": 13.19
+      "size_mb": 14.39
     },
     {
       "geoid": "45083",
@@ -613,7 +613,7 @@
       ],
       "count": 165262,
       "file": "buildings/45083.geojson",
-      "size_mb": 44.22
+      "size_mb": 46.52
     },
     {
       "geoid": "45087",
@@ -627,7 +627,7 @@
       ],
       "count": 3197,
       "file": "buildings/45087.geojson",
-      "size_mb": 0.84
+      "size_mb": 0.89
     },
     {
       "geoid": "45091",
@@ -641,7 +641,7 @@
       ],
       "count": 113246,
       "file": "buildings/45091.geojson",
-      "size_mb": 31.12
+      "size_mb": 44.04
     },
     {
       "geoid": "47001",
@@ -655,7 +655,7 @@
       ],
       "count": 43656,
       "file": "buildings/47001.geojson",
-      "size_mb": 11.87
+      "size_mb": 14.22
     },
     {
       "geoid": "47009",
@@ -667,9 +667,9 @@
         -83.67961,
         35.8865
       ],
-      "count": 73074,
+      "count": 73075,
       "file": "buildings/47009.geojson",
-      "size_mb": 19.91
+      "size_mb": 21.79
     },
     {
       "geoid": "47013",
@@ -683,7 +683,7 @@
       ],
       "count": 27292,
       "file": "buildings/47013.geojson",
-      "size_mb": 7.31
+      "size_mb": 7.97
     },
     {
       "geoid": "47019",
@@ -697,7 +697,7 @@
       ],
       "count": 36705,
       "file": "buildings/47019.geojson",
-      "size_mb": 9.8
+      "size_mb": 10.56
     },
     {
       "geoid": "47025",
@@ -711,7 +711,7 @@
       ],
       "count": 25717,
       "file": "buildings/47025.geojson",
-      "size_mb": 6.83
+      "size_mb": 7.3
     },
     {
       "geoid": "47029",
@@ -723,9 +723,9 @@
         -82.90126,
         36.17498
       ],
-      "count": 28397,
+      "count": 28396,
       "file": "buildings/47029.geojson",
-      "size_mb": 7.55
+      "size_mb": 8.09
     },
     {
       "geoid": "47057",
@@ -739,7 +739,7 @@
       ],
       "count": 20637,
       "file": "buildings/47057.geojson",
-      "size_mb": 5.49
+      "size_mb": 5.89
     },
     {
       "geoid": "47059",
@@ -753,7 +753,7 @@
       ],
       "count": 54893,
       "file": "buildings/47059.geojson",
-      "size_mb": 14.61
+      "size_mb": 15.48
     },
     {
       "geoid": "47063",
@@ -765,9 +765,9 @@
         -83.08351,
         36.33329
       ],
-      "count": 37901,
+      "count": 37900,
       "file": "buildings/47063.geojson",
-      "size_mb": 10.15
+      "size_mb": 12.48
     },
     {
       "geoid": "47067",
@@ -781,7 +781,7 @@
       ],
       "count": 7422,
       "file": "buildings/47067.geojson",
-      "size_mb": 1.94
+      "size_mb": 2.09
     },
     {
       "geoid": "47073",
@@ -793,9 +793,9 @@
         -82.60151,
         36.59379
       ],
-      "count": 42616,
+      "count": 42617,
       "file": "buildings/47073.geojson",
-      "size_mb": 11.32
+      "size_mb": 12.06
     },
     {
       "geoid": "47089",
@@ -803,13 +803,13 @@
       "state": "47",
       "bbox": [
         -83.70501,
-        35.905,
+        35.90498,
         -83.23817,
         36.191
       ],
-      "count": 38455,
+      "count": 38456,
       "file": "buildings/47089.geojson",
-      "size_mb": 10.34
+      "size_mb": 11.21
     },
     {
       "geoid": "47091",
@@ -823,7 +823,7 @@
       ],
       "count": 15923,
       "file": "buildings/47091.geojson",
-      "size_mb": 4.23
+      "size_mb": 4.53
     },
     {
       "geoid": "47093",
@@ -837,7 +837,7 @@
       ],
       "count": 198443,
       "file": "buildings/47093.geojson",
-      "size_mb": 54.11
+      "size_mb": 61.45
     },
     {
       "geoid": "47105",
@@ -849,9 +849,9 @@
         -84.13454,
         35.89562
       ],
-      "count": 31081,
+      "count": 31080,
       "file": "buildings/47105.geojson",
-      "size_mb": 8.62
+      "size_mb": 9.58
     },
     {
       "geoid": "47107",
@@ -865,7 +865,7 @@
       ],
       "count": 3361,
       "file": "buildings/47107.geojson",
-      "size_mb": 0.9
+      "size_mb": 0.96
     },
     {
       "geoid": "47123",
@@ -879,7 +879,7 @@
       ],
       "count": 32246,
       "file": "buildings/47123.geojson",
-      "size_mb": 8.69
+      "size_mb": 9.37
     },
     {
       "geoid": "47129",
@@ -889,11 +889,11 @@
         -84.5002,
         35.98953,
         -84.34294,
-        36.13336
+        36.13337
       ],
       "count": 2640,
       "file": "buildings/47129.geojson",
-      "size_mb": 0.71
+      "size_mb": 0.76
     },
     {
       "geoid": "47139",
@@ -907,7 +907,7 @@
       ],
       "count": 4475,
       "file": "buildings/47139.geojson",
-      "size_mb": 1.19
+      "size_mb": 1.28
     },
     {
       "geoid": "47145",
@@ -921,7 +921,7 @@
       ],
       "count": 13960,
       "file": "buildings/47145.geojson",
-      "size_mb": 3.8
+      "size_mb": 4.22
     },
     {
       "geoid": "47151",
@@ -935,7 +935,7 @@
       ],
       "count": 6063,
       "file": "buildings/47151.geojson",
-      "size_mb": 1.62
+      "size_mb": 1.76
     },
     {
       "geoid": "47155",
@@ -943,13 +943,13 @@
       "state": "47",
       "bbox": [
         -83.79365,
-        35.56426,
+        35.56425,
         -83.26176,
         36.04187
       ],
       "count": 65633,
       "file": "buildings/47155.geojson",
-      "size_mb": 17.73
+      "size_mb": 19.38
     },
     {
       "geoid": "47163",
@@ -961,9 +961,9 @@
         -81.88689,
         36.61601
       ],
-      "count": 88233,
+      "count": 88235,
       "file": "buildings/47163.geojson",
-      "size_mb": 23.74
+      "size_mb": 25.5
     },
     {
       "geoid": "47171",
@@ -977,7 +977,7 @@
       ],
       "count": 12014,
       "file": "buildings/47171.geojson",
-      "size_mb": 3.21
+      "size_mb": 3.45
     },
     {
       "geoid": "47173",
@@ -991,7 +991,7 @@
       ],
       "count": 15188,
       "file": "buildings/47173.geojson",
-      "size_mb": 4.04
+      "size_mb": 4.31
     },
     {
       "geoid": "47179",
@@ -1005,7 +1005,7 @@
       ],
       "count": 67910,
       "file": "buildings/47179.geojson",
-      "size_mb": 18.35
+      "size_mb": 19.95
     },
     {
       "geoid": "51077",
@@ -1019,7 +1019,7 @@
       ],
       "count": 8502,
       "file": "buildings/51077.geojson",
-      "size_mb": 2.23
+      "size_mb": 2.32
     },
     {
       "geoid": "51105",
@@ -1033,7 +1033,7 @@
       ],
       "count": 10312,
       "file": "buildings/51105.geojson",
-      "size_mb": 2.72
+      "size_mb": 2.9
     },
     {
       "geoid": "51169",
@@ -1047,7 +1047,7 @@
       ],
       "count": 13101,
       "file": "buildings/51169.geojson",
-      "size_mb": 3.45
+      "size_mb": 3.63
     },
     {
       "geoid": "51173",
@@ -1061,7 +1061,7 @@
       ],
       "count": 286,
       "file": "buildings/51173.geojson",
-      "size_mb": 0.07
+      "size_mb": 0.08
     },
     {
       "geoid": "51191",
@@ -1075,7 +1075,7 @@
       ],
       "count": 19541,
       "file": "buildings/51191.geojson",
-      "size_mb": 5.23
+      "size_mb": 5.6
     },
     {
       "geoid": "51520",
@@ -1083,13 +1083,13 @@
       "state": "51",
       "bbox": [
         -82.23563,
-        36.59455,
+        36.59456,
         -82.10709,
         36.67128
       ],
-      "count": 8676,
+      "count": 8674,
       "file": "buildings/51520.geojson",
-      "size_mb": 2.34
+      "size_mb": 2.57
     }
   ]
 }
