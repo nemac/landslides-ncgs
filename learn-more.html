@@ -122,6 +122,30 @@
     .featured-banner__cta:hover,
     .featured-banner__cta:focus-visible { background: #a04000; border-color: var(--clr-focus); }
 
+    /* Coming Soon state for featured banner + badge (matches index.html) */
+    .featured-banner--coming-soon { cursor: not-allowed; pointer-events: none; }
+    .featured-banner--coming-soon .featured-banner__bg { opacity: 0.25; }
+    .featured-banner--coming-soon .featured-banner__title { opacity: 0.6; }
+    .featured-banner--coming-soon .featured-banner__cta { display: none; }
+    .coming-soon-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 2;
+      background: transparent;
+      color: #FFD166;
+      border: 1.5px solid #FFD166;
+      font-family: var(--font-main);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
     .ext-icon { display: inline-block; width: 0.8em; height: 0.8em; margin-left: 0.3em; vertical-align: middle; opacity: 0.8; }
 
     /* Resource Cards */
@@ -253,12 +277,19 @@
   <main id="main-content" class="page-wrapper">
 
     <section class="resources-section" aria-labelledby="heading-storymaps">
-      <h2 class="section-heading" id="heading-storymaps">Select a resource below to explore selected landslide events, historical floods, regional geology, and more:</h2>
-      <a class="featured-banner"
-        href="intro-landslides.html"
+      <h2 class="section-heading" id="heading-storymaps">Select a resource below to explore selected landslide events, historical floods, regional geology, and more.</h2>
+      <!-- Featured banner (Coming Soon)
+           TO ENABLE: (1) remove the featured-banner--coming-soon class;
+           (2) remove aria-disabled and tabindex; (3) delete the coming-soon-badge span;
+           (4) update the aria-label to remove "coming soon".
+           The href already points to the live storymap URL. -->
+      <a class="featured-banner featured-banner--coming-soon"
+        href="https://storymaps.arcgis.com/stories/0c4e18cdf5b542ecb1662afc10965f87"
         target="_blank" rel="noopener noreferrer"
-        aria-label="An Introduction to Landslides in Western North Carolina — opens in a new tab">
+        aria-disabled="true" tabindex="-1"
+        aria-label="An Introduction to Landslides in Western North Carolina — coming soon">
         <div class="featured-banner__bg" aria-hidden="true"></div>
+        <span class="coming-soon-badge" aria-hidden="true">Coming Soon</span>
         <div class="featured-banner__content">
           <div class="featured-banner__title">An Introduction to Landslides<br />in Western North Carolina</div>
           <span class="featured-banner__cta" aria-hidden="true">

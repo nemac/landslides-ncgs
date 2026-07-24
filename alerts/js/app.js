@@ -427,25 +427,14 @@
     _updateModeUI();
   }
 
-  // Show or hide the "zoom in to load" hint next to the NC Parcels toggle
-  // based on current map zoom. The hint is always present in the DOM (for
-  // screen-reader stability) but visually hidden via the .is-hidden class
-  // when not relevant. Updated on every zoomend so users see real-time
-  // feedback as they zoom in or out.
+  // Keep the "(zoom in to load)" hint next to the NC Parcels toggle
+  // always visible. We used to toggle it based on zoom, but hiding it
+  // shifted the row height and made the layer name jump above the
+  // checkbox baseline. Always-visible = consistent row height in the
+  // layers panel.
   function _wireParcelsZoomHint() {
-    if (!els.parcelsZoomHint || !window.DEFNS_MAP) return;
-    const map = window.DEFNS_MAP._internalMap();
-    if (!map) return;
-
-    const minZoom = (window.DEFNS_CONFIG &&
-                     window.DEFNS_CONFIG.NCONEMAP_PARCELS_MIN_ZOOM) || 14;
-
-    function update() {
-      const tooFarOut = map.getZoom() < minZoom;
-      els.parcelsZoomHint.classList.toggle('is-hidden', !tooFarOut);
-    }
-    map.on('zoomend', update);
-    update();   // initial state
+    if (!els.parcelsZoomHint) return;
+    els.parcelsZoomHint.classList.remove('is-hidden');
   }
 
   // =====================================================================

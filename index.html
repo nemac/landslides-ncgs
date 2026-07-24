@@ -173,20 +173,20 @@
     .nav-card__desc--muted  { color: #5a7a60; }
     .coming-soon-badge {
       position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
+      top: 10px;
+      right: 12px;
       z-index: 2;
-      background: #FFD166;
-      color: #1a1a1a;
+      background: transparent;
+      color: #FFD166;
+      border: 1.5px solid #FFD166;
       font-family: var(--font-main);
       font-size: 0.78rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      padding: 0.3rem 0.9rem;
+      padding: 0.25rem 0.7rem;
       border-radius: 999px;
       white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
       pointer-events: none;
     }
     .site-footer {
@@ -235,11 +235,14 @@
     <nav class="card-grid" aria-label="Site sections">
 
       <!-- 1. An Introduction to Landslides in Western North Carolina (Coming Soon)
-           TO ENABLE: (1) change href="#" to href="intro_landslides.html" (or the storymap URL);
-           (2) remove the nav-card--coming-soon class; (3) remove aria-disabled and tabindex;
-           (4) delete the coming-soon-badge span; (5) remove the --muted suffix from
-           nav-card__title--muted and nav-card__desc--muted. -->
-      <a class="nav-card nav-card--coming-soon" href="#" aria-disabled="true" tabindex="-1">
+           TO ENABLE: (1) remove the nav-card--coming-soon class;
+           (2) remove aria-disabled and tabindex; (3) delete the coming-soon-badge span;
+           (4) remove the --muted suffix from nav-card__title--muted and nav-card__desc--muted.
+           The href already points to the live storymap URL. -->
+      <a class="nav-card nav-card--coming-soon"
+         href="https://storymaps.arcgis.com/stories/0c4e18cdf5b542ecb1662afc10965f87"
+         target="_blank" rel="noopener noreferrer"
+         aria-disabled="true" tabindex="-1">
         <div class="nav-card__bg" style="background-image:url('assets/images/main-site/banner-intro-landslides.jpg');" aria-hidden="true"></div>
         <span class="coming-soon-badge" aria-hidden="true">Coming Soon</span>
         <div class="nav-card__content">
