@@ -25,9 +25,23 @@
     :focus:not(:focus-visible){outline:none;}
 
     .site-header{background:var(--clr-bg);padding:1.25rem 2rem;display:flex;align-items:center;gap:1.25rem;border-bottom:3px solid var(--clr-accent);flex-shrink:0;}
-    .site-header__logo{width:80px;height:80px;flex-shrink:0;border-radius:50%;overflow:hidden;border:2px solid var(--clr-accent);}
+    .site-header__logo{width: 100px; height: 100px;flex-shrink:0;border-radius:50%;overflow:hidden;border:2px solid var(--clr-accent);}
     .site-header__logo img{width:100%;height:100%;object-fit:contain;}
-    .site-header__text h1{font-size:clamp(1.3rem,3vw,2rem);font-weight:700;color:var(--clr-text);line-height:1.2;}
+    
+    .site-header__logo { display: block; text-decoration: none; transition: border-color 0.2s; }
+    .site-header__logo:hover, .site-header__logo:focus-visible { border-color: var(--clr-focus); }
+    .site-header__partner-logo {
+      margin-left: auto; flex-shrink: 0; display: block;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+      border: 2px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .site-header__partner-logo:hover, .site-header__partner-logo:focus-visible {
+      border-color: var(--clr-primary);
+      background: rgba(192, 76, 0, 0.1);
+    }
+    .site-header__partner-logo img { height: 80px; width: auto; display: block; }
+.site-header__text h1{font-size:clamp(1.3rem,3vw,2rem);font-weight:700;color:var(--clr-text);line-height:1.2;}
     .site-header__text p{font-size:clamp(0.85rem,1.4vw,0.95rem);color:var(--clr-text-muted);max-width:65ch;margin-top:0.3rem;}
 
     .site-nav{background:var(--clr-surface);border-bottom:1px solid var(--clr-border);position:sticky;top:0;z-index:100;flex-shrink:0;}
@@ -57,6 +71,10 @@
     .credit-card{background:var(--clr-surface);border:1px solid var(--clr-border);border-left:4px solid var(--clr-accent);border-radius:0 6px 6px 0;padding:1.25rem 1.5rem;}
     .credit-card__title{font-weight:700;font-size:1rem;color:var(--clr-text);margin-bottom:0.6rem;}
     .credit-card__members{font-size:0.875rem;color:var(--clr-text-muted);line-height:1.65;}
+    .credit-card__logo{display:flex;align-items:center;justify-content:center;height:120px;margin-bottom:1rem;}
+    .credit-card__logo img{max-height:120px;max-width:100%;width:auto;object-fit:contain;}
+    .credit-card__logo a{display:flex;align-items:center;justify-content:center;height:100%;text-decoration:none;transition:transform 0.2s, opacity 0.2s;}
+    .credit-card__logo a:hover, .credit-card__logo a:focus-visible{transform:scale(1.03);opacity:0.85;}
 
     .org-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1.25rem;}
     .org-card{background:var(--clr-surface);border:1px solid var(--clr-border);border-radius:6px;overflow:hidden;}
@@ -70,8 +88,8 @@
     .org-card__contact{display:inline-flex;align-items:center;gap:0.4rem;font-size:0.875rem;font-weight:700;color:var(--clr-text-muted);text-decoration:none;padding:0.4rem 0.9rem;border:1px solid var(--clr-border);border-radius:4px;transition:border-color 0.2s,color 0.2s,background 0.2s;}
     .org-card__contact:hover,.org-card__contact:focus-visible{border-color:var(--clr-accent);color:var(--clr-text);background:var(--clr-surface-2);}
 
-    .site-footer{background:var(--clr-surface);border-top:3px solid var(--clr-primary);padding:1.75rem 2rem;flex-shrink:0;}
-    .site-footer__inner{max-width:1200px;margin:0 auto;}
+    .site-footer{background:var(--clr-surface);border-top:3px solid var(--clr-primary);padding: 1.75rem 2rem 1.75rem calc(2rem + 100px + 1.25rem);flex-shrink:0;}
+    .site-footer__inner { /* full-width; content flushes left, aligning with header edge */ }
     .site-footer__org{font-size:1rem;font-weight:700;color:var(--clr-accent);}
     .site-footer__detail{font-size:0.9rem;color:var(--clr-text-muted);margin-top:0.25rem;}
     .site-footer__detail a{color:var(--clr-text-muted);text-decoration:underline;}
@@ -82,7 +100,9 @@
       .about-block__photo img{aspect-ratio:16/9;}
       .credits-grid,.org-grid{grid-template-columns:1fr;}
       .site-header{padding:1rem;}
-      .site-header__logo{width:60px;height:60px;}
+      .site-header__logo{width: 72px; height: 72px;}
+      .site-header__partner-logo img { height: 52px; }
+      .site-footer { padding: 1.25rem 1rem 1.25rem calc(1rem + 72px + 1.25rem); }
       .page-wrapper{padding:1.25rem 1rem 3rem;}
     }
   </style>
@@ -91,15 +111,16 @@
   <a class="skip-nav" href="#main-content">Skip to main content</a>
 
   <header class="site-header" role="banner">
-    <div class="site-header__logo">
-      <a href="index.html" aria-label="Return to home page">
-        <img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey seal" />
-      </a>
-    </div>
+    <a class="site-header__logo" href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer">
+      <img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
+    </a>
     <div class="site-header__text">
       <h1>Landslides in Western North Carolina</h1>
       <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
     </div>
+    <a class="site-header__partner-logo" href="https://www.deq.nc.gov/" target="_blank" rel="noopener noreferrer">
+      <img src="assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
+    </a>
   </header>
 
   <nav class="site-nav" aria-label="Main navigation">
@@ -134,10 +155,8 @@
     <section aria-labelledby="heading-disclaimer">
       <h2 class="section-heading" id="heading-disclaimer">Disclaimer</h2>
       <div class="disclaimer-box" role="note" aria-label="Legal disclaimer">
-        <div class="disclaimer-box__warning">Entrance into this website and use of these materials constitutes acceptance of this disclaimer of liability.</div>
-        <p>Therefore, users must be aware of data conditions and bear responsibility for the appropriate use of the information with respect to possible errors, original map scale, collection methodology, currency of data, and other conditions specific to current data.</p>
-        <p>In no event shall NCDEQ or its employees be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, injuries or death; procurement or substitute goods or services; loss of use, data or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of these data, even if advised of the possibility of such damage.</p>
-        <p>This website is being provided for the benefit of the general public. No representation is made that this website will meet the specific requirements of any person or will operate without error or interruption. All other conditions or warranties, express or implied, are disclaimed. It is the sole responsibility of the user to evaluate the accuracy, completeness, or usefulness of any information, opinion, advice or other content available through this website. DEQ may modify or remove map services, data and access methods at will.</p>
+        <div class="disclaimer-box__warning">USE OF THESE MATERIALS CONSTITUTES ACCEPTANCE OF THIS DISCLAIMER OF LIABILITY.</div>
+        <p>The NC Department of Environmental Quality (DEQ) is committed to offering access to current State geospatial information developed and maintained by DEQ at no charge. Although every effort has been made to ensure the accuracy of information, errors and conditions originating from sources used to develop the data may be reflected in the information supplied. The user must be aware of possible conditions and bear responsibility with respect to errors, collection methodologies, currency, and other conditions related to all data, web services or applications. While every effort has been made by data providers to ensure this information is accurate and reliable, there is no assumption of liability for any damages caused by inaccuracies in the data, web services or applications. There is no warranty, express or implied, nor does the fact of access or distribution constitute any such warranty. Written release agreements to authorize use of the geospatial data, web services, and applications found on the NC DEQ website are not required and will not be issued. The use of trade names or commercial products does not constitute their endorsement by DEQ or North Carolina State Government. Any sale of this data must not violate applicable state laws or regulations.</p>
       </div>
     </section>
 
@@ -147,10 +166,12 @@
       <h2 class="section-heading" id="heading-credits">Credits</h2>
       <div class="credits-grid">
         <div class="credit-card">
+          <div class="credit-card__logo"><a href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer" aria-label="North Carolina Geological Survey — opens in a new tab"><img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey seal" loading="lazy" /></a></div>
           <div class="credit-card__title">NCDEQ / NCGS Team</div>
           <div class="credit-card__members">David Korte, Nick Bozdog<br><span style="font-size:0.9em;opacity:0.75;">Rick Wooten, Corey Scheip, Jesse Hill, Tommy Douglas</span></div>
         </div>
         <div class="credit-card">
+          <div class="credit-card__logo"><a href="https://www.unca.edu/nemac/" target="_blank" rel="noopener noreferrer" aria-label="NEMAC website — opens in a new tab"><img src="assets/images/shared/nemac_logo_h_white_nemac_logo_h_white_tpt.png" alt="NEMAC logo" loading="lazy" /></a></div>
           <div class="credit-card__title">NEMAC Team</div>
           <div class="credit-card__members">Karin Rogers, Greg Dobson, Ian Johnson, Dave Michelson, Grace Chien, Jeff Bliss<br><span style="font-size:0.9em;opacity:0.75;">Jim Fox, Nina Hall, Matthew Geiger, Mary Spivey, Katie Caruso (student intern), Kelsey Hall (student intern), Josh Ward (student intern)</span></div>
         </div>
@@ -221,8 +242,11 @@
       <div class="site-footer__org">
         <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
           target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;"
-          aria-label="North Carolina Geological Survey — opens in a new tab">North Carolina Geological Survey</a>
+          aria-label="North Carolina Geological Survey — opens in a new tab">
+          North Carolina Geological Survey
+        </a>
       </div>
+      <div class="site-footer__detail">Department of Environmental Quality</div>
       <div class="site-footer__detail">Asheville Regional Office</div>
       <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
     </div>
