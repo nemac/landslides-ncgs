@@ -55,12 +55,26 @@
       border-bottom: 3px solid var(--clr-accent);
     }
     .site-header__logo {
-      width: 80px; height: 80px; flex-shrink: 0;
+      width: 100px; height: 100px; flex-shrink: 0;
       border-radius: 50%; overflow: hidden;
       border: 2px solid var(--clr-accent);
     }
     .site-header__logo img { width: 100%; height: 100%; object-fit: contain; }
-    .site-header__text h1 {
+    
+    .site-header__logo { display: block; text-decoration: none; transition: border-color 0.2s; }
+    .site-header__logo:hover, .site-header__logo:focus-visible { border-color: var(--clr-focus); }
+    .site-header__partner-logo {
+      margin-left: auto; flex-shrink: 0; display: block;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+      border: 2px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .site-header__partner-logo:hover, .site-header__partner-logo:focus-visible {
+      border-color: var(--clr-primary);
+      background: rgba(192, 76, 0, 0.1);
+    }
+    .site-header__partner-logo img { height: 80px; width: auto; display: block; }
+.site-header__text h1 {
       font-size: clamp(1.3rem, 3vw, 2rem);
       font-weight: 700; color: var(--clr-text); line-height: 1.2;
     }
@@ -192,16 +206,18 @@
     .site-footer {
       background-color: var(--clr-surface);
       border-top: 3px solid var(--clr-primary);
-      padding: 1.75rem 2rem; margin-top: 3rem;
+      padding: 1.75rem 2rem 1.75rem calc(2rem + 100px + 1.25rem); margin-top: 3rem;
     }
-    .site-footer__inner { max-width: 1200px; margin: 0 auto; }
+    .site-footer__inner { /* full-width; content flushes left, aligning with header edge */ }
     .site-footer__org { font-size: 1rem; font-weight: 700; color: var(--clr-accent); }
     .site-footer__detail { font-size: 0.9rem; color: var(--clr-text-muted); margin-top: 0.25rem; }
     .site-footer__detail a { color: var(--clr-text-muted); text-decoration: underline; }
     .site-footer__detail a:hover { color: var(--clr-text); }
     @media (max-width: 600px) {
       .site-header { padding: 1rem; }
-      .site-header__logo { width: 60px; height: 60px; }
+      .site-header__logo { width: 72px; height: 72px; }
+      .site-header__partner-logo img { height: 52px; }
+      .site-footer { padding: 1.25rem 1rem 1.25rem calc(1rem + 72px + 1.25rem); }
       .site-nav__item a { padding: 0.75rem 1rem; font-size: 0.85rem; }
       .main-content { padding: 1.25rem 1rem 3rem; }
       .nav-card { padding: 1.25rem; }
@@ -212,13 +228,16 @@
   <a class="skip-nav" href="#main-content">Skip to main content</a>
 
   <header class="site-header" role="banner">
-    <div class="site-header__logo" aria-hidden="true">
-      <img src="assets/images/shared/ncgs-seal.png" alt="" />
-    </div>
+    <a class="site-header__logo" href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer">
+      <img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
+    </a>
     <div class="site-header__text">
       <h1>Landslides in Western North Carolina</h1>
       <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
     </div>
+    <a class="site-header__partner-logo" href="https://www.deq.nc.gov/" target="_blank" rel="noopener noreferrer">
+      <img src="assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
+    </a>
   </header>
 
   <nav class="site-nav" aria-label="Main navigation">
@@ -287,7 +306,14 @@
 
   <footer class="site-footer" role="contentinfo">
     <div class="site-footer__inner">
-      <div class="site-footer__org">North Carolina Geological Survey</div>
+      <div class="site-footer__org">
+        <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
+          target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;"
+          aria-label="North Carolina Geological Survey — opens in a new tab">
+          North Carolina Geological Survey
+        </a>
+      </div>
+      <div class="site-footer__detail">Department of Environmental Quality</div>
       <div class="site-footer__detail">Asheville Regional Office</div>
       <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
     </div>
