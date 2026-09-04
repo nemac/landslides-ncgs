@@ -190,11 +190,36 @@ window.DEFNS_MAP = (function () {
 
   // ---- Basemaps -----------------------------------------------------------
   function _addBasemaps() {
+    // Default basemap changed 2026-08 from CartoDB Positron to Esri Gray:
+    //   - CartoDB began requiring an API key on basemaps.cartocdn.com in
+    //     late Aug 2026; unauthenticated raster requests now render
+    //     watermarked "API KEY REQUIRED" tiles worldwide.
+    //   - Esri's "legacy" raster basemaps (accessed via L.esri.basemapLayer)
+    //     are still keyless, and we already have esri-leaflet loaded for
+    //     the parcels layer - zero new dependencies.
+    //   - Visual style is very close to CartoDB Positron: muted, light,
+    //     minimal. Attribution is added automatically by the basemapLayer.
+    //
+    // Basemap options (updated 2026-08):
+    //   1. Light (Esri Gray)      - keyless, default, close to Positron style
+    //   2. Dark (Esri Dark Gray)  - keyless, dark counterpart of #1
+    //   3. Streets (OpenStreetMap)- keyless fallback if Esri ever deprecates
+    //   4. Satellite (Esri Imagery)- keyless, raw satellite/aerial imagery
+    //
+    // Both Esri Gray and Dark Gray bundle a base tile layer + label overlay
+    // into a single L.layerGroup so the basemap selector treats them as
+    // one item. Adding just the base layer without labels leaves the map
+    // unlabelled (no city/road names); pairing them gives the standard
+    // CartoDB-Positron-like experience.
     const basemaps = {
-      'Light (CartoDB Positron)': L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        { attribution: '\u00a9 OpenStreetMap \u00a9 CartoDB', maxZoom: 19 }
-      ),
+      'Light (Esri Gray)': L.layerGroup([
+        L.esri.basemapLayer('Gray'),
+        L.esri.basemapLayer('GrayLabels'),
+      ]),
+      'Dark (Esri Dark Gray)': L.layerGroup([
+        L.esri.basemapLayer('DarkGray'),
+        L.esri.basemapLayer('DarkGrayLabels'),
+      ]),
       'Streets (OpenStreetMap)': L.tileLayer(
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         { attribution: '\u00a9 OpenStreetMap contributors', maxZoom: 19 }
@@ -205,7 +230,10 @@ window.DEFNS_MAP = (function () {
         { attribution: 'Tiles \u00a9 Esri', maxZoom: 19 }
       )
     };
-    basemaps['Light (CartoDB Positron)'].addTo(map);
+    // Default = Dark (Esri Dark Gray). All four options remain available
+    // via the basemap selector; this just picks which one is on the map
+    // when the page first loads.
+    basemaps['Dark (Esri Dark Gray)'].addTo(map);
     L.control.layers(basemaps, null, { position: 'topright', collapsed: true })
       .addTo(map);
   }

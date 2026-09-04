@@ -136,14 +136,49 @@ a:hover, a:focus { color: var(--accent-1); }
   margin-bottom: var(--sp-2);
 }
 
-.logo img {
-  width: 72px;
-  height: 72px;
+/* Left logo (NCGS seal) - round, 96x96. Bumped from 72px (2026-08)
+   to give the primary agency mark more presence in the header. */
+.logo-left img {
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   border: 2px solid var(--site-border);
   background: var(--site-bg);
   object-fit: contain;
   display: block;
+}
+
+/* Right logo (NC DEQ) - rectangular, ~216x80 preserving native aspect
+   ratio (~2.7:1). No border/circle treatment - it's a wordmark, not a
+   seal. object-fit: contain keeps the artwork intact if a future image
+   version has a different aspect ratio. */
+.logo-right img {
+  width: 216px;
+  height: 80px;
+  border: 0;
+  background: transparent;
+  object-fit: contain;
+  display: block;
+}
+
+/* Anchor wrapper that makes each logo clickable. Extracted to its own
+   class so hover styling is consistent across both logos even though
+   they have different shapes/sizes. box-shadow (instead of border or
+   outline) picks up the wrapper's border-radius automatically - so
+   the highlight is circular around the seal and rectangular around
+   the DEQ wordmark without any per-logo overrides. */
+.logo-link {
+  display: inline-block;
+  border-radius: 50%;
+  transition: box-shadow 0.15s ease-in-out;
+}
+.logo-right .logo-link {
+  border-radius: 4px;   /* softer corners for rectangular logo */
+}
+.logo-link:hover,
+.logo-link:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-1);
+  outline: none;   /* replace default focus outline with our themed one */
 }
 
 .header-text { flex: 1; min-width: 0; }
@@ -360,6 +395,58 @@ body {
 .sidebar-footer-links {
   font-size: var(--fs-sm);
   line-height: 1.8;
+}
+/* The sole link in this block ("Landslides in Western North Carolina").
+   Wants to stand out against the dark green sidebar - accent-1 orange
+   makes it read as the primary "out to the parent site" call to action. */
+.sidebar-footer-links a {
+  color: var(--accent-1);
+  text-decoration: underline;
+}
+.sidebar-footer-links a:hover,
+.sidebar-footer-links a:focus {
+  color: var(--accent-dark);   /* deeper orange on hover */
+}
+
+/* Agency address block below the sidebar footer links. Semantically an
+   <address> element. Body text (Department + Office) is plain white for
+   maximum contrast against the dark green sidebar background. The two
+   links inside (agency name, phone) get their own color treatments -
+   see .agency-name and .agency-phone rules below.
+   Browsers render <address> italic by default - we reset that to normal
+   since the surrounding sidebar text is upright. */
+.sidebar-agency {
+  font-style: normal;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  margin-top: var(--sp-2);
+  color: #ffffff;
+}
+
+/* NCGS agency name link - same orange as the main "Landslides in WNC"
+   link above, so both organization-level links read at the same tier. */
+.sidebar-agency .agency-name {
+  color: var(--accent-1);
+  text-decoration: underline;
+}
+
+/* Phone number link - white text with an explicit white underline. Uses
+   text-decoration-color rather than the shorthand so the underline
+   inherits the phone's white color even when the link's own color rule
+   might otherwise apply a different underline color. */
+.sidebar-agency .agency-phone {
+  color: #ffffff;
+  text-decoration: underline;
+  text-decoration-color: #ffffff;
+}
+
+/* Hover treatment - both links darken to the deeper orange, matching
+   the .sidebar-footer-links hover pattern above. Keeps interactive
+   feedback consistent across the whole footer stack. */
+.sidebar-agency a:hover,
+.sidebar-agency a:focus {
+  color: var(--accent-dark);
+  text-decoration-color: var(--accent-dark);
 }
 
 /* -------------------------------------------------------------------------
@@ -946,7 +1033,11 @@ select {
 
 @media (max-width: 540px) {
   .header-row { flex-direction: column; }
-  .logo img { width: 56px; height: 56px; }
+  /* Mobile: shrink both logos so they don't dominate a narrow screen.
+     Seal drops to 64px (from 96px desktop). DEQ logo drops to 160x60
+     (from 216x80), preserving its native ~2.7:1 aspect ratio. */
+  .logo-left img  { width: 64px;  height: 64px; }
+  .logo-right img { width: 160px; height: 60px; }
   .app-header h1 { font-size: var(--fs-lg); }
   .metrics { grid-template-columns: 1fr; }
   #map { height: 320px; min-height: 320px; }
