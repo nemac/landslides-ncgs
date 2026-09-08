@@ -42,9 +42,13 @@
        ==================================================================== -->
   <header class="app-header" role="banner">
     <div class="header-row">
-      <div class="logo">
-        <img src="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png"
-             alt="North Carolina Geological Survey seal" />
+      <div class="logo logo-left">
+        <a href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey"
+           class="logo-link" target="_blank" rel="noopener"
+           aria-label="North Carolina Geological Survey (opens in new tab)">
+          <img src="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png"
+               alt="North Carolina Geological Survey seal" />
+        </a>
       </div>
       <div class="header-text">
         <a href="https://landslidesncgs.org/" class="parent-link">
@@ -53,8 +57,8 @@
         <h1>DFENS: Debris Flow Early Notification System</h1>
         <p class="subtitle" id="mode-subtitle">
           Real-time alerts of precipitation accumulation and debris flow
-          pathways. Select an alert detection mode and forecast window to
-          view the potentially impacted debris flows.
+          pathways. Select alert mode and time window to view the
+          potentially impacted debris flows.
         </p>
       </div>
 
@@ -66,6 +70,20 @@
            role="status" aria-live="polite" aria-busy="false" hidden>
         <span class="loading-spinner" aria-hidden="true"></span>
         <span class="loading-text">Loading&hellip;</span>
+      </div>
+
+      <!-- DEQ parent-department logo. Placed at the far right of the
+           header row. Links out to the NC Department of Environmental
+           Quality homepage (the parent agency of the NC Geological
+           Survey, which itself sits under the Division of Energy,
+           Mineral and Land Resources). Hover effect defined in CSS. -->
+      <div class="logo logo-right">
+        <a href="https://www.deq.nc.gov/" class="logo-link"
+           target="_blank" rel="noopener"
+           aria-label="North Carolina Department of Environmental Quality (opens in new tab)">
+          <img src="https://landslidesncgs.org/assets/images/shared/DEQLogo.png"
+               alt="North Carolina Department of Environmental Quality" />
+        </a>
       </div>
     </div>
 
@@ -312,11 +330,26 @@
       <!-- Footer links -->
       <hr class="sidebar-divider" />
       <p class="sidebar-footer-links">
-        <a href="accessibility.html" target="_blank" rel="noopener">Accessibility statement</a><br />
         <a href="https://landslidesncgs.org/" target="_blank" rel="noopener">
-          NCGS landslides home &nearr;
+          Landslides in Western North Carolina &nearr;
         </a>
       </p>
+
+      <!-- Address block, mirroring the footer on landslidesncgs.org so the
+           two properties feel like a single site. Not a <footer> element
+           because it sits inside the <aside> sidebar, not at page bottom.
+           Uses <address> for its semantics (contact info for the responsible
+           party). -->
+      <address class="sidebar-agency">
+        <a class="agency-name"
+           href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
+           target="_blank" rel="noopener">
+          North Carolina Geological Survey
+        </a><br />
+        Department of Environmental Quality<br />
+        Asheville Regional Office<br />
+        <a class="agency-phone" href="tel:+18282964500">828-296-4500</a>
+      </address>
 
     </aside>
 
