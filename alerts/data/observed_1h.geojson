@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[],"meta":{"source":"NOAA MRMS RadarOnly (1H)","observed_at":"2026-09-09T08:00:00+00:00","window_hours":1,"max_inches":0.0,"minutes_ago":52.5780788,"generated_at":"2026-09-09T08:52:35.957622+00:00","n_polygons":0}}
+{"type":"FeatureCollection","features":[],"meta":{"source":"NOAA MRMS RadarOnly (1H)","observed_at":"2026-09-10T08:00:00+00:00","window_hours":1,"max_inches":0.0039370134472846985,"minutes_ago":51.34685465,"generated_at":"2026-09-10T08:51:22.373829+00:00","n_polygons":0}}
