@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-22T04:43:23.102670+00:00",
+  "generated_at": "2026-09-21T09:51:28.286291+00:00",
   "source": "Overture Maps Foundation",
   "bbox": [
     -84.5,
@@ -177,7 +177,7 @@
         -81.3658,
         35.99696
       ],
-      "count": 58252,
+      "count": 58263,
       "file": "buildings/37023.geojson",
       "size_mb": 17.02
     },
@@ -205,9 +205,9 @@
         -80.99971,
         35.8259
       ],
-      "count": 85045,
+      "count": 85034,
       "file": "buildings/37035.geojson",
-      "size_mb": 24.89
+      "size_mb": 24.88
     },
     {
       "geoid": "37039",
@@ -331,7 +331,7 @@
         -82.91964,
         35.52438
       ],
-      "count": 30787,
+      "count": 30788,
       "file": "buildings/37099.geojson",
       "size_mb": 9.23
     },
@@ -373,7 +373,7 @@
         -83.14401,
         35.32411
       ],
-      "count": 31697,
+      "count": 31696,
       "file": "buildings/37113.geojson",
       "size_mb": 9.47
     },
