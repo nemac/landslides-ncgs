@@ -230,10 +230,10 @@ window.DEFNS_MAP = (function () {
         { attribution: 'Tiles \u00a9 Esri', maxZoom: 19 }
       )
     };
-    // Default = Dark (Esri Dark Gray). All four options remain available
-    // via the basemap selector; this just picks which one is on the map
-    // when the page first loads.
-    basemaps['Dark (Esri Dark Gray)'].addTo(map);
+    // Default = Light (Esri Gray). All four options remain available via
+    // the basemap selector; this just picks which one is on the map when
+    // the page first loads.
+    basemaps['Light (Esri Gray)'].addTo(map);
     L.control.layers(basemaps, null, { position: 'topright', collapsed: true })
       .addTo(map);
   }
