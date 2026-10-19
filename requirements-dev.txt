@@ -1,0 +1,3 @@
+# Developer tooling for the Python pipeline. Runtime deps are in
+# scripts/requirements.txt.
+ruff>=0.8

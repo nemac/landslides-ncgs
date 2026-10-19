@@ -1,0 +1,19 @@
+# Lint and format configuration for the Python data pipeline in scripts/.
+# The pipeline itself is not packaged; install its runtime dependencies
+# from scripts/requirements.txt. Install the dev tools with:
+#     pip install -r requirements-dev.txt
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["scripts"]
+extend-exclude = ["cache", "alerts/data"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: import sorting, B: bugbear, UP: pyupgrade.
+select = ["E", "W", "F", "I", "B", "UP"]
+# E402: refresh.py adjusts sys.path before importing its sibling modules.
+ignore = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
