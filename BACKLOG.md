@@ -22,9 +22,17 @@ details belong in an issue or PR once someone picks it up.
 
 - Compression and cache headers for the S3 deploy (see the task card from
   the audit session).
-- Handle `refresh.py` exit code 2 (partial success) in
-  `refresh-data.yml` so one failed window does not block publishing the
-  others.
+- **Publish partial `refresh.py` results safely.** Any non-zero exit code
+  currently fails the CI step, so the commit and deploy are skipped and no
+  window publishes that day. Exit code 2 covers two different cases that
+  need different handling: some precipitation windows failed but the rest
+  were intersected (safe to publish), and the debris-flow load failed after
+  precipitation was written (must not publish, or fresh precipitation sits
+  next to stale flagged files). Split those into separate codes in
+  `refresh.py`, then have `refresh-data.yml` publish on the first and fail
+  on the second. Low urgency: in 96 runs it has only happened twice, both
+  on 2026-07-20 during setup, and the only realistic trigger is the monthly
+  cold debris-flow cache.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is the intended production
   setting or a leftover from testing.
 - Remove or reconcile the duplicate and leftover constants in
