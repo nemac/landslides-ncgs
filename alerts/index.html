@@ -370,6 +370,21 @@
         </span>
       </div>
 
+      <!-- Data-unavailable banner. Hidden unless a data file the active
+           mode needs failed to load. There is no placeholder data in the
+           frontend, so when this shows the map and table are empty.
+           role=alert so screen readers announce it immediately: an empty
+           map must never read as "no risk". Toggled by
+           _updateDataAvailabilityBanner() in app.js. -->
+      <div id="data-unavailable-banner" class="data-unavailable-banner" hidden
+           role="alert">
+        <span class="data-unavailable-banner-icon" aria-hidden="true">&#9888;</span>
+        <span class="data-unavailable-banner-text">
+          <strong>Data unavailable</strong>
+          <span id="data-unavailable-detail"></span>
+        </span>
+      </div>
+
       <!-- Map. aria-hidden because the map is a visual aid; canonical
            data lives in the alerts table below, which IS accessible. -->
       <section class="map-section" aria-label="Interactive map">
@@ -451,9 +466,9 @@
   </footer>
 
   <!-- ====================================================================
-       SCRIPTS (Phase 2)
+       SCRIPTS
        Third-party libraries first, then our modules in dependency order:
-       config -> mock-data -> map -> alerts -> app (which boots everything)
+       config -> map -> alerts -> app (which boots everything)
        ==================================================================== -->
 
   <!-- Leaflet (map engine) -->
@@ -475,7 +490,6 @@
 
   <!-- Our modules -->
   <script src="js/config.js"></script>
-  <script src="js/mock-data.js"></script>
   <script src="js/map.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/app.js"></script>
