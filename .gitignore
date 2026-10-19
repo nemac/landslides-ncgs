@@ -20,3 +20,7 @@ node_modules/
 
 # Ruff cache
 .ruff_cache/
+
+# Local Python virtual environments (ruff and other dev tools)
+.venv/
+venv/
