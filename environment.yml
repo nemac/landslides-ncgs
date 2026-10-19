@@ -1,0 +1,38 @@
+# Pinned Python environment for the SIREN data pipeline (scripts/refresh.py).
+#
+# One file for both places the pipeline runs:
+#   - CI: .github/workflows/refresh-data.yml creates it with micromamba.
+#   - Local: conda env create -f environment.yml   (or micromamba create -f)
+#            conda activate defns-refresh
+#
+# Every version is pinned to what the daily CI run resolved on 2026-10-19,
+# so a local run and a CI run see the same libraries. To upgrade, change
+# the pins here deliberately and let the next CI run prove they work.
+#
+# conda-forge is required (not pip) for rasterio + libgdal-grib: the GRIB2
+# driver that reads MRMS files is a separate GDAL plugin that pip wheels do
+# not reliably include.
+name: defns-refresh
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11.15
+  - geopandas=1.1.4
+  - pandas=3.0.5
+  - shapely=2.1.2
+  - numpy=2.4.6
+  - pyproj=3.7.2
+  - pyogrio=0.12.1
+  - rasterio=1.4.4
+  - libgdal-core=3.12.3
+  - libgdal-grib=3.12.3
+  - requests=2.34.2
+  - pip=26.2.1
+  # Only available from PyPI. Used by the monthly Overture buildings
+  # extraction in scripts/data.py; imported lazily, so the rest of the
+  # pipeline runs without them.
+  - pip:
+      - overturemaps==1.0.2
+      - duckdb==1.5.6
+      - pyarrow==26.0.0

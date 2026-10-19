@@ -33,9 +33,11 @@ window stays open.
 ### Window 2 — Everything else
 
 ```
-conda activate EWS
+conda activate defns-refresh
 cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
 ```
+
+(First time only: `conda env create -f environment.yml` from the repo root.)
 
 Use this window to refresh data, run scripts, or anything else. Window 1
 just keeps serving files.
@@ -217,13 +219,15 @@ cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
 
 ### `ModuleNotFoundError: No module named 'geopandas'`
 
-Wrong conda environment. Activate EWS:
+Wrong conda environment. Activate defns-refresh:
 
 ```
-conda activate EWS
+conda activate defns-refresh
 ```
 
-The prompt should show `(EWS)` at the start of the line.
+The prompt should show `(defns-refresh)` at the start of the line. If the
+environment does not exist yet, create it from the repo root with
+`conda env create -f environment.yml`.
 
 ### Loading spinner never goes away
 
@@ -277,7 +281,7 @@ This un-tracks it without deleting from disk.
 | Historical event files | `alerts/data/historical/` |
 | Python scripts | `scripts/` |
 | Debris flow cache | `cache/debris_flows.gpkg` (NEVER commit) |
-| Conda environment | EWS (shared with wnc_alert project) |
+| Conda environment | defns-refresh, created from `environment.yml` |
 | Local URL | `http://localhost:8000/alerts/` |
 | Production URL (deploy TBD) | `https://landslidesncgs.com/alerts/` |
 
@@ -288,7 +292,7 @@ This un-tracks it without deleting from disk.
 cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
 python -m http.server 8000            (Window 1, leave running)
 
-conda activate EWS                    (Window 2)
+conda activate defns-refresh          (Window 2)
 cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
 
 # Get fresh live data
@@ -362,7 +366,7 @@ The buildings layer is off by default. When the user toggles it on:
 Overture is a global dataset. The WNC bbox `(-84.5, 34.8, -81.0, 36.7)` captures buildings in NC, TN, GA, SC, and VA wherever they fall inside the bbox — same multi-state coverage we get for debris flows and county labels. Counties are identified by 5-digit FIPS GEOID codes (state + county), unique across states.
 
 ### Dependencies
-The buildings phase requires `overturemaps` and `duckdb` Python packages (see `scripts/requirements.txt`). Install via `pip install -r scripts/requirements.txt`. These are imported lazily inside `fetch_overture_buildings` so the rest of the pipeline runs even if these packages aren't installed — you'd just see a clean error message in the buildings phase.
+The buildings phase requires the `overturemaps` and `duckdb` Python packages. They are pinned in the `pip:` section of `environment.yml`, so `conda env create -f environment.yml` installs them. These are imported lazily inside `fetch_overture_buildings` so the rest of the pipeline runs even if these packages aren't installed — you'd just see a clean error message in the buildings phase.
 
 ### Tuning knobs
 

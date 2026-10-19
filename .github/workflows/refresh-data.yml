@@ -100,26 +100,19 @@ jobs:
               print("No buildings manifest present; extraction will run.")
           PY
 
-      # conda-forge provides libgdal-grib (the GRIB2 driver rasterio needs to
-      # read MRMS), which plain pip rasterio wheels don't reliably include.
+      # The environment is fully pinned in environment.yml at the repo root
+      # (same file for local setup), so every run uses identical library
+      # versions. conda-forge provides libgdal-grib (the GRIB2 driver
+      # rasterio needs to read MRMS), which plain pip rasterio wheels don't
+      # reliably include; the pip-only packages (overturemaps, duckdb) are in
+      # the file's pip section. The environment cache key includes the
+      # file's contents, so editing a pin rebuilds the environment.
       - name: Set up environment (micromamba)
         uses: mamba-org/setup-micromamba@v2
         with:
-          environment-name: defns-refresh
-          create-args: >-
-            python=3.11
-            geopandas
-            rasterio
-            libgdal-grib
-            requests
+          environment-file: environment.yml
           init-shell: bash
           cache-environment: true
-
-      # overturemaps + duckdb are pip-only (used only by the ~monthly buildings
-      # extraction; pulled here so the env is complete).
-      - name: Install pip-only deps
-        shell: bash -el {0}
-        run: pip install overturemaps duckdb
 
       - name: Run refresh pipeline
         shell: bash -el {0}
