@@ -3,7 +3,8 @@ Data fetching for the WNC Debris Flow Early Warning Dashboard.
 
 Two public functions:
     fetch_debris_flows()      -> GeoDataFrame of NCGS debris flow polygons
-    fetch_precip_forecast()   -> (GeoDataFrame, fromdate, todate) for NDFD
+    fetch_precip_forecast()   -> (GeoDataFrame, valid_start, valid_end) for NDFD
+    fetch_ndfd_source_updated() -> when the NDFD layer last got new data
 
 Both return geometries in WGS84 (EPSG:4326) so they can be displayed
 directly in Folium. Reproject to an equal-area CRS for area math.
@@ -644,66 +645,120 @@ def _query_latest_forecast_issuance() -> int:
     return int(feats[0]["attributes"]["fromdate"])
 
 
+def _query_ndfd_cycle_start() -> datetime:
+    """Return the start (UTC) of the NDFD cycle currently in the layer.
+
+    The "Accumulation by Time" layer is CUMULATIVE: each 6-hour period's
+    polygons hold the total rain from the cycle start through that
+    period's `todate` (verified 2026-10-07 - categories at a fixed point
+    never decrease from one period to the next). The cycle start is the
+    earliest `fromdate` in the layer, aligned to 00/06/12/18 UTC.
+    """
+    params = {
+        "where": "1=1",
+        "outFields": "fromdate",
+        "orderByFields": "fromdate ASC",
+        "resultRecordCount": 1,
+        "returnGeometry": "false",
+        "f": "json",
+    }
+    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query",
+                     params=params, timeout=60)
+    r.raise_for_status()
+    feats = r.json().get("features", [])
+    if not feats:
+        raise RuntimeError(
+            "NDFD service returned no features when probing for the cycle "
+            "start. The service may be unavailable."
+        )
+    ms = int(feats[0]["attributes"]["fromdate"])
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+
+
+def fetch_ndfd_source_updated() -> datetime | None:
+    """Return when Esri last loaded new NDFD data into the layer (UTC).
+
+    This is the best available "forecast issued" time: the layer refreshes
+    roughly hourly from the NWS NDFD QPF grid. It is also a cheap change
+    detector - if it hasn't moved since the last run, nothing upstream has
+    changed. Returns None if the metadata can't be read.
+    """
+    try:
+        r = requests.get(NDFD_PRECIP_SERVICE_URL, params={"f": "json"},
+                         timeout=60)
+        r.raise_for_status()
+        info = r.json().get("editingInfo") or {}
+        ms = info.get("dataLastEditDate") or info.get("lastEditDate")
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc) if ms else None
+    except Exception as e:  # metadata is nice-to-have; never fail the run
+        print(f"  WARNING: could not read NDFD layer edit date: {e}")
+        return None
+
+
 def fetch_precip_forecast(
     window_hours: int,
     min_category: int,
 ) -> tuple[gpd.GeoDataFrame, datetime, datetime]:
-    """Fetch precipitation polygons for the requested forecast window.
+    """Fetch the NDFD rain total for exactly `window_hours` from cycle start.
 
-    NDFD's "Accumulation by Time" service stores 6-hour accumulation
-    periods (per the NWS NDFD spec, periods are 6 hours long beginning
-    and ending at 0000, 0600, 1200, 1800 UTC). To cover a longer
-    window_hours, we return ALL 6-hour periods whose accumulation window
-    overlaps [now, now + window_hours]. The client-side intersection logic
-    takes the MAX category across overlapping polygons, so duplicates
-    don't break alerts.
+    Because the "Accumulation by Time" layer is cumulative from the cycle
+    start, the N-hour total is simply the single 6-hour period whose
+    `todate` is cycle_start + N hours. We select that one period.
+
+    (Before 2026-10-07 this function took every period overlapping
+    [now, now + N] and kept the max category. Since the layer is
+    cumulative, that returned the total from cycle start through the
+    LAST overlapping period - 24 to 30 hours of rain for a "24 h"
+    window - and reported now / now + N as the window bounds.)
+
+    The returned window starts at the cycle start, which can be up to
+    ~6 hours before the run time, so part of it may already be in the
+    past. Callers should display valid_start / valid_end as-is.
 
     Parameters
     ----------
     window_hours : int
-        Hours past now to take the accumulation snapshot. Multiple of 6.
+        Accumulation length in hours. Positive multiple of 6, <= 72.
     min_category : int
         Lowest NDFD precipitation category to include (0-19).
 
     Returns
     -------
     gdf : GeoDataFrame (EPSG:4326)
-        Features above the threshold across CONUS.
         Columns: category, label, fromdate, todate, geometry.
-    fromdate : datetime (UTC)
-        Now - the start of our query window.
-    todate : datetime (UTC)
-        End of the accumulation window we requested (now + window_hours).
+    valid_start : datetime (UTC)
+        Start of the accumulation (NDFD cycle start).
+    valid_end : datetime (UTC)
+        End of the accumulation (valid_start + window_hours).
     """
     if window_hours <= 0 or window_hours % 6 != 0:
         raise ValueError(
             f"window_hours must be a positive multiple of 6 (got {window_hours})"
         )
 
-    now_dt = datetime.now(timezone.utc)
-    end_dt = now_dt + timedelta(hours=window_hours)
+    valid_start = _query_ndfd_cycle_start()
+    valid_end = valid_start + timedelta(hours=window_hours)
+    # The target period is the one whose fromdate is (valid_end - 6h).
+    # The service stores fromdates 1 s after the boundary (e.g. 18:00:01)
+    # and the final todate a minute early (11:58:59), so match fromdate
+    # within +/- 1 minute of the boundary rather than testing equality.
+    period_start = valid_end - timedelta(hours=6)
+    lo = period_start - timedelta(minutes=1)
+    hi = period_start + timedelta(minutes=1)
 
     print(f"Fetching NDFD precipitation forecast "
           f"(window={window_hours}h, min category={min_category})...")
-    print(f"  query window from: {now_dt:%Y-%m-%d %H:%M UTC}")
-    print(f"  query window to:   {end_dt:%Y-%m-%d %H:%M UTC}")
+    print(f"  accumulation from: {valid_start:%Y-%m-%d %H:%M UTC} (cycle start)")
+    print(f"  accumulation to:   {valid_end:%Y-%m-%d %H:%M UTC}")
 
-    # Build the WHERE clause. Overlap test: a polygon's accumulation
-    # period [fromdate, todate] overlaps [now, end] iff
-    #     fromdate < end  AND  todate > now
-    # ArcGIS REST API supports `timestamp 'YYYY-MM-DD HH:MM:SS'` literals
-    # for date/time field comparisons.
     where = (
-        f"fromdate < timestamp '{end_dt:%Y-%m-%d %H:%M:%S}' "
-        f"AND todate > timestamp '{now_dt:%Y-%m-%d %H:%M:%S}' "
+        f"fromdate >= timestamp '{lo:%Y-%m-%d %H:%M:%S}' "
+        f"AND fromdate <= timestamp '{hi:%Y-%m-%d %H:%M:%S}' "
         f"AND category >= {min_category}"
     )
 
-    # Server-side spatial filter to the WNC bbox. Without this, busy CONUS
-    # forecasts can return >2000 features and hit the ArcGIS maxRecordCount
-    # cap, truncating WNC features arbitrarily. Filtering at the service
-    # cuts the response to just our area and keeps us well below the cap.
-    from config import WNC_BBOX
+    # Server-side spatial filter to the WNC bbox keeps us well under the
+    # service's maxRecordCount even on busy CONUS forecast days.
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
 
     params = {
@@ -721,9 +776,11 @@ def fetch_precip_forecast(
                      params=params, timeout=90)
     r.raise_for_status()
     page = r.json()
+    if "error" in page:
+        raise RuntimeError(f"NDFD query error: {page['error']}")
 
     feats = page.get("features", [])
-    print(f"  -> {len(feats)} precipitation polygons above threshold (WNC bbox)")
+    print(f"  -> {len(feats)} precipitation polygons (WNC bbox)")
 
     if not feats:
         gdf = gpd.GeoDataFrame(
@@ -734,7 +791,7 @@ def fetch_precip_forecast(
     else:
         gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
 
-    return gdf, now_dt, end_dt
+    return gdf, valid_start, valid_end
 
 
 # =============================================================================
