@@ -15,6 +15,23 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+# Node tooling (eslint, prettier)
+node_modules/
+
+# Ruff cache
+.ruff_cache/
+
+# Local Python virtual environments (ruff and other dev tools)
+.venv/
+venv/
+
 # DFENS Simple pipeline outputs (production data lives only in S3)
 simple/data/
 out/
+
+# CDK app (infra/cdk)
+infra/cdk/node_modules/
+infra/cdk/cdk.out/
+
+# Pipeline outputs live only in S3 (see OPERATIONS.md)
+alerts/data/

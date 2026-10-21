@@ -1,0 +1,6 @@
+node_modules/
+alerts/data/
+cache/
+assets/
+*.html
+*.md

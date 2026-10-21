@@ -1,0 +1,39 @@
+name: CI checks
+
+# Runs on every pull request. Nothing here touches AWS: `cdk synth` only
+# needs the TypeScript to compile and the stacks to validate, and the
+# CloudFront Function tests run against the source files with plain Node.
+# ESLint, Prettier and ruff are not run here yet: the frontend has
+# pre-existing lint errors and format drift (see the "PR checks and tests"
+# item in BACKLOG.md). Add a lint job once those are cleaned up.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  infra:
+    name: CDK synth and function tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/cdk/package-lock.json
+      - name: Install the CDK app
+        run: npm ci
+        working-directory: infra/cdk
+      - name: Typecheck and test the CDK app
+        run: npm run typecheck && npm test
+        working-directory: infra/cdk
+      - name: Synth every stack (no credentials)
+        run: npx cdk synth --context cutover=done
+        working-directory: infra/cdk
+      - name: Test the CloudFront Function pieces
+        run: node --test "infra/cloudfront/test/*.test.js"

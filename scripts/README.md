@@ -10,8 +10,9 @@ scripts/
   refresh.py          Driver: fetches NDFD + MRMS, writes JSON to alerts/data/
   data.py             Data fetchers (copied from wnc_alert project)
   config.py           Constants (URLs, bbox, product fallback order)
-  requirements.txt    Python package dependencies
   README.md           This file
+
+../environment.yml    Pinned Python environment (same file CI uses)
 ```
 
 ## Phase 3a: manual refresh (current)
@@ -23,24 +24,23 @@ load.
 
 ### Setup (one time)
 
-Reuse the existing EWS conda environment from the wnc_alert project. All
-the dependencies are already installed there — `geopandas`, `rasterio`,
-`libgdal-grib`, `requests`.
-
-If for some reason you want a fresh environment dedicated to this script:
+Create the pinned environment from `environment.yml` at the repo root.
+It is the same file the GitHub Actions refresh uses, so local runs and CI
+runs see identical library versions:
 
 ```bash
-conda create -n defns-refresh -c conda-forge \
-    python=3.11 geopandas rasterio libgdal-grib requests
+conda env create -f environment.yml
 conda activate defns-refresh
 ```
+
+(`micromamba create -f environment.yml` works the same way.)
 
 ### Run it
 
 From the repository root (`landslidesncgs.com/`):
 
 ```bash
-conda activate EWS
+conda activate defns-refresh
 python scripts/refresh.py
 ```
 
