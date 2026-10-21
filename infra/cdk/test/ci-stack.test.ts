@@ -84,3 +84,7 @@ test('outputs both role ARNs', () => {
   template.hasOutput('ProdRoleArn', Match.anyValue());
   template.hasOutput('DevRoleArn', Match.anyValue());
 });
+
+test('stack is termination protected', () => {
+  assert.equal(ciTemplate().ci.terminationProtection, true);
+});

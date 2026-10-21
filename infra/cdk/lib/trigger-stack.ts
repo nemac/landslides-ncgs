@@ -19,7 +19,7 @@ const HANDLER_DIR = path.resolve(here, '..', '..', 'lambda', 'refresh-simple-tri
 // is harmless, and the workflows' own cron is the backup.
 export class TriggerStack extends Stack {
   constructor(scope: Construct, id: string, props: StackProps) {
-    super(scope, id, props);
+    super(scope, id, { terminationProtection: true, ...props });
     const secret = new secretsmanager.Secret(this, 'Token', {
       secretName: 'landslides/github-dispatch-token',
       description: `GitHub token (Actions: read/write on ${GITHUB_REPO}) used to dispatch workflows`,

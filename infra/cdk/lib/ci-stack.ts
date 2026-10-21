@@ -24,7 +24,7 @@ export class CiStack extends Stack {
   readonly devRole: iam.IRole;
 
   constructor(scope: Construct, id: string, props: CiStackProps) {
-    super(scope, id, props);
+    super(scope, id, { terminationProtection: true, ...props });
     const provider = new iam.OpenIdConnectProvider(this, 'GitHub', {
       url: GITHUB_OIDC_URL,
       clientIds: ['sts.amazonaws.com'],

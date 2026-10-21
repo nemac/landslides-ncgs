@@ -109,3 +109,11 @@ test('outputs what the runbook and workflows need', () => {
     template.hasOutput(name, Match.anyValue());
   }
 });
+
+test('distributions are retained and the stack is termination protected', () => {
+  const { web, template } = webTemplate('done');
+  assert.equal(web.terminationProtection, true);
+  for (const d of Object.values(template.findResources('AWS::CloudFront::Distribution'))) {
+    assert.equal(d.DeletionPolicy, 'Retain');
+  }
+});

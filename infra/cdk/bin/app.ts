@@ -8,19 +8,22 @@ import { TriggerStack } from '../lib/trigger-stack.js';
 
 const app = new App();
 const env = { account: ACCOUNT, region: REGION };
+// Every stack owns something that must not vanish by accident (the only
+// authoritative DNS, the live distributions, the data bucket).
+const protect = { env, terminationProtection: true };
 const stage = readCutoverStage(app);
 
-const dns = new DnsStack(app, 'Dns', { env });
+const dns = new DnsStack(app, 'Dns', protect);
 const web = new WebStack(app, 'Web', {
-  env,
+  ...protect,
   stage,
   orgZone: dns.orgZone,
   comZone: dns.comZone,
   certificate: dns.certificate,
 });
 
-const ci = new CiStack(app, 'Ci', {
-  env,
+new CiStack(app, 'Ci', {
+  ...protect,
   siteBucket: web.siteBucket,
   dataBucket: web.dataBucket,
   devSiteBucket: web.devSiteBucket,
@@ -28,5 +31,4 @@ const ci = new CiStack(app, 'Ci', {
   devDistribution: web.devDistribution,
 });
 
-new TriggerStack(app, 'Trigger', { env });
-void ci;
+new TriggerStack(app, 'Trigger', protect);

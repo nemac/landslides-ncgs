@@ -21,3 +21,12 @@ test('DnsStack has both zones and one cert covering apexes and wildcards', () =>
   });
   assert.ok(stack.orgZone && stack.comZone && stack.certificate);
 });
+
+test('zones are retained and the stack is termination protected', () => {
+  const stack = new DnsStack(new App(), 'Dns', { env });
+  const template = Template.fromStack(stack);
+  assert.equal(stack.terminationProtection, true);
+  for (const zone of Object.values(template.findResources('AWS::Route53::HostedZone'))) {
+    assert.equal(zone.DeletionPolicy, 'Retain');
+  }
+});

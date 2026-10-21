@@ -36,7 +36,7 @@ export class WebStack extends Stack {
   private devAuthStore!: cloudfront.IKeyValueStore;
 
   constructor(scope: Construct, id: string, props: WebStackProps) {
-    super(scope, id, props);
+    super(scope, id, { terminationProtection: true, ...props });
     this.siteBucket = this.makeBucket('SiteBucket', SITE_BUCKET, false);
     this.dataBucket = this.makeBucket('DataBucket', DATA_BUCKET, true);
     this.devSiteBucket = this.makeBucket('DevSiteBucket', DEV_SITE_BUCKET, false);
@@ -74,14 +74,14 @@ export class WebStack extends Stack {
       code: cloudfront.FunctionCode.fromInline(composeProductionFunction()),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
-    return new cloudfront.Distribution(this, 'ProductionDistribution', {
+    return this.retained(new cloudfront.Distribution(this, 'ProductionDistribution', {
       comment: 'landslidesncgs.org production site, dashboard, DFENS Simple, inventory and mapviewer hosts',
       domainNames: productionDomainNames(props.stage),
       certificate: props.certificate,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       defaultBehavior: this.makeBehavior(this.originFor(this.siteBucket), fn, true),
       additionalBehaviors: this.makeDataBehaviors(fn, true),
-    });
+    }));
   }
 
   private makeDevDistribution(props: WebStackProps): cloudfront.IDistribution {
@@ -96,14 +96,20 @@ export class WebStack extends Stack {
       runtime: cloudfront.FunctionRuntime.JS_2_0,
       keyValueStore: store,
     });
-    return new cloudfront.Distribution(this, 'DevDistribution', {
+    return this.retained(new cloudfront.Distribution(this, 'DevDistribution', {
       comment: 'dev.landslidesncgs.org, basic auth, reads production data',
       domainNames: [DEV_HOSTNAME],
       certificate: props.certificate,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       defaultBehavior: this.makeBehavior(this.originFor(this.devSiteBucket), fn, false),
       additionalBehaviors: this.makeDataBehaviors(fn, false),
-    });
+    }));
+  }
+
+  // A distribution that CloudFormation drops is a live hostname gone; keep it.
+  private retained(distribution: cloudfront.Distribution): cloudfront.Distribution {
+    distribution.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    return distribution;
   }
 
   // One origin object per bucket per distribution; behaviors that share it

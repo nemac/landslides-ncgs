@@ -1,4 +1,4 @@
-import { Stack, type StackProps } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import type { Construct } from 'constructs';
@@ -13,10 +13,18 @@ export class DnsStack extends Stack {
   readonly certificate: acm.ICertificate;
 
   constructor(scope: Construct, id: string, props: StackProps) {
-    super(scope, id, props);
-    this.orgZone = new route53.PublicHostedZone(this, 'OrgZone', { zoneName: ORG_DOMAIN });
-    this.comZone = new route53.PublicHostedZone(this, 'ComZone', { zoneName: COM_DOMAIN });
+    super(scope, id, { terminationProtection: true, ...props });
+    this.orgZone = this.makeZone('OrgZone', ORG_DOMAIN);
+    this.comZone = this.makeZone('ComZone', COM_DOMAIN);
     this.certificate = this.makeCertificate();
+  }
+
+  // Once the registrar points at these zones they are the only DNS for the
+  // domain; a replaced zone gets new name servers and takes the site down.
+  private makeZone(id: string, zoneName: string): route53.IHostedZone {
+    const zone = new route53.PublicHostedZone(this, id, { zoneName });
+    zone.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    return zone;
   }
 
   private makeCertificate(): acm.ICertificate {
