@@ -63,15 +63,20 @@ monthly `actions/cache` key are shared with `refresh-data.yml`.
 | Step | Typical time |
 |------|--------------|
 | NWS updates NDFD; Esri reloads the layer | about hourly |
-| Next scheduled check (GitHub cron, best-effort) | 0–10 min, sometimes later under load |
+| Next scheduled check (EventBridge Scheduler, every 10 min) | 0–10 min |
 | Run: skip | ~30 s |
 | Run: build | ~1–2 min; ~3–5 min with heavy rain (~20 min on the monthly cold cache) |
 | CloudFront / browser cache | ≤ 1 min; the page re-polls every 5 min |
 
 The page displays a warning banner if `status.checked_at` is more than 45
-minutes old, which means the pipeline has stopped checking. If GitHub's
-scheduling turns out too unreliable, the same two scripts can run on AWS
-(EventBridge Scheduler + Lambda or Fargate) with no code changes.
+minutes old, which means the pipeline has stopped checking.
+
+GitHub's own cron turned out to be hours late for this repo, so the
+workflow is triggered by **EventBridge Scheduler + a small Lambda** that
+calls GitHub's `workflow_dispatch` API every 10 minutes; see
+`infra/lambda/refresh-simple-trigger/README.md`. The cron in the workflow
+file is only a backup. Running the two scripts themselves on AWS (Lambda
+or Fargate) is a later step, tracked in `BACKLOG.md`.
 
 ## How the time window is labeled
 
