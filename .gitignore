@@ -32,3 +32,6 @@ out/
 # CDK app (infra/cdk)
 infra/cdk/node_modules/
 infra/cdk/cdk.out/
+
+# Pipeline outputs live only in S3 (see OPERATIONS.md)
+alerts/data/
