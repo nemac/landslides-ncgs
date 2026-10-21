@@ -20,5 +20,5 @@ jobs:
       environment: production
       role_arn: arn:aws:iam::710482330128:role/landslides-github-prod
       bucket: landslidesncgs-site
-      distribution_id: TODO-AFTER-FIRST-DEPLOY
+      distribution_id: E2ERQC7EESP0UJ
       site_url: https://landslidesncgs.org
