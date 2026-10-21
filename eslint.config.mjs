@@ -30,6 +30,6 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/', 'alerts/data/', 'cache/'],
+    ignores: ['node_modules/', 'alerts/data/', 'cache/', 'infra/'],
   },
 ];
