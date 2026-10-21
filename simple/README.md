@@ -111,8 +111,8 @@ into `simple/data/`, and serves the repo root so the page is at
 
 ```bat
 cd %USERPROFILE%\Documents\GitHub\landslides-ncgs
-conda activate defns-refresh
-python simple\pipeline\run_local.py
+conda activate EWS              REM any env with geopandas + requests
+python simple/pipeline/run_local.py
 ```
 
 Options: `--warm` (load the debris cache before starting), `--force` (rebuild

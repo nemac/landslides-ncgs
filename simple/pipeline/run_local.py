@@ -13,7 +13,7 @@ URL layout (mirrors production, so relative paths in js/config.js work):
   /alerts/data/...   -> alerts/data/ (building footprints)
 
 Usage, from the landslides-ncgs repo root in a terminal whose Python has
-geopandas (e.g. an Anaconda Prompt with the defns-refresh env activated):
+geopandas (e.g. an Anaconda Prompt with the EWS env activated):
 
   python simple/pipeline/run_local.py           # run until Ctrl+C
   python simple/pipeline/run_local.py --warm    # prepare the debris cache first
