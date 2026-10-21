@@ -2,7 +2,7 @@ name: Refresh DFENS Simple data (every 10 min)
 
 # Data pipeline for the DFENS Simple dashboard at /simple/ (simple/pipeline/).
 # Independent of the nightly refresh-data.yml: nothing is committed to git,
-# outputs go straight to s3://landslides-ncgs/simple/data/. The debris-flow
+# outputs go straight to s3://landslidesncgs-data/simple/data/. The debris-flow
 # actions/cache key is deliberately the same as refresh-data.yml's so the
 # monthly cold fetch happens once for both workflows.
 #
@@ -45,8 +45,8 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_ROLE: arn:aws:iam::104538610210:role/landslides-github-actions-prod
-  S3_DATA: s3://landslides-ncgs/simple/data
+  AWS_ROLE: arn:aws:iam::710482330128:role/landslides-github-prod
+  S3_DATA: s3://landslidesncgs-data/simple/data
   STATUS_URL: https://landslidesncgs.org/simple/data/status.json
   CHECK_INTERVAL_MINUTES: "10"     # keep in step with the cron above
   PYTHONUNBUFFERED: "1"
@@ -121,7 +121,7 @@ jobs:
         run: |
           for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do
             aws s3 cp "out/$f" "$S3_DATA/$f" \
-              --content-type application/geo+json \
+              --content-type application/json \
               --cache-control "public, max-age=60"
           done
 

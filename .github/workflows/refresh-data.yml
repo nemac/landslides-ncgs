@@ -1,17 +1,19 @@
 name: Refresh alert data (daily)
 
-# Runs the DEFNS data pipeline (scripts/refresh.py) once a day, commits any
-# changed files under alerts/data/ to master, and triggers the prod deploy so
-# the refreshed data reaches the live S3 dashboard.
+# Runs the DEFNS data pipeline (scripts/refresh.py) and uploads alerts/data/
+# straight to the data bucket. Nothing is committed to git: the data lives
+# only in S3, and the short Cache-Control on the files means CloudFront
+# serves the new versions within minutes with no invalidation.
 #
-# Cost: $0 — public repo (unlimited Actions minutes). No secrets: every
-# upstream data source is public, the push uses the built-in GITHUB_TOKEN, and
-# the deploy it triggers assumes an OIDC role (no stored AWS keys).
+# Trigger: EventBridge Scheduler in the AWS account dispatches this workflow
+# at 04:00 UTC every day (infra/lambda/refresh-simple-trigger/). The cron
+# below is only a backup; GitHub's scheduler runs hours late for this repo.
+#
+# Cost: $0 — public repo. No secrets: every upstream source is public and
+# the upload assumes an OIDC role (no stored AWS keys).
 
 on:
   schedule:
-    # 04:00 UTC daily. GitHub cron is best-effort: runs can be delayed a few
-    # minutes under load and are occasionally skipped. Fine for a daily refresh.
     - cron: "0 4 * * *"
   workflow_dispatch:
 
@@ -21,8 +23,14 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # commit + push refreshed data to master
-  actions: write    # dispatch deploy-prod.yml via workflow_dispatch
+  id-token: write   # assume the AWS role with OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE: arn:aws:iam::710482330128:role/landslides-github-prod
+  DATA_BUCKET: landslidesncgs-data
+  DATA_PREFIX: alerts/data
 
 jobs:
   refresh:
@@ -32,6 +40,10 @@ jobs:
     # NCGS debris polygons + augments them (several minutes) before the cache
     # repopulates, plus the ~monthly ~754 MB Overture buildings extract.
     timeout-minutes: 60
+
+    # The `production` environment is what the IAM role's trust policy is
+    # scoped to (sub = repo:nemac/landslides-ncgs:environment:production).
+    environment: production
 
     env:
       # Stream refresh.py's progress live. Python block-buffers stdout when it
@@ -51,9 +63,26 @@ jobs:
       GDAL_HTTP_RETRY_DELAY: "2"
 
     steps:
-      - name: Checkout master
+      - name: Checkout
         uses: actions/checkout@v4
-        # Default persist-credentials keeps GITHUB_TOKEN wired up for the push.
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The checkout has no data. scripts/refresh.py decides whether to
+      # re-extract the ~754 MB Overture buildings layer by looking at the
+      # buildings manifest, so fetch the live one first. On the very first
+      # run there is none and the extraction simply runs.
+      - name: Fetch buildings manifest
+        run: |
+          mkdir -p alerts/data/buildings
+          aws s3 cp "s3://${DATA_BUCKET}/${DATA_PREFIX}/buildings/manifest.json" \
+            alerts/data/buildings/manifest.json || echo "No buildings manifest in the bucket yet; extraction will run."
 
       # The NCGS debris-flow layer is ~225k polygons for the WNC bbox and is
       # essentially static (last edited 2026-03; a susceptibility model, not a
@@ -79,13 +108,11 @@ jobs:
           restore-keys: |
             debris-gpkg-v1-
 
-      # scripts/refresh.py caches the ~754 MB Overture buildings layer for 30
-      # days, keyed off the manifest file's mtime. A fresh checkout resets that
-      # mtime to "now", so the cache would look permanently fresh and never
-      # re-extract in CI. Restore the manifest's true age from its embedded
-      # `generated_at` timestamp so the 30-day TTL fires (~monthly) as designed.
-      # Failure-safe: we never delete the manifest, so a failed extraction just
-      # retries next run.
+      # The freshness check keys off the manifest file's mtime, and the copy
+      # above was written just now. Restore the manifest's true age from its
+      # embedded `generated_at` timestamp so the 30-day TTL fires (~monthly)
+      # as designed. Failure-safe: we never delete the manifest, so a failed
+      # extraction just retries next run.
       - name: Restore buildings manifest mtime
         run: |
           python3 - <<'PY'
@@ -114,42 +141,35 @@ jobs:
           init-shell: bash
           cache-environment: true
 
+      # A non-zero exit here fails the job and nothing below runs, so a
+      # broken run never uploads. (Splitting the partial-success exit code
+      # is a backlog item.)
       - name: Run refresh pipeline
         shell: bash -el {0}
         run: python scripts/refresh.py
 
-      - name: Commit refreshed data
-        id: commit
+      # Uploads never remove remote files: a CI checkout has no historical/ files
+      # (those are regenerated by hand with --hindcast) and a monthly skip of
+      # the buildings extract leaves only the manifest locally. Every file is
+      # JSON, uploaded as application/json so CloudFront compresses it.
+      - name: Upload buildings (one day)
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add alerts/data
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No data changes; nothing to commit or deploy."
-          else
-            git commit -m "chore(data): daily alert refresh"
-            git push origin HEAD:master
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Pushed refreshed data to master."
-          fi
+          aws s3 sync alerts/data/buildings "s3://${DATA_BUCKET}/${DATA_PREFIX}/buildings" \
+            --content-type application/json \
+            --cache-control "public, max-age=86400"
 
-      # A push made with GITHUB_TOKEN does NOT trigger deploy-prod.yml's `push`
-      # event (GitHub blocks that recursion), so dispatch it explicitly.
-      # workflow_dispatch IS allowed to be triggered by GITHUB_TOKEN.
-      - name: Trigger production deploy
-        if: steps.commit.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload alert data (five minutes)
         run: |
-          gh workflow run deploy-prod.yml --ref master
-          echo "Dispatched deploy-prod.yml (S3 sync + CloudFront invalidation)."
+          aws s3 sync alerts/data "s3://${DATA_BUCKET}/${DATA_PREFIX}" \
+            --exclude "buildings/*" \
+            --content-type application/json \
+            --cache-control "public, max-age=300"
 
       - name: Summary
         if: always()
         run: |
           {
             echo "### Refresh summary"
-            echo "- Data changed: \`${{ steps.commit.outputs.changed }}\`"
-            echo "- Deploy dispatched: \`${{ steps.commit.outputs.changed == 'true' }}\`"
+            echo "- Uploaded to: \`s3://${DATA_BUCKET}/${DATA_PREFIX}\`"
+            echo "- Outcome: \`${{ job.status }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
