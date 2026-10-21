@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[],"meta":{"source":"NWS NDFD precipitation forecast","issued":"2026-10-20T09:18:57.100610+00:00","window_end":"2026-10-22T09:18:57.100610+00:00","window_hours":48,"generated_at":"2026-10-20T09:18:57.261014+00:00","n_polygons":0}}
+{"type":"FeatureCollection","features":[],"meta":{"source":"NWS NDFD precipitation forecast","issued":"2026-10-21T09:10:54.467000+00:00","window_start":"2026-10-21T06:00:00+00:00","window_end":"2026-10-23T06:00:00+00:00","window_hours":48,"generated_at":"2026-10-21T09:15:40.526139+00:00","n_polygons":0}}
