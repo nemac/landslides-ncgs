@@ -4,6 +4,7 @@ import { readCutoverStage } from '../lib/cutover.js';
 import { DnsStack } from '../lib/dns-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 import { CiStack } from '../lib/ci-stack.js';
+import { TriggerStack } from '../lib/trigger-stack.js';
 
 const app = new App();
 const env = { account: ACCOUNT, region: REGION };
@@ -27,5 +28,5 @@ const ci = new CiStack(app, 'Ci', {
   devDistribution: web.devDistribution,
 });
 
-// The Trigger stack is added here when it is built.
+new TriggerStack(app, 'Trigger', { env });
 void ci;
