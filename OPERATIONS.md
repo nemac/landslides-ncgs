@@ -9,8 +9,9 @@ troubleshooting common issues.
 2. [Refreshing data](#refreshing-data)
 3. [After making code changes](#after-making-code-changes)
 4. [Stopping everything](#stopping-everything)
-5. [Common issues](#common-issues)
-6. [Reference: file locations](#reference-file-locations)
+5. [DFENS Simple](#dfens-simple-simple)
+6. [Common issues](#common-issues)
+7. [Reference: file locations](#reference-file-locations)
 
 ---
 
@@ -104,6 +105,22 @@ data.
 | Live precipitation | Whenever you want current weather. Will be automated via cron in Phase 3b. |
 | Historical events | Only when adding events or changing config. Files don't expire. |
 | Debris flow polygons | Auto-cached for 30 days. The script handles this transparently. |
+
+## DFENS Simple (`/simple/`)
+
+The simplified dashboard at <https://landslidesncgs.org/simple/> lives in
+`simple/`. Its data (`simple/data/`) is **not in git**: the
+`refresh-simple.yml` workflow checks NDFD every 10 minutes and writes
+three small files straight to S3. See `simple/README.md` for details.
+
+To test it locally, from the repo root with the `EWS` conda env activated:
+
+```
+python simple/pipeline/run_local.py
+```
+
+Then open `http://localhost:8000/simple/`. This serves the whole repo, so
+building footprints load from `alerts/data/` as in production.
 
 ---
 

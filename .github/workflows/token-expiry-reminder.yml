@@ -1,0 +1,64 @@
+name: GitHub token expiry reminder
+
+# Opens an issue reminding us to renew the GitHub token that the
+# refresh-simple trigger Lambda uses (Secrets Manager secret
+# landslides/github-dispatch-token). It is dispatched once by a one-time
+# EventBridge Scheduler schedule a month before the token expires; see
+# infra/lambda/refresh-simple-trigger/deploy.sh (TOKEN_EXPIRES / REMINDER_AT).
+# It does not use GitHub cron on purpose: cron runs hours late here and is
+# disabled after 60 days without repo activity.
+#
+# Run it by hand with dry_run to see the issue text without creating it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the issue instead of creating it"
+        type: boolean
+        default: false
+      expires:
+        description: "Token expiry date shown in the issue (YYYY-MM-DD)"
+        type: string
+        default: "2027-10-21"
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPIRES: ${{ inputs.expires }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Open the reminder issue
+        run: |
+          TITLE="Renew the GitHub token for the DFENS Simple trigger (expires $EXPIRES)"
+          BODY="The DFENS Simple dashboard at https://landslidesncgs.org/simple/ is kept fresh by an AWS EventBridge Scheduler schedule that invokes the Lambda \`landslides-refresh-simple-trigger\` every 10 minutes. That Lambda dispatches the \`refresh-simple.yml\` workflow through GitHub's API using a fine-grained personal access token stored in AWS Secrets Manager as \`landslides/github-dispatch-token\` (us-east-1). The token expires on **$EXPIRES**. When it does, every dispatch fails with HTTP 401, the pipeline stops checking NDFD, and within 45 minutes the page shows its stale-data banner to responders.
+
+          **What to do before $EXPIRES**
+
+          1. Create a new fine-grained token at https://github.com/settings/personal-access-tokens/new: resource owner \`nemac\`, repository \`nemac/landslides-ncgs\`, permission *Actions: Read and write*. Note the new expiry date.
+          2. Store it (the command prompts for the token without echoing it):
+             \`read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token --region us-east-1 --secret-string \"\$TOKEN\" && unset TOKEN\`
+          3. Confirm it works: \`aws lambda invoke --function-name landslides-refresh-simple-trigger /dev/stdout\` should return \`{\"status\": 204, ...}\`.
+          4. Set the next reminder: in \`infra/lambda/refresh-simple-trigger/deploy.sh\` update \`TOKEN_EXPIRES\` and \`REMINDER_AT\` to the new dates and run the script, which recreates the one-time schedule.
+          5. Delete the old token on GitHub.
+
+          Full notes: \`infra/lambda/refresh-simple-trigger/README.md\`. This issue was opened automatically by the \`token-expiry-reminder.yml\` workflow."
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "DRY RUN - would create issue:"; echo "Title: $TITLE"; echo; echo "$BODY"
+            exit 0
+          fi
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #$EXISTING is already open; not creating another."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" --label maintenance 2>/dev/null \
+            || gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIREN: Slope Instability and Rainfall Early Notification | NC Geological Survey</title>
+  <meta name="description"
+        content="Debris flow pathways in Western North Carolina forecast to
+                 receive 5 inches or more of rain in 24 hours, from the NWS
+                 forecast and the NC Geological Survey debris flow model." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <link rel="stylesheet"
+        href="https://unpkg.com/esri-leaflet-geocoder@3.1.5/dist/esri-leaflet-geocoder.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <a href="#alerts-table" class="skip-link">Skip to flagged pathways table</a>
+
+  <!-- ===================== HEADER ===================== -->
+  <!-- Banner matches the full DFENS dashboard (logos, links, alt text). -->
+  <header class="app-header" role="banner">
+    <div class="header-row">
+      <div class="logo logo-left">
+        <a href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey"
+           class="logo-link" target="_blank" rel="noopener"
+           aria-label="North Carolina Geological Survey (opens in new tab)">
+          <img src="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png"
+               alt="North Carolina Geological Survey seal" />
+        </a>
+      </div>
+      <div class="header-text">
+        <a href="https://landslidesncgs.org/" class="parent-link">
+          &larr; Landslides in Western North Carolina
+        </a>
+        <h1>SIREN: Slope Instability and Rainfall Early Notification</h1>
+        <p class="subtitle">
+          Real-time alerts showing debris flow pathways forecasted to receive
+          at least 5 inches of rain within a 24-hour period
+        </p>
+      </div>
+      <div class="logo logo-right">
+        <a href="https://www.deq.nc.gov/" class="logo-link"
+           target="_blank" rel="noopener"
+           aria-label="North Carolina Department of Environmental Quality (opens in new tab)">
+          <img src="https://landslidesncgs.org/assets/images/shared/DEQLogo.png"
+               alt="North Carolina Department of Environmental Quality" />
+        </a>
+      </div>
+      <div id="loading-indicator" class="loading-indicator"
+           role="status" aria-live="polite" aria-busy="false" hidden>
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span>Loading&hellip;</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Status cards, left to right: count, window, last update, threshold -->
+  <section class="status" aria-label="Current forecast status">
+    <dl class="card card-count" id="status-card">
+      <dt id="status-count-label">Flagged debris flow pathways</dt>
+      <dd class="card-number" id="status-count" aria-live="polite" aria-atomic="true">--</dd>
+    </dl>
+    <dl class="card">
+      <dt>Forecast Issued for</dt>
+      <dd class="card-value" id="status-window">Loading&hellip;</dd>
+      <dd class="card-note" id="status-window-note"></dd>
+    </dl>
+    <dl class="card">
+      <dt>Last Update</dt>
+      <dd class="card-value" id="status-issued">--</dd>
+      <dd class="card-note" id="status-checked"></dd>
+      <dd class="card-note" id="status-next"></dd>
+    </dl>
+    <dl class="card">
+      <dt>Precipitation Threshold</dt>
+      <dd class="card-value">5&Prime; precipitation in 24 hours</dd>
+    </dl>
+  </section>
+
+  <div class="stale-banner" id="stale-banner" role="alert" hidden></div>
+
+  <!-- ===================== BODY ===================== -->
+  <div class="app-body">
+
+    <aside class="sidebar" aria-label="Map layers and information">
+      <details class="side-section about">
+        <summary><h2 class="sidebar-heading">About this map</h2></summary>
+        <p>
+          Flagged areas show potential channelized debris flow pathways where
+          the National Weather Service forecasts at least 5 inches of rain
+          within a 24-hour period.
+        </p>
+        <p>
+          For more information, visit the
+          <a href="https://landslidesncgs.org/" target="_blank" rel="noopener">Landslides in Western North Carolina</a>
+          home page. To see where landslides have been documented across the
+          state, explore the
+          <a href="https://inventory.landslidesncgs.org/" target="_blank" rel="noopener">Landslide Inventory of North Carolina</a>.
+        </p>
+      </details>
+
+      <details class="side-section">
+        <summary><h2 class="sidebar-heading">Map layers</h2></summary>
+      <fieldset class="layer-list">
+        <legend class="sr-only">Map layer visibility</legend>
+
+        <div class="layer-row">
+          <input type="checkbox" id="layer-ndfd" checked />
+          <label for="layer-ndfd">
+            NDFD forecast precipitation
+          </label>
+        </div>
+        <details class="legend" id="ndfd-legend">
+          <summary>Precipitation legend</summary>
+          <ul class="legend-grid" id="ndfd-legend-list" aria-label="NDFD 24-hour precipitation categories">
+            <!-- Filled by app.js from PRECIP_COLORS + PRECIP_LABELS -->
+          </ul>
+          <p class="legend-note">Bold: at or above the 5&Prime; alert threshold.</p>
+        </details>
+        <div class="layer-row">
+          <input type="checkbox" id="layer-mrms" />
+          <label for="layer-mrms">
+            MRMS observed precipitation (past 24 hours)
+          </label>
+        </div>
+        <details class="legend" id="mrms-legend">
+          <summary>Precipitation legend</summary>
+          <div class="ramp" id="mrms-ramp" role="img"
+               aria-label="MRMS 24-hour precipitation color scale, in inches: blue below one half, cyan to green up to 1, yellow to orange 2 to 3, red 4 to 5, magenta 5 to 10, pale pink 15 and above">
+            <div class="ramp-bar" id="mrms-ramp-bar"></div>
+            <div class="ramp-ticks" id="mrms-ramp-ticks" aria-hidden="true"></div>
+          </div>
+          <p class="legend-note">Radar and gauge estimate of rain in the past 24 hours, updated hourly.</p>
+        </details>
+        <div class="layer-row">
+          <input type="checkbox" id="layer-radar" />
+          <label for="layer-radar">
+            NEXRAD radar (current)
+          </label>
+        </div>
+        <div class="layer-row">
+          <input type="checkbox" id="layer-alerts" checked />
+          <label for="layer-alerts">
+            <span class="key key-alerts" aria-hidden="true"></span>
+            Flagged debris flow pathways
+          </label>
+        </div>
+        <div class="layer-row">
+          <input type="checkbox" id="layer-reference" />
+          <label for="layer-reference">
+            <span class="key key-reference" aria-hidden="true"></span>
+            Potential channelized debris flow pathways
+          </label>
+        </div>
+        <div class="layer-row zoom-gated" id="row-parcels" title="Zoom in to see parcels">
+          <input type="checkbox" id="layer-parcels" />
+          <label for="layer-parcels">
+            <span class="key key-parcels" aria-hidden="true"></span>
+            NC Parcels
+          </label>
+        </div>
+        <div class="layer-row zoom-gated" id="row-buildings" title="Zoom in to see building footprints">
+          <input type="checkbox" id="layer-buildings" />
+          <label for="layer-buildings">
+            <span class="key key-buildings" aria-hidden="true"></span>
+            Building footprints
+          </label>
+        </div>
+      </fieldset>
+      </details>
+
+      <details class="side-section sources-section">
+        <summary><h2 class="sidebar-heading">Data Feeds</h2></summary>
+        <p class="feeds-intro">The map updates automatically when new National Weather Service forecast data are released:</p>
+        <table class="refresh-table">
+          <caption class="sr-only">How often the forecast data and this map update</caption>
+          <thead>
+            <tr><th scope="col">Update</th><th scope="col">How often</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">NWS forecast data</th>
+              <td>~12 minutes past each hour</td>
+            </tr>
+            <tr>
+              <th scope="row">24-hour forecast window</th>
+              <td>Every 6 hours: <span id="window-step-times">2 AM, 8 AM, 2 PM, 8 PM ET</span></td>
+            </tr>
+            <tr>
+              <th scope="row">SIREN dashboard</th>
+              <td>Every <span id="check-interval-text">10</span> minutes</td>
+            </tr>
+          </tbody>
+        </table>
+        <ul class="sources">
+          <li><a id="source-link" href="#" target="_blank" rel="noopener">NOAA NWS NDFD precipitation forecast</a></li>
+          <li><a href="https://mesonet.agron.iastate.edu/docs/nexrad_mosaic/" target="_blank" rel="noopener">NOAA NEXRAD radar via Iowa Environmental Mesonet</a></li>
+          <li><a href="https://mtarchive.geol.iastate.edu/" target="_blank" rel="noopener">NOAA MRMS observed precipitation via Iowa Environmental Mesonet</a></li>
+          <li><a href="https://services1.arcgis.com/PwLrOgCfU0cYShcG/arcgis/rest/services/CDF_Landslides_Model/FeatureServer" target="_blank" rel="noopener">NC Geological Survey channelized debris flow model</a></li>
+          <li><a href="https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer/1" target="_blank" rel="noopener">NC OneMap parcels</a></li>
+          <li><a href="https://docs.overturemaps.org/guides/buildings/#14/32.58453/-117.05154/0/60" target="_blank" rel="noopener">Overture Maps buildings</a></li>
+        </ul>
+      </details>
+
+
+      <address class="agency">
+        <a class="agency-name"
+           href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey"
+           target="_blank" rel="noopener">North Carolina Geological Survey<span class="sr-only"> (opens in new tab)</span></a><br />
+        Asheville Regional Office<br />
+        <a href="tel:+18282964500">828-296-4500</a>
+      </address>
+    </aside>
+
+    <main class="content" id="main-content">
+      <section class="map-section" aria-label="Map">
+        <div id="map" role="img"
+             aria-label="Map of Western North Carolina showing flagged debris flow pathways.
+                        The same pathways are listed in the table below."></div>
+      </section>
+
+      <section class="table-section" aria-labelledby="table-heading">
+        <div class="table-head">
+          <h2 id="table-heading">Flagged pathways</h2>
+          <p id="table-summary" class="table-summary" aria-live="polite">Loading&hellip;</p>
+          <button type="button" id="export-csv" class="btn" disabled>
+            Download CSV
+          </button>
+        </div>
+        <div class="table-wrapper" tabindex="0" aria-label="Scrollable table of flagged pathways">
+          <table id="alerts-table">
+            <caption class="sr-only">
+              Debris flow pathways forecast to receive 5 inches or more of
+              rain in 24 hours, highest rain first. Select a row to show it
+              on the map.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">County</th>
+                <th scope="col">Watershed</th>
+                <th scope="col">Forecast rain</th>
+                <th scope="col" class="num">Area (acres)</th>
+                <th scope="col" class="num">Pathway ID</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-tbody">
+              <tr><td colspan="5" class="empty-row">Loading&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/esri-leaflet-geocoder@3.1.5/dist/esri-leaflet-geocoder.js"></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
