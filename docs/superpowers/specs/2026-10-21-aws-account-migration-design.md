@@ -1,6 +1,6 @@
 # Migrate landslides-ncgs to its own AWS account
 
-Date: 2026-10-21. Status: reviewed, awaiting approval.
+Date: 2026-10-21. Status: reviewed, open questions answered, awaiting approval.
 
 ## Intent
 
@@ -365,12 +365,11 @@ Steps marked (hand) cannot be in CDK.
    path on the matching www host, and publish it. From this moment every
    visitor reaches the new account; the old distribution only answers the
    two apexes with a redirect.
-10. Move the apex names. The wildcard method does not cover apexes, and the
-    alias-move API requires the old distribution to be disabled, so there
-    are two options, and the choice is Jeff's (see "Apex names" below).
-    Either way, first add the ownership TXT records `_.landslidesncgs.org`
-    and `_.landslidesncgs.com` (value: the new distribution's domain) to
-    the old zones (hand).
+10. Move the apex names with Option A below (Jeff's decision, 2026-10-21:
+    a short gap is acceptable anywhere except inventory.landslidesncgs.org,
+    which is a subdomain and moves with no gap in step 8). First add the
+    ownership TXT records `_.landslidesncgs.org` and `_.landslidesncgs.com`
+    (value: the new distribution's domain) to the old zones (hand).
 11. Point the old zones' apex A records at the new distribution (hand),
     then update the name servers at GoDaddy for both domains (hand) to the
     four servers of each new zone.
@@ -398,7 +397,8 @@ Steps marked (hand) cannot be in CDK.
   on the bridge until Support acts, which can take days, and the new
   account's support plan may limit this.
 
-The document's recommendation is Option A.
+Decision: Option A. Option B stays here only as the fallback if the
+alias move is refused for any reason.
 
 ### Decommission list (old account, after step 12)
 
