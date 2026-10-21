@@ -18,6 +18,41 @@ details belong in an issue or PR once someone picks it up.
   tests for `scripts/analysis.py` (the intersection logic) and the
   frontend's threshold filtering.
 
+- **Move `alerts/data/` out of git into S3.** Decided 2026-10-20, to run
+  after the DFENS Simple fold lands. The repo carries about 950 MB of data
+  under `alerts/data/` (841 MB of it building footprints) and a 1.8 GB
+  history from 92 daily bot commits; GitHub Pages has a soft 1 GB limit we
+  are already at. Git history does not need to be kept. The pattern to copy
+  is `simple/pipeline/` plus `refresh-simple.yml`: the pipeline writes
+  straight to the bucket, commits nothing, and sets short `Cache-Control`
+  on data files so no CloudFront invalidation is needed.
+  - `refresh-data.yml` stops committing to `master` and stops dispatching
+    the deploy; it uploads `alerts/data/` to `s3://landslides-ncgs/alerts/data/`
+    with `aws s3 sync` and per-file `Cache-Control` (see the headers item
+    below). Seed the prefix once by hand before switching.
+  - `deploy-prod.yml` must add `--exclude "alerts/data/*"` to its root
+    `--delete` sync before the first S3-only refresh, or the next code
+    deploy wipes the live data. Same one-line pattern as `simple/data/*`.
+  - Stop tracking the folder (`git rm -r --cached alerts/data`, add it to
+    `.gitignore`). To shrink the clone as well, rewrite history with
+    `git filter-repo --path alerts/data --invert-paths` and force-push, or
+    start a fresh repo; either way Ian re-clones once and his fork goes
+    stale. Leaving history alone breaks nothing but keeps the 1.8 GB.
+  - Fresh checkouts will have no data. Add a small `scripts/sync_data.py`
+    (or `aws s3 sync` one-liner in OPERATIONS.md) that pulls the current
+    `alerts/data/` down from the live site; running `scripts/refresh.py`
+    locally still works as it does today. Buildings are 841 MB, so the
+    download beats regenerating.
+  - The GitHub Pages dev site (development branch) loses its data: it would
+    need CORS on CloudFront to read from landslidesncgs.org. Preferred:
+    retire the Pages site rather than add CORS plumbing.
+  - Turn on S3 versioning for the bucket if anyone wants to look at
+    yesterday's alerts after the git record goes away; that is the only
+    thing the git history gave us.
+  - Cost is negligible: about a gigabyte of storage plus a few hundred
+    small uploads a day. Later migration to the dedicated AWS account
+    becomes one bucket sync, one role and one distribution.
+
 ## From the October 2026 audit, not yet decided
 
 - **CloudFront and S3 response headers.** Production serves GeoJSON with no
