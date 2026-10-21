@@ -1,0 +1,136 @@
+name: Refresh DFENS Simple data (every 10 min)
+
+# Data pipeline for the DFENS Simple dashboard at /simple/ (simple/pipeline/).
+# Independent of the nightly refresh-data.yml: nothing is committed to git,
+# outputs go straight to s3://landslides-ncgs/simple/data/. The debris-flow
+# actions/cache key is deliberately the same as refresh-data.yml's so the
+# monthly cold fetch happens once for both workflows.
+#
+# Each run:
+#   1. ndfd_check.py (stdlib, ~5 s): has NDFD changed since the last
+#      published status.json?
+#        skip  -> only status.json is re-uploaded (heartbeat for the page)
+#        build -> step 2
+#   2. refresh_simple.py (geopandas): writes the forecast layer; if any
+#      >= 5" polygons are over WNC (heavy=true), also intersects them with
+#      the cached debris flows. Writes forecast, flagged file and status.
+#
+# GitHub cron is best-effort: runs can start several minutes late under
+# load. Worst-case lag from an Esri update to the page is roughly
+# cron interval + start delay + run time (~30 s skip, ~1-2 min build,
+# ~3-5 min build with heavy rain, ~20 min on the monthly cache rebuild).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild even if NDFD hasn't changed"
+        type: boolean
+        default: false
+
+concurrency:
+  group: refresh-simple
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE: arn:aws:iam::104538610210:role/landslides-github-actions-prod
+  S3_DATA: s3://landslides-ncgs/simple/data
+  STATUS_URL: https://landslidesncgs.org/simple/data/status.json
+  CHECK_INTERVAL_MINUTES: "10"     # keep in step with the cron above
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python (stdlib check)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check NDFD for changes
+        id: check
+        env:
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        run: python simple/pipeline/ndfd_check.py --out out
+
+      # ---- Build path: NDFD changed ------------------------------------
+      # The debris-flow cache (~570 MB) is only restored when there is
+      # >= 5" rain over WNC to intersect.
+      - name: Compute cache month
+        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
+        id: cachemonth
+        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache debris-flow gpkg
+        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: debris-gpkg-v1-${{ steps.cachemonth.outputs.ym }}
+          restore-keys: |
+            debris-gpkg-v1-
+
+      - name: Set up geopandas (micromamba)
+        if: steps.check.outputs.action == 'build'
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: dfens-simple
+          create-args: >-
+            python=3.11
+            geopandas
+            requests
+          init-shell: bash
+          cache-environment: true
+
+      - name: Build forecast + flagged files
+        if: steps.check.outputs.action == 'build'
+        shell: bash -el {0}
+        run: python simple/pipeline/refresh_simple.py --out out
+
+      # ---- Publish ------------------------------------------------------
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Data files first, then status, so the status never points at
+      # data that isn't up yet. Short max-age so CloudFront and browsers
+      # pick up new files within a minute without an invalidation.
+      - name: Upload forecast + flagged files
+        if: steps.check.outputs.action == 'build'
+        run: |
+          for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do
+            aws s3 cp "out/$f" "$S3_DATA/$f" \
+              --content-type application/geo+json \
+              --cache-control "public, max-age=60"
+          done
+
+      - name: Upload status
+        run: |
+          aws s3 cp out/status.json "$S3_DATA/status.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=30"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### NDFD refresh"
+            echo "- Action: \`${{ steps.check.outputs.action }}\`"
+            [ -f out/check.json ] && echo '```json' && cat out/check.json && echo && echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
