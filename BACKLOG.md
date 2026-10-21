@@ -53,6 +53,32 @@ details belong in an issue or PR once someone picks it up.
     small uploads a day. Later migration to the dedicated AWS account
     becomes one bucket sync, one role and one distribution.
 
+- **Everything on AWS except the code.** Decided 2026-10-21: the end state
+  is that GitHub holds only source code and every runtime piece (data,
+  schedules, pipelines, site) lives in the dedicated AWS account. Steps,
+  in order:
+  1. `alerts/data/` to S3 (the item above).
+  2. **Run the DFENS Simple pipeline itself on AWS** ("Option B"). Today
+     only the *trigger* is on AWS (EventBridge Scheduler + a stdlib Lambda
+     that calls `workflow_dispatch`, see
+     `infra/lambda/refresh-simple-trigger/`); the scripts still run on
+     GitHub Actions. Moving them means a container image with geopandas
+     and GDAL (ECR), the 570 MB debris-flow cache in S3 instead of
+     `actions/cache`, an execution role with bucket access, and Fargate or
+     Lambda with enough storage. Lambda's 15-minute limit is shorter than
+     the monthly cold debris-flow fetch (~20 min), so either keep that
+     one step on Actions or use Fargate. `scripts/` would then have two
+     runtimes to keep working.
+  3. Then the nightly `refresh-data.yml` the same way.
+- **Migrate the DFENS Simple trigger with everything else.** When the
+  project moves to its own AWS account, recreate (or redeploy with
+  `infra/lambda/refresh-simple-trigger/deploy.sh` after editing its
+  account-specific names): secret `landslides/github-dispatch-token`,
+  Lambda `landslides-refresh-simple-trigger`, roles
+  `landslides-refresh-simple-trigger-lambda` and
+  `-scheduler`, schedule `landslides-refresh-simple-10min`. The GitHub
+  token in the secret has an expiry and must be renewed by hand.
+
 ## From the October 2026 audit, not yet decided
 
 - **CloudFront and S3 response headers.** Production serves GeoJSON with no
