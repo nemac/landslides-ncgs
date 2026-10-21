@@ -55,6 +55,22 @@ developing. This saves you from cache headaches when files change.
 
 ## Refreshing data
 
+### Where the data lives
+
+`alerts/data/` is **not in git**. Production data lives only in the S3
+bucket `landslidesncgs-data` (AWS account 710482330128), written by the
+`refresh-data.yml` workflow every day at 04:00 UTC and served by CloudFront
+at `https://landslidesncgs.org/alerts/data/`. A fresh checkout has an empty
+`alerts/data/` folder. Two ways to fill it:
+
+- **With AWS access** (one command, about 870 MB, mostly building footprints):
+  ```
+  aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile jbliss-landslidesncgs
+  ```
+- **Without AWS access**: run the pipeline below. `python scripts/refresh.py`
+  regenerates the live files and, the first time, the building footprints
+  (5 to 15 minutes). Historical events come from `--hindcast`.
+
 ### Live precipitation (NDFD + MRMS) — most common
 
 In **Window 2**:
@@ -98,11 +114,21 @@ python scripts/refresh.py --hindcast may_2026_storm
 After it finishes, **hard-refresh the browser** to see the new historical
 data.
 
+The nightly workflow never runs `--hindcast`, so historical files reach
+production only when someone uploads them by hand after regenerating:
+
+```
+aws s3 sync alerts/data/historical s3://landslidesncgs-data/alerts/data/historical --content-type application/json --cache-control "public, max-age=300" --profile jbliss-landslidesncgs
+```
+
+The nightly upload never deletes remote files, so the historical folder in
+the bucket is safe between uploads.
+
 ### How often to refresh?
 
 | Data | Refresh cadence |
 |---|---|
-| Live precipitation | Whenever you want current weather. Will be automated via cron in Phase 3b. |
+| Live precipitation | Whenever you want current weather locally. Production refreshes daily at 04:00 UTC from AWS. |
 | Historical events | Only when adding events or changing config. Files don't expire. |
 | Debris flow polygons | Auto-cached for 30 days. The script handles this transparently. |
 
@@ -294,13 +320,14 @@ This un-tracks it without deleting from disk.
 |---|---|
 | Repo root | `C:\Users\ijohnson\Documents\GitHub\landslides-ncgs\` |
 | Dashboard HTML/CSS/JS | `alerts/` |
-| Live data files | `alerts/data/forecast.geojson` etc. |
-| Historical event files | `alerts/data/historical/` |
+| Live data files | `alerts/data/forecast.geojson` etc. (not in git; see [Where the data lives](#where-the-data-lives)) |
+| Historical event files | `alerts/data/historical/` (not in git; uploaded by hand) |
 | Python scripts | `scripts/` |
 | Debris flow cache | `cache/debris_flows.gpkg` (NEVER commit) |
 | Conda environment | defns-refresh, created from `environment.yml` |
 | Local URL | `http://localhost:8000/alerts/` |
-| Production URL (deploy TBD) | `https://landslidesncgs.com/alerts/` |
+| Production URL | `https://landslidesncgs.org/alerts/` (also `https://dashboard.landslidesncgs.org/`) |
+| Dev URL | `https://dev.landslidesncgs.org/alerts/` (basic auth; ask Jeff) |
 
 ### Quick commands cheat sheet
 
