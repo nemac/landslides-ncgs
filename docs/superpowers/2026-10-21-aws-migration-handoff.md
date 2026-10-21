@@ -86,7 +86,7 @@ Documents, in reading order:
 - Old account resources: distribution `E139BPMQTMFRUH` (site, five
   aliases, function `landslides-rewrite`), `EQE7L8KCKTTWN` (inventory,
   function `inventory-landslidesncgs-wrapper`), `EOBSDQ691NOUV` and
-  `E2PYK3QNTDCOU` (mapviewer .org/.com, redirect via an empty S3 website
+  `E2PYK3QNTDKCOU` (mapviewer .org/.com, redirect via an empty S3 website
   bucket); certs `e509892f-...` and `ef7adc33-...`; zones
   `Z0975952219HYWK0M3KBW` (.org) and `Z09867101HKHS3GND0YIE` (.com);
   bucket `landslides-ncgs` (183 objects, 994 MB); role
@@ -148,10 +148,44 @@ Documents, in reading order:
 
 ## Cutover progress
 
-### 2026-10-21: runbook steps 1 to 5 done
+### 2026-10-21 evening: runbook steps 6 to 10 done, step 11 apex records done
+
+Every hostname is served by the new account. PR nemac/landslides-ncgs#10
+merged to `master` as 5e61a82; `development` fast-forwarded to it. The
+production distribution holds the eight exact aliases, `cdk.json` defaults
+to `cutover=done`, and `cdk diff` is clean. The apex A and AAAA records in
+the old zones already point at `PROD_DOMAIN` (done inside step 10, see
+below). **Resume at step 11's name-server change at GoDaddy**, then step 12.
+
+Timings and findings from steps 6 to 10:
+
+- Step 8: each alias move took about two minutes; no host ever returned an
+  error. The runbook's `grep -c` check tripped on `EQE7L8KCKTTWN` because
+  its Comment names the host; the script stopped before changing anything
+  and the check now inspects the alias list (runbook updated). Removing the
+  last alias from the three single-host distributions worked with the
+  certificate switched to the CloudFront default in the same update.
+- The mapviewer `.com` distribution id was mistyped in the docs; it is
+  `E2PYK3QNTDKCOU` (fixed everywhere).
+- Step 9: the bridge reached the edge within five seconds of publishing.
+  The unmodified LIVE source is not needed again; the old function is on
+  the decommission list.
+- Step 10: disabled `E139BPMQTMFRUH` at 22:37 UTC (deployed 22:40), both
+  associations succeeded at 22:40. Disabling the distribution withdrew
+  `d3jh2fu1jt5on0.cloudfront.net` from DNS, so the apex alias records in
+  the old zones resolved to nothing until repointed at 22:41. Resolvers
+  that asked in that window cache the empty answer up to 900 s. Runbook
+  updated to repoint the apex records immediately after the association.
+- Old account state now: `E139BPMQTMFRUH` disabled with no aliases; the
+  three single-host distributions enabled with no aliases on the default
+  certificate; `landslides-rewrite` LIVE carries the apex bridge (unused);
+  old zones still authoritative and identical to the new ones except NS,
+  SOA, ACM validation CNAMEs and the two `_.` TXT ownership records.
+
+### 2026-10-21 afternoon: runbook steps 1 to 5 done
 
 All four stacks are `CREATE_COMPLETE` in 710482330128 and every step 5
-check passed. Nothing visitor-facing has changed. Resume at **step 6**.
+check passed.
 
 | Placeholder | Value |
 |---|---|
@@ -187,7 +221,7 @@ State at the end of the sitting:
 - Deferred minors still to apply when their step comes: step 7, UPSERT
   both A and AAAA for all six names and add `dev.landslidesncgs.org`
   (A and AAAA to `DEV_DOMAIN`) to the old `.org` zone; step 8, if removing
-  the last alias from `EQE7L8KCKTTWN`, `EOBSDQ691NOUV` or `E2PYK3QNTDCOU`
+  the last alias from `EQE7L8KCKTTWN`, `EOBSDQ691NOUV` or `E2PYK3QNTDKCOU`
   is rejected, set `ViewerCertificate.CloudFrontDefaultCertificate=true`
   in the same update.
 - Lessons: the CDK needs a live SSO token (`aws sso login --profile
