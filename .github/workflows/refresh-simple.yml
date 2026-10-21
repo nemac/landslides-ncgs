@@ -15,7 +15,12 @@ name: Refresh DFENS Simple data (every 10 min)
 #      >= 5" polygons are over WNC (heavy=true), also intersects them with
 #      the cached debris flows. Writes forecast, flagged file and status.
 #
-# GitHub cron is best-effort: runs can start several minutes late under
+# GitHub cron is best-effort and, for this repo, hours late (the daily job
+# has started 4-8 h late on every run; measured 2026-10-21). The real
+# 10-minute trigger is therefore EventBridge Scheduler + a Lambda that
+# calls workflow_dispatch (see infra/lambda/refresh-simple-trigger/). The
+# cron below is kept only as a backup; duplicate runs are serialized by
+# the concurrency group. Runs can still start a few minutes late under
 # load. Worst-case lag from an Esri update to the page is roughly
 # cron interval + start delay + run time (~30 s skip, ~1-2 min build,
 # ~3-5 min build with heavy rain, ~20 min on the monthly cache rebuild).
