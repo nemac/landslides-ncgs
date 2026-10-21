@@ -1,6 +1,6 @@
 # Migrate landslides-ncgs to its own AWS account
 
-Date: 2026-10-21. Status: reviewed, open questions answered, awaiting approval.
+Date: 2026-10-21. Status: approved by Jeff 2026-10-21. inventory.landslidesncgs.com is deliberately not created.
 
 ## Intent
 
