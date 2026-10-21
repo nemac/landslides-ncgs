@@ -111,10 +111,10 @@ The simplified dashboard at <https://landslidesncgs.org/simple/> lives in
 `refresh-simple.yml` workflow checks NDFD every 10 minutes and writes
 three small files straight to S3. See `simple/README.md` for details.
 
-To test it locally, from the repo root with `defns-refresh` activated:
+To test it locally, from the repo root with the `EWS` conda env activated:
 
 ```
-python simple\pipeline\run_local.py
+python simple/pipeline/run_local.py
 ```
 
 Then open `http://localhost:8000/simple/`. This serves the whole repo, so
