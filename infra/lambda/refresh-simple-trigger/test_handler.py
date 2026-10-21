@@ -48,6 +48,18 @@ class DispatchTests(unittest.TestCase):
         d.assert_called_once_with("tok", "nemac/landslides-ncgs", "refresh-simple.yml", "master")
         self.assertEqual(out, {"status": 204, "workflow": "refresh-simple.yml", "ref": "master"})
 
+    def test_event_can_override_workflow_file(self):
+        """A one-time schedule (e.g. the token-expiry reminder) passes
+        {"workflow_file": ...} in the event to dispatch a different workflow."""
+        env = {"GITHUB_REPO": "nemac/landslides-ncgs", "WORKFLOW_FILE": "refresh-simple.yml",
+               "GIT_REF": "master", "TOKEN_SECRET_ID": "x"}
+        with mock.patch.dict(os.environ, env), \
+             mock.patch.object(handler, "github_token", return_value="tok"), \
+             mock.patch.object(handler, "dispatch_workflow", return_value=204) as d:
+            out = handler.handler({"workflow_file": "token-expiry-reminder.yml"}, None)
+        d.assert_called_once_with("tok", "nemac/landslides-ncgs", "token-expiry-reminder.yml", "master")
+        self.assertEqual(out["workflow"], "token-expiry-reminder.yml")
+
 
 if __name__ == "__main__":
     unittest.main()

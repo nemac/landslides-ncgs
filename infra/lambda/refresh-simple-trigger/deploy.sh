@@ -16,6 +16,13 @@ SECRET=landslides/github-dispatch-token
 LAMBDA_ROLE=landslides-refresh-simple-trigger-lambda
 SCHED_ROLE=landslides-refresh-simple-trigger-scheduler
 SCHEDULE=landslides-refresh-simple-10min
+# The GitHub token in $SECRET expires on TOKEN_EXPIRES. A one-time schedule
+# fires on REMINDER_AT (UTC) and dispatches token-expiry-reminder.yml, which
+# opens an issue. Update both dates whenever the token is renewed.
+TOKEN_EXPIRES=2027-10-21
+REMINDER_AT=2027-09-21T13:00:00
+REMINDER_SCHEDULE=landslides-github-token-expiry-reminder
+REMINDER_WORKFLOW=token-expiry-reminder.yml
 HERE=$(cd "$(dirname "$0")" && pwd)
 export AWS_DEFAULT_REGION=$REGION
 
@@ -111,7 +118,29 @@ else
   echo "updated (state $STATE)"
 fi
 
+# ---- 6. One-time token-expiry reminder ----------------------------------
+# Fires once at REMINDER_AT, dispatches the reminder workflow (which opens
+# the issue), then deletes itself (ActionAfterCompletion=DELETE).
+log "reminder schedule $REMINDER_SCHEDULE (at $REMINDER_AT, token expires $TOKEN_EXPIRES)"
+REMINDER_INPUT="{\"workflow_file\":\"$REMINDER_WORKFLOW\"}"
+REMINDER_TARGET="{\"Arn\":\"$FN_ARN\",\"RoleArn\":\"$SCHED_ROLE_ARN\",\"Input\":$(printf '%s' "$REMINDER_INPUT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}"
+REMINDER_DESC="Dispatches $REMINDER_WORKFLOW a month before the GitHub token expires ($TOKEN_EXPIRES)"
+if ! aws scheduler get-schedule --name "$REMINDER_SCHEDULE" >/dev/null 2>&1; then
+  aws scheduler create-schedule --name "$REMINDER_SCHEDULE" \
+    --schedule-expression "at($REMINDER_AT)" --schedule-expression-timezone UTC \
+    --flexible-time-window Mode=OFF --action-after-completion DELETE \
+    --target "$REMINDER_TARGET" --description "$REMINDER_DESC" >/dev/null
+  echo "created"
+else
+  aws scheduler update-schedule --name "$REMINDER_SCHEDULE" \
+    --schedule-expression "at($REMINDER_AT)" --schedule-expression-timezone UTC \
+    --flexible-time-window Mode=OFF --action-after-completion DELETE \
+    --target "$REMINDER_TARGET" --description "$REMINDER_DESC" >/dev/null
+  echo "updated"
+fi
+
 log "done"
 echo "function:  $FN_ARN"
 echo "schedule:  $SCHEDULE ($(aws scheduler get-schedule --name "$SCHEDULE" --query State --output text))"
-echo "secret:    $SECRET_ARN"
+echo "reminder:  $REMINDER_SCHEDULE at $REMINDER_AT UTC -> $REMINDER_WORKFLOW"
+echo "secret:    $SECRET_ARN (token expires $TOKEN_EXPIRES)"
