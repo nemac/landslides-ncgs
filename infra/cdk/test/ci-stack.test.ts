@@ -70,6 +70,17 @@ test('dev role has no statement on the data bucket', () => {
   assert.match(prodStatements, /SiteBucket/);
 });
 
+test('prod role cannot delete from the data bucket', () => {
+  const { template } = ciTemplate();
+  const dataStatements = policyStatementsFor(template, 'ProdRole').filter((s) => JSON.stringify(s).includes('DataBucket'));
+  assert.ok(dataStatements.length >= 1, 'prod role has a data bucket statement');
+  for (const statement of dataStatements) {
+    assert.doesNotMatch(JSON.stringify(statement), /s3:Delete/);
+  }
+  const siteStatements = policyStatementsFor(template, 'ProdRole').filter((s) => JSON.stringify(s).includes('SiteBucket'));
+  assert.match(JSON.stringify(siteStatements), /s3:DeleteObject/);
+});
+
 test('each role may invalidate only its distribution', () => {
   const { template } = ciTemplate();
   for (const [role, pattern] of [['ProdRole', /cloudfront::710482330128:distribution\//], ['DevRole', /cloudfront::710482330128:distribution\//]] as const) {
