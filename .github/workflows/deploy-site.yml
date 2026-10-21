@@ -1,0 +1,119 @@
+name: Deploy a site bucket (reusable)
+
+# Syncs the static site in this repo to an S3 bucket and invalidates its
+# CloudFront distribution. Called by deploy-prod.yml (master -> production)
+# and deploy-dev.yml (development -> dev.landslidesncgs.org). The site is
+# plain HTML/CSS/JS with no build step; the two sync passes differ only in
+# the Cache-Control they set. Data never comes from the repo: alerts/data/
+# and simple/data/ live only in the data bucket, written by the refresh
+# workflows, and are excluded here in case a developer's checkout has them.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub environment whose OIDC subject the role trusts"
+        required: true
+        type: string
+      role_arn:
+        required: true
+        type: string
+      bucket:
+        required: true
+        type: string
+      distribution_id:
+        required: true
+        type: string
+      site_url:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.site_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Pass one: pages, styles and scripts, served with no-cache so a deploy
+      # plus invalidation is always visible at once. `--delete` removes files
+      # that left the repo; it skips excluded paths, which is why assets/ has
+      # its own pass below.
+      - name: Sync pages, CSS and JS (no-cache)
+        run: |
+          aws s3 sync . "s3://${{ inputs.bucket }}" \
+            --delete \
+            --cache-control "no-cache" \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude ".idea/*" \
+            --exclude ".claude/*" \
+            --exclude "__pycache__/*" \
+            --exclude "*/__pycache__/*" \
+            --exclude "scripts/*" \
+            --exclude "docs/*" \
+            --exclude "infra/*" \
+            --exclude "cache/*" \
+            --exclude "simple/pipeline/*" \
+            --exclude "alerts/data/*" \
+            --exclude "simple/data/*" \
+            --exclude "assets/*" \
+            --exclude "*.py" \
+            --exclude "*.md" \
+            --exclude ".gitignore" \
+            --exclude ".prettierrc" \
+            --exclude ".prettierignore" \
+            --exclude "eslint.config.mjs" \
+            --exclude "environment.yml" \
+            --exclude "package.json" \
+            --exclude "package-lock.json" \
+            --exclude "pyproject.toml" \
+            --exclude "requirements-dev.txt"
+
+      # Pass two: images, fonts and other static assets, cached for a day.
+      - name: Sync assets (one day)
+        run: |
+          aws s3 sync assets "s3://${{ inputs.bucket }}/assets" \
+            --delete \
+            --cache-control "public, max-age=86400"
+
+      - name: Invalidate CloudFront
+        id: invalidate
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+            --distribution-id "${{ inputs.distribution_id }}" \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text)
+          echo "invalidation_id=$ID" >> "$GITHUB_OUTPUT"
+          echo "Created invalidation $ID for /*"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy summary (${{ inputs.environment }})"
+            echo "- Bucket: \`s3://${{ inputs.bucket }}\`"
+            echo "- CloudFront: \`${{ inputs.distribution_id }}\` (invalidation \`${{ steps.invalidate.outputs.invalidation_id }}\`)"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

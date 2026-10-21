@@ -1,7 +1,7 @@
 # DEFNS Alerts dashboard
 
 Source files for the **Debris Flow Early Notification System** dashboard,
-served at <https://landslidesncgs.com/alerts/>.
+served at <https://landslidesncgs.org/alerts/> and <https://dashboard.landslidesncgs.org/>.
 
 ## Phases
 
@@ -13,8 +13,9 @@ This dashboard is being built in three phases.
 - **Phase 2 (next):** JavaScript controllers. Leaflet map, turf.js
   client-side intersection, alerts table, all interactions. Still using
   mocked JSON so reviewers can click through.
-- **Phase 3:** Python data pipeline + GitHub Action cron. Live data
-  refreshes every 15 minutes via committed JSON files.
+- **Phase 3:** Python data pipeline (`scripts/refresh.py`), run daily on
+  GitHub Actions and dispatched from EventBridge. It writes `alerts/data/`
+  straight to the S3 data bucket; nothing is committed to git.
 
 ## Files
 
@@ -25,7 +26,7 @@ alerts/
   css/
     styles.css            Dark theme matching landslidesncgs.com palette
   js/                     (added in Phase 2)
-  data/                   (added in Phase 3, written by cron job)
+  data/                   not in git: written to S3 by refresh-data.yml (see OPERATIONS.md)
 ```
 
 ## Accessibility commitments

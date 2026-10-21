@@ -2,7 +2,7 @@
  * app.js — main dashboard controller
  *
  * Responsibilities:
- *   - Initialize map and load mock data (Phase 3 swaps to live fetch)
+ *   - Initialize map and load the live GeoJSON files written by refresh.py
  *   - Wire up sidebar controls to map + alerts logic
  *   - Manage detection mode (NDFD vs MRMS) and update header/UI accordingly
  *   - Manage auto-refresh timer
@@ -15,7 +15,28 @@
   const CFG  = window.DEFNS_CONFIG;
   const MAP  = window.DEFNS_MAP;
   const AL   = window.DEFNS_ALERTS;
-  const MOCK = window.DEFNS_MOCK;
+
+  // Live data store. Every key starts null and is filled by _fetchInto()
+  // when the matching GeoJSON file written by scripts/refresh.py loads.
+  // A key goes back to null when its fetch fails, so the dashboard never
+  // renders stale or placeholder data as if it were current. refresh()
+  // shows the data-unavailable banner whenever an active key is null.
+  const DATA = {
+    NDFD_FORECAST:      null,
+    MRMS_OBSERVED:      null,
+    FLAGGED_NDFD:       null,
+    FLAGGED_MRMS:       null,
+    HISTORICAL_PRECIP:  null,
+    HISTORICAL_FLAGGED: null,
+  };
+
+  // Which DATA keys each detection mode depends on. Used to decide when
+  // the active view is missing data and must show the unavailable banner.
+  const DATA_KEYS_BY_MODE = {
+    ndfd:       ['NDFD_FORECAST', 'FLAGGED_NDFD'],
+    mrms:       ['MRMS_OBSERVED', 'FLAGGED_MRMS'],
+    historical: ['HISTORICAL_PRECIP', 'HISTORICAL_FLAGGED'],
+  };
 
   // ---- DOM references (collected once, reused) ----------------------------
   const $ = (id) => document.getElementById(id);
@@ -30,6 +51,8 @@
     eventDescription:$('event-description'),
     hindcastBanner:  $('hindcast-banner'),
     hindcastBannerDetail: $('hindcast-banner-detail'),
+    dataUnavailableBanner: $('data-unavailable-banner'),
+    dataUnavailableDetail: $('data-unavailable-detail'),
     thresholdSlider: $('threshold-slider'),
     thresholdLabel:  $('threshold-readout-label'),
     thresholdSourceLabel: $('threshold-source-label'),
@@ -89,10 +112,13 @@
     threshold: CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY,     // 0..19
     window:    CFG.NDFD_DEFAULT_WINDOW_HOURS,           // hours, semantics depends on mode
     autoRefreshTimer: null,
-    // Track which window's data is currently loaded into the MOCK keys.
+    // Track which window's data is currently loaded into the DATA keys.
     // Lets us skip re-fetching when the user toggles modes and the
     // already-loaded window matches the new mode's selection.
     loadedWindows: { ndfd: null, mrms: null },
+    // DATA key -> URL of the file whose most recent fetch failed. Cleared
+    // for a key when a later fetch of it succeeds.
+    unavailable: {},
   };
 
   // Per-mode window dropdown configuration. NDFD is forward-looking
@@ -298,27 +324,22 @@
   // =====================================================================
   // LIVE DATA FETCH (Phase 3a + Phase B)
   // =====================================================================
-  // We fetch four files in parallel:
-  //   forecast.geojson      NDFD precip (visualization)
-  //   observed.geojson      MRMS precip (visualization)
-  //   flagged_ndfd.geojson  Pre-computed alerts (server-side intersection)
-  //   flagged_mrms.geojson  Pre-computed alerts (server-side intersection)
-  //
-  // The MOCK module is mutated in-place when fetches succeed, so refresh()
-  // transparently uses live data wherever it's available.
-  // =====================================================================
   // Per-window file loaders.
   //
-  // After our 2026-05-28 multi-window refactor, refresh.py writes
-  // window-suffixed files like forecast_12h.geojson, observed_24h.geojson,
-  // flagged_ndfd_72h.geojson, etc. The frontend keeps the most recently
-  // loaded window of each mode in the MOCK keys (NDFD_FORECAST, etc.) and
-  // tracks which window that is in state.loadedWindows.
+  // refresh.py writes window-suffixed files like forecast_12h.geojson,
+  // observed_24h.geojson, flagged_ndfd_72h.geojson, etc. The frontend
+  // keeps the most recently loaded window of each mode in the DATA keys
+  // (NDFD_FORECAST, etc.) and tracks which window that is in
+  // state.loadedWindows.
   //
   // On page init we preload the DEFAULT window for both modes (NDFD 12h
   // and MRMS 1h) so mode-switching is instant. When the user picks a
   // different window from the dropdown, _loadLiveData() fetches just
-  // that window's files into the same MOCK keys.
+  // that window's files into the same DATA keys.
+  //
+  // A file that fails to load leaves its DATA key null. There is no
+  // placeholder data anywhere in the frontend: refresh() renders an
+  // empty map and table and shows the data-unavailable banner instead.
   // =====================================================================
   function _loadLiveDataInitial() {
     _setLoading(true);
@@ -333,7 +354,7 @@
       console.log(`[DEFNS] Initial live data: ${okCount}/4 files loaded.`);
       results.forEach(function (r, i) {
         if (r.status !== 'fulfilled' || !r.value) {
-          console.warn(`[DEFNS] ${labels[i]} failed; falling back to mock.`);
+          console.warn(`[DEFNS] ${labels[i]} failed; data unavailable.`);
         }
       });
       // Mark these default windows as loaded so we don't re-fetch them
@@ -379,14 +400,15 @@
       const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
       console.log(`[DEFNS] ${state.mode.toUpperCase()} ${target}h: ${okCount}/2 files loaded.`);
       // Mark loaded even if some files failed - we don't want infinite
-      // retry loops on missing files. The MOCK keys will hold whatever
-      // succeeded plus stale data for whatever didn't.
+      // retry loops on missing files. Failed keys are null, and refresh()
+      // shows the data-unavailable banner for them. The next auto-refresh
+      // tick or manual refresh retries the fetch.
       if (state.mode === 'ndfd') state.loadedWindows.ndfd = target;
       else if (state.mode === 'mrms') state.loadedWindows.mrms = target;
     });
   }
 
-  function _fetchInto(url, mockKey) {
+  function _fetchInto(url, dataKey) {
     return fetch(url, { cache: 'no-cache' }).then(function (resp) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
       return resp.json();
@@ -394,12 +416,59 @@
       if (!geojson || !geojson.type || geojson.type !== 'FeatureCollection') {
         throw new Error(`${url}: not a FeatureCollection`);
       }
-      MOCK[mockKey] = geojson;
+      DATA[dataKey] = geojson;
+      delete state.unavailable[dataKey];
       return true;
     }).catch(function (err) {
       console.warn(`[DEFNS] ${url} fetch failed: ${err.message}`);
+      DATA[dataKey] = null;
+      state.unavailable[dataKey] = url;
       return false;
     });
+  }
+
+  // =====================================================================
+  // DATA AVAILABILITY
+  // =====================================================================
+  // Names of the files the active mode needs that are not loaded. Uses the
+  // URL recorded at fetch time when there is one, otherwise the DATA key.
+  function _missingFilesForActiveMode() {
+    return DATA_KEYS_BY_MODE[state.mode]
+      .filter(function (key) { return DATA[key] == null; })
+      .map(function (key) { return state.unavailable[key] || key; });
+  }
+
+  function _isActiveDataUnavailable() {
+    return _missingFilesForActiveMode().length > 0;
+  }
+
+  // Show or hide the data-unavailable banner above the map. role=alert on
+  // the banner means screen readers announce it as soon as it appears.
+  function _updateDataAvailabilityBanner() {
+    if (!els.dataUnavailableBanner) return;
+    const missing = _missingFilesForActiveMode();
+    els.dataUnavailableBanner.hidden = missing.length === 0;
+    if (missing.length > 0 && els.dataUnavailableDetail) {
+      els.dataUnavailableDetail.textContent =
+        'Could not load: ' + missing.join(', ') + '. The map and table ' +
+        'stay empty until the next refresh succeeds. This is not an ' +
+        'indication that there is no debris flow risk.';
+    }
+  }
+
+  // Replace the alerts table's "nothing meets the threshold" message with
+  // an unavailable message, so an empty table never reads as "no risk".
+  function _showUnavailableInAlertsTable() {
+    const emptyCell = els.alertsTbody &&
+                      els.alertsTbody.querySelector('td.empty-row');
+    if (emptyCell) {
+      emptyCell.textContent =
+        'Alert data is unavailable. Nothing can be shown for this mode ' +
+        'until the data files load.';
+    }
+    if (els.alertsSummary) {
+      els.alertsSummary.textContent = 'Data unavailable.';
+    }
   }
 
   // =====================================================================
@@ -636,13 +705,14 @@
   // =====================================================================
   // REFRESH - recomputes everything from current state + loaded data
   //
-  // Phase B: alerts are pre-computed by refresh.py and shipped as
-  // flagged_ndfd.geojson and flagged_mrms.geojson. Each feature has a
-  // `max_category` property. We filter client-side by:
+  // Alerts are pre-computed by refresh.py and shipped as
+  // flagged_ndfd_{N}h.geojson and flagged_mrms_{N}h.geojson. Each feature
+  // has a `max_category` property. We filter client-side by:
   //     feature.properties.max_category >= state.threshold
-  // No turf intersection on the client - all spatial work is done by
-  // refresh.py in geopandas, which is orders of magnitude faster than
-  // doing it in JS for 228k debris flow polygons.
+  // No spatial work happens on the client - refresh.py does it in
+  // geopandas, which is orders of magnitude faster than JS for 228k
+  // debris flow polygons. If a flagged file is missing there is nothing
+  // to show, and the data-unavailable banner says so.
   // =====================================================================
   function refresh() {
     const isHistorical = state.mode === 'historical';
@@ -652,50 +722,45 @@
     // In historical mode, hide live layers and show the historical layer.
     if (isHistorical) {
       MAP.setForecast(null);                          // clear NDFD
-      MAP.setObserved(MOCK.HISTORICAL_PRECIP);        // reuse observed pane
+      MAP.setObserved(DATA.HISTORICAL_PRECIP);        // reuse observed pane
       MAP.setObservedVisible(true);                   // always show in hindcast
     } else {
-      MAP.setForecast(MOCK.NDFD_FORECAST);
+      MAP.setForecast(DATA.NDFD_FORECAST);
       MAP.setForecastVisible(els.layerNdfd.checked);
-      MAP.setObserved(MOCK.MRMS_OBSERVED);
+      MAP.setObserved(DATA.MRMS_OBSERVED);
       MAP.setObservedVisible(els.layerMrms.checked);
     }
 
     // ---- Pick the active precip + flagged dataset for the current mode --
     let activePrecip, activeFlagged;
     if (isHistorical) {
-      activePrecip  = MOCK.HISTORICAL_PRECIP;
-      activeFlagged = MOCK.HISTORICAL_FLAGGED;
+      activePrecip  = DATA.HISTORICAL_PRECIP;
+      activeFlagged = DATA.HISTORICAL_FLAGGED;
     } else if (state.mode === 'mrms') {
-      activePrecip  = MOCK.MRMS_OBSERVED;
-      activeFlagged = MOCK.FLAGGED_MRMS;
+      activePrecip  = DATA.MRMS_OBSERVED;
+      activeFlagged = DATA.FLAGGED_MRMS;
     } else {
-      activePrecip  = MOCK.NDFD_FORECAST;
-      activeFlagged = MOCK.FLAGGED_NDFD;
+      activePrecip  = DATA.NDFD_FORECAST;
+      activeFlagged = DATA.FLAGGED_NDFD;
     }
 
     // ---- Filter pre-computed flagged data by threshold -------------------
+    // flaggedCount is null (not 0) when the flagged file is missing, so the
+    // header metric shows "--" rather than a reassuring zero.
     let alertsFC;
-    let totalCandidates = 0;
-    let totalDebris     = 0;
+    let flaggedCount = null;
+    let totalDebris  = 0;
 
     if (activeFlagged && activeFlagged.features) {
-      // Live mode: server pre-computed. Filter by max_category client-side.
-      totalCandidates = activeFlagged.features.length;
-      totalDebris     = (activeFlagged.meta && activeFlagged.meta.n_debris)
-                        || totalCandidates;
-      const matched = activeFlagged.features.filter(function (f) {
-        return Number(f.properties.max_category) >= state.threshold;
-      });
-      alertsFC = { type: 'FeatureCollection', features: matched };
+      totalDebris  = (activeFlagged.meta && activeFlagged.meta.n_debris)
+                     || activeFlagged.features.length;
+      alertsFC     = _filterFlaggedByThreshold(activeFlagged, state.threshold);
+      flaggedCount = alertsFC.features.length;
     } else {
-      // Fallback mode: no flagged file present. Use legacy client-side
-      // turf intersection against the mock 8-rectangle debris flows.
-      // This keeps the dashboard testable before refresh.py has run.
-      const result = AL.compute(activePrecip, MOCK.DEBRIS_FLOWS, state.threshold);
-      alertsFC = result.alerts;
-      totalDebris = result.summary.total;
+      alertsFC = { type: 'FeatureCollection', features: [] };
     }
+
+    _updateDataAvailabilityBanner();
 
     // ---- Stash for CSV export + click-to-zoom ---------------------------
     state.lastAlerts = alertsFC;
@@ -707,7 +772,7 @@
 
     // ---- Header metrics --------------------------------------------------
     _updateHeader(activePrecip, {
-      flagged: alertsFC.features.length,
+      flagged: flaggedCount,
       total:   totalDebris,
       maxCategory: _maxCategoryIn(alertsFC)
     });
@@ -716,10 +781,9 @@
     _updateSourceMeta(activePrecip);
 
     // ---- Alerts table ----------------------------------------------------
-    // Normalize property name: pre-computed flagged data uses `max_category`
-    // (a property of the polygon itself), while client-side fallback uses
-    // `precip_category` (a property of the intersection event). The table
-    // renderer reads `precip_category` for the swatch and label. Bridge:
+    // Normalize property name: flagged data uses `max_category` (a property
+    // of the polygon itself) while the table renderer reads
+    // `precip_category` for the swatch and label. Bridge:
     alertsFC.features.forEach(function (f) {
       const p = f.properties;
       if (p.max_category != null && p.precip_category == null) {
@@ -729,6 +793,7 @@
     });
 
     AL.render(alertsFC, els.alertsTbody, els.alertsSummary, state.lastCtx);
+    if (_isActiveDataUnavailable()) _showUnavailableInAlertsTable();
     _wireRowClicks();        // (re-wire after every render - new <tr> each time)
 
     if (els.exportCsvBtn) {
@@ -739,6 +804,13 @@
       'Last updated: ' + new Date().toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit'
       });
+  }
+
+  function _filterFlaggedByThreshold(flaggedFC, threshold) {
+    const matched = flaggedFC.features.filter(function (f) {
+      return Number(f.properties.max_category) >= threshold;
+    });
+    return { type: 'FeatureCollection', features: matched };
   }
 
   function _maxCategoryIn(fc) {
@@ -884,7 +956,7 @@
   }
 
   function _updateHeader(activeFC, summary) {
-    const m = activeFC.meta || {};
+    const m = (activeFC && activeFC.meta) || {};
 
     if (state.mode === 'historical') {
       // The "Issued"/"Window" metric cards repurpose to show event identity
@@ -917,9 +989,16 @@
       '\u2265 ' + (CFG.formatThresholdInches(state.threshold) || '--');
     els.metricThresholdSub.textContent = 'NDFD category ' + state.threshold;
 
-    els.metricFlagged.textContent = String(summary.flagged);
-    els.metricFlaggedSub.textContent =
-      'of ' + summary.total + ' debris flow pathways';
+    // summary.flagged is null when the flagged file did not load. Show
+    // "--" in that case: a zero here would wrongly imply "no risk".
+    if (summary.flagged == null) {
+      els.metricFlagged.textContent    = '--';
+      els.metricFlaggedSub.textContent = 'data unavailable';
+    } else {
+      els.metricFlagged.textContent    = String(summary.flagged);
+      els.metricFlaggedSub.textContent =
+        'of ' + summary.total + ' debris flow pathways';
+    }
 
     if (summary.flagged > 0) {
       els.metricFlaggedCard.classList.add('has-alerts');

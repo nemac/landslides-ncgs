@@ -1,10 +1,7 @@
 /* =========================================================================
- * alerts.js — compute alerts and render them in an accessible table
+ * alerts.js — render pre-computed alerts in an accessible table
  *
  * Public surface (exported on window.DEFNS_ALERTS):
- *   compute(precipFeatures, debrisFeatures, threshold)
- *     -> { alerts: GeoJSON FeatureCollection, summary: {flagged, total, ...} }
- *
  *   render(alertsFC, tbodyEl, summaryEl, ctx)
  *     -> populates an accessible <tbody> + updates the live-region summary
  *        ctx is { source, timestamp } - used for the Source column.
@@ -12,89 +9,16 @@
  *   toCSV(alertsFC, ctx)
  *     -> returns a CSV string with header row + one row per alert
  *
- * Uses turf.js (loaded globally as `turf`) for the geometric intersection.
+ * The alerts themselves are computed server-side by scripts/refresh.py
+ * (geopandas intersection of debris flow polygons with precipitation
+ * polygons) and shipped as flagged_*.geojson. This module only renders.
+ * Uses turf.js (loaded globally as `turf`) for per-polygon area estimates.
  * ========================================================================= */
 
 window.DEFNS_ALERTS = (function () {
   'use strict';
 
   const CFG = window.DEFNS_CONFIG;
-
-  /**
-   * compute(precip, debris, threshold)
-   * (unchanged from previous version)
-   */
-  function compute(precip, debris, threshold) {
-    if (!precip || !precip.features || !precip.features.length ||
-        !debris || !debris.features || !debris.features.length) {
-      return {
-        alerts: { type: 'FeatureCollection', features: [] },
-        summary: { flagged: 0, total: (debris && debris.features) ? debris.features.length : 0,
-                   maxCategory: null }
-      };
-    }
-
-    const qualifyingPrecip = {
-      type: 'FeatureCollection',
-      features: precip.features.filter(
-        f => Number(f.properties.category) >= threshold
-      )
-    };
-
-    if (!qualifyingPrecip.features.length) {
-      return {
-        alerts: { type: 'FeatureCollection', features: [] },
-        summary: { flagged: 0, total: debris.features.length, maxCategory: null }
-      };
-    }
-
-    const flagged = [];
-    let maxCategorySeen = -1;
-
-    for (const dfFeat of debris.features) {
-      let bestCat = -1;
-      let bestLabel = null;
-
-      for (const pFeat of qualifyingPrecip.features) {
-        let intersects = false;
-        try {
-          intersects = turf.booleanIntersects(dfFeat, pFeat);
-        } catch (e) {
-          console.warn('[DEFNS] turf.booleanIntersects failed:', e);
-          continue;
-        }
-        if (intersects) {
-          const cat = Number(pFeat.properties.category);
-          if (cat > bestCat) {
-            bestCat = cat;
-            bestLabel = pFeat.properties.label;
-          }
-        }
-      }
-
-      if (bestCat >= threshold) {
-        if (bestCat > maxCategorySeen) maxCategorySeen = bestCat;
-        flagged.push({
-          type: 'Feature',
-          properties: {
-            ...dfFeat.properties,
-            precip_category: bestCat,
-            precip_label:    bestLabel
-          },
-          geometry: dfFeat.geometry
-        });
-      }
-    }
-
-    return {
-      alerts: { type: 'FeatureCollection', features: flagged },
-      summary: {
-        flagged:     flagged.length,
-        total:       debris.features.length,
-        maxCategory: maxCategorySeen >= 0 ? maxCategorySeen : null
-      }
-    };
-  }
 
   /**
    * render(alertsFC, tbody, summaryEl, ctx)
@@ -283,5 +207,5 @@ window.DEFNS_ALERTS = (function () {
     return s;
   }
 
-  return { compute, render, toCSV };
+  return { render, toCSV };
 })();

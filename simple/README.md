@@ -32,7 +32,7 @@ pathways table (click a row to zoom, CSV download), and four layer toggles:
 
 The main dashboard's pipeline (`scripts/refresh.py`, `refresh-data.yml`)
 runs nightly. It produces 7 flagged files plus MRMS and buildings, and
-commits its data to git. It is too heavy to keep up with NDFD, which updates
+uploads them to the data bucket. It is too heavy to keep up with NDFD, which updates
 about hourly. The simple page therefore has its own lean pipeline that
 produces only the files this page needs and uploads them straight to S3.
 Nothing under `simple/data/` is committed to git.
@@ -46,7 +46,7 @@ Nothing under `simple/data/` is committed to git.
       fetch all categories for the 24 h period, clip to WNC -> forecast_24h.geojson
       any >= 5" polygons? load debris flows (cache/debris_flows.gpkg,
       actions/cache monthly), bbox prefilter, find_alerts() on candidates
-  -> s3://landslides-ncgs/simple/data/
+  -> s3://landslidesncgs-data/simple/data/
         forecast_24h.geojson             (map layer, Cache-Control max-age=60)
         flagged_ndfd_24h_min11.geojson   (max-age=60)
         status.json                      (max-age=30, rewritten every run)
@@ -93,18 +93,20 @@ pipeline last checked for updates (`checked_at`).
 
 ## Deploy
 
-- `deploy-prod.yml` (on push to `master`) syncs the whole repo to the
-  bucket, so `simple/` ships with the main site. It excludes
-  `simple/data/*` (written only by the refresh workflow) and
-  `simple/pipeline/*`.
-- `refresh-simple.yml` (cron) writes `simple/data/`.
+- `deploy-prod.yml` (on push to `master`) syncs the repo to the site
+  bucket, so `simple/` ships with the main site. `simple/pipeline/*` is
+  excluded. `simple/data/` is served from the separate data bucket through
+  the same CloudFront distribution.
+- `refresh-simple.yml` (dispatched every 10 minutes) writes `simple/data/`
+  to the data bucket.
 
 After the first deploy, seed `simple/data/` by running `refresh-simple.yml`
 once by hand (Actions, Run workflow, `force` checked). Until then the page
 shows its stale-data banner.
 
-The GitHub Pages copy of the development branch serves the page but has no
-`simple/data/`, so it always shows the banner. That is expected.
+The dev site at <https://dev.landslidesncgs.org/simple/> (from the
+`development` branch, basic auth) reads the production data bucket, so it
+shows live data.
 
 ## Run it locally
 

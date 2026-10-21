@@ -644,6 +644,38 @@ kbd {
   font-weight: 700;
 }
 
+/* Data-unavailable banner - shown above the map when a data file the
+   active mode needs failed to load. Red palette so it is clearly an
+   error, not the amber "historical" notice. Same layout as the hindcast
+   banner so the two stack cleanly if both ever show. */
+.data-unavailable-banner {
+  background: #5a1a1a;          /* dark red */
+  color: #ffb3b3;
+  border: 1px solid #8a2a2a;
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.data-unavailable-banner[hidden] { display: none; }
+.data-unavailable-banner-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.data-unavailable-banner-text {
+  flex: 1;
+}
+.data-unavailable-banner-text strong {
+  display: block;
+  color: #ffd6d6;
+  font-weight: 700;
+}
+
 /* Slider */
 input[type="range"] {
   width: 100%;

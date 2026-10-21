@@ -1,0 +1,25 @@
+name: Deploy to dev (S3 + CloudFront)
+
+# Fires on any push to `development`, replacing the old GitHub Pages site.
+# The dev site at dev.landslidesncgs.org is behind basic auth and reads live
+# production data through its own distribution. The role ARN and
+# distribution id come from the CDK outputs (infra/README.md) and are filled
+# in during the cutover.
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-site.yml
+    with:
+      environment: development
+      role_arn: arn:aws:iam::710482330128:role/landslides-github-dev
+      bucket: landslidesncgs-dev-site
+      distribution_id: E3AS4HL2G2AKTI
+      site_url: https://dev.landslidesncgs.org
