@@ -28,3 +28,7 @@ venv/
 # DFENS Simple pipeline outputs (production data lives only in S3)
 simple/data/
 out/
+
+# CDK app (infra/cdk)
+infra/cdk/node_modules/
+infra/cdk/cdk.out/
