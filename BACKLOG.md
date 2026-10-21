@@ -53,6 +53,18 @@ details belong in an issue or PR once someone picks it up.
     small uploads a day. Later migration to the dedicated AWS account
     becomes one bucket sync, one role and one distribution.
 
+- **Reproducible snapshots of flagged runs.** Requested 2026-10-21. Today
+  each refresh overwrites `alerts/data/flagged_*.geojson`, and the only
+  record of past runs is git history, which the S3 move above gives up.
+  - When nothing is flagged, keep nothing but one log line (run time,
+    windows checked, "nothing flagged").
+  - When a run flags any debris flows, keep a dated, read-only snapshot
+    (for example `s3://landslides-ncgs/alerts/snapshots/<run time>/`) with
+    every asset and input needed to reproduce that forecast exactly: the
+    flagged outputs, the NDFD/MRMS precipitation inputs per window, the
+    thresholds and category cutoffs in force, the debris-flow basin data
+    version, and the code commit.
+
 - **Everything on AWS except the code.** Decided 2026-10-21: the end state
   is that GitHub holds only source code and every runtime piece (data,
   schedules, pipelines, site) lives in the dedicated AWS account. Steps,
