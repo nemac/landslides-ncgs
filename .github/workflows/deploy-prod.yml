@@ -51,7 +51,9 @@ jobs:
       # Sync the repo root to the bucket. `--delete` removes files from the
       # bucket that no longer exist in the repo. Excludes keep non-web files
       # (git metadata, CI config, editor config, Python data scripts, docs)
-      # out of the public bucket.
+      # out of the public bucket. "simple/data/*" is written by refresh-simple.yml
+      # straight to S3 and is never in git - without this exclude, --delete would
+      # wipe it on every deploy. "simple/pipeline/*" is not web content.
       - name: Sync to S3
         run: |
           aws s3 sync . "s3://${S3_BUCKET}" \
@@ -66,7 +68,9 @@ jobs:
             --exclude "cache/*" \
             --exclude "*.py" \
             --exclude "*.md" \
-            --exclude ".gitignore"
+            --exclude ".gitignore" \
+            --exclude "simple/data/*" \
+            --exclude "simple/pipeline/*"
 
       - name: Invalidate CloudFront
         id: invalidate

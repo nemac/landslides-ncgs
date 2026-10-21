@@ -235,9 +235,10 @@ def _refresh_ndfd(window_hours: int = 12) -> None:
     """Fetch NDFD forecast for a specific window. Writes per-window file
     forecast_{N}h.geojson. min_category=0 returns ALL categories so the
     client can re-threshold without re-fetching."""
-    gdf, fromdate, todate = defns_data.fetch_precip_forecast(
+    gdf, valid_start, valid_end = defns_data.fetch_precip_forecast(
         window_hours=window_hours, min_category=0
     )
+    source_updated = defns_data.fetch_ndfd_source_updated()
     print(f"  Fetched {len(gdf)} NDFD polygons across all categories.")
 
     gdf_clipped = _clip_to_wnc(gdf)
@@ -253,8 +254,12 @@ def _refresh_ndfd(window_hours: int = 12) -> None:
     }
     fc["meta"] = {
         "source":        "NWS NDFD precipitation forecast",
-        "issued":        _to_iso(fromdate),
-        "window_end":    _to_iso(todate),
+        # When Esri last loaded new NDFD data (falls back to run time).
+        "issued":        _to_iso(source_updated or datetime.now(timezone.utc)),
+        # Accumulation window. window_start is the NDFD cycle start and
+        # can be up to ~6 h before the run, so part may be in the past.
+        "window_start":  _to_iso(valid_start),
+        "window_end":    _to_iso(valid_end),
         "window_hours":  window_hours,
         "generated_at":  _to_iso(datetime.now(timezone.utc)),
         "n_polygons":    len(gdf_slim),
@@ -384,11 +389,21 @@ def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None
     if not precip_path.exists():
         raise FileNotFoundError(f"Precip file missing: {precip_path}")
     precip_gdf = gpd.read_file(precip_path)
+    # Carry the precip file's window/issue meta into the flagged file so a
+    # consumer (e.g. the simplified dashboard) needs only one file.
+    try:
+        with open(precip_path, encoding="utf-8") as fh:
+            precip_meta = json.load(fh).get("meta") or {}
+    except Exception:
+        precip_meta = {}
+    _PRECIP_META_KEYS = ("issued", "window_start", "window_end",
+                         "window_hours", "observed_at")
+    carried = {k: precip_meta[k] for k in _PRECIP_META_KEYS if k in precip_meta}
     print(f"  Precip polygons:  {len(precip_gdf)}")
 
     if precip_gdf.empty:
         print(f"  No precipitation -> empty flagged file.")
-        _write_empty_flagged(out_path, source_label)
+        _write_empty_flagged(out_path, source_label, carried)
         return
 
     # IMPORTANT: find_alerts requires precip to already be filtered to
@@ -400,7 +415,7 @@ def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None
     print(f"  Debris flows flagged (raw): {len(flagged)}")
 
     if flagged.empty:
-        _write_empty_flagged(out_path, source_label)
+        _write_empty_flagged(out_path, source_label, carried)
         return
 
     # find_alerts returns columns: OBJECTID, category, label, area_acres, geometry.
@@ -417,7 +432,7 @@ def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None
               f"({len(flagged)} remain)")
 
     if flagged.empty:
-        _write_empty_flagged(out_path, source_label)
+        _write_empty_flagged(out_path, source_label, carried)
         return
 
     # ---- Optimization 2: geometry simplification ----------------------------
@@ -445,6 +460,7 @@ def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None
         "n_flagged":    len(flagged),
         "n_debris":     len(debris_gdf),
         "min_category_shipped": FLAGGED_MIN_CATEGORY,
+        **carried,
     }
     _write_json(out_path, fc)
     print(f"  Wrote {out_path.name}: {out_path.stat().st_size / 1024:.1f} KB")
@@ -477,7 +493,8 @@ def _round_recursive(coords, precision):
     return coords
 
 
-def _write_empty_flagged(out_path: Path, source_label: str) -> None:
+def _write_empty_flagged(out_path: Path, source_label: str,
+                         carried: dict | None = None) -> None:
     """Write a valid empty FeatureCollection so the frontend has a file
     to fetch even when there are no flagged polygons."""
     fc = {
@@ -487,7 +504,8 @@ def _write_empty_flagged(out_path: Path, source_label: str) -> None:
             "source":       source_label,
             "generated_at": _to_iso(datetime.now(timezone.utc)),
             "n_flagged":    0,
-            "n_debris":     len(_debris_cache.get("gdf", []))
+            "n_debris":     len(_debris_cache.get("gdf", [])),
+            **(carried or {}),
         }
     }
     _write_json(out_path, fc)
