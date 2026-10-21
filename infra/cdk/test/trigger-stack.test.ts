@@ -70,3 +70,8 @@ test('function may read only that secret', () => {
   assert.equal(reads.length, 1);
   assert.match(JSON.stringify(reads[0].Resource), /Token/);
 });
+
+test('stack is termination protected', () => {
+  const stack = new TriggerStack(new App(), 'Trigger', { env });
+  assert.equal(stack.terminationProtection, true);
+});

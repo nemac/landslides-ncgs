@@ -187,6 +187,14 @@ curl -s -o /dev/null -w '%{http_code}\n' --resolve dev.landslidesncgs.org:443:$E
 curl -s -o /dev/null -w '%{http_code}\n' --resolve dev.landslidesncgs.org:443:$EDGE -u 'user:password' https://dev.landslidesncgs.org/
 ```
 
+Rehearse the step 8 alias move on the throwaway name before any real
+hostname moves: run the "new account: add" half of step 8 with
+`NAME=cut-test.landslidesncgs.org`, confirm `curl -sI --resolve ...` above
+still returns 200, then run the "old account: remove" half against
+`PROD_ID` with the new-account profile (the same jq, removing the name
+again), and confirm the wildcard answers the name once more. Both halves
+must print the expected `grep -c` counts.
+
 Host-dependent logic (dashboard mapping, inventory page, mapviewer
 redirects) is covered by the function tests and can be exercised live with
 `aws cloudfront test-function --name landslides-production --stage LIVE --event-object fileb://event.json --profile jbliss-landslidesncgs`
@@ -241,13 +249,15 @@ NAME=www.landslidesncgs.org
 
 # old account: remove
 aws cloudfront get-distribution-config --id OLD_PROD > /tmp/old.json
-jq '.DistributionConfig | .Aliases.Items -= [env.NAME] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/old.json > /tmp/old-config.json
+jq --arg name "$NAME" '.DistributionConfig | .Aliases.Items -= [$name] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/old.json > /tmp/old-config.json
+grep -c "$NAME" /tmp/old-config.json      # must print 0 before you continue
 aws cloudfront update-distribution --id OLD_PROD --if-match "$(jq -r .ETag /tmp/old.json)" --distribution-config file:///tmp/old-config.json > /dev/null
 aws cloudfront wait distribution-deployed --id OLD_PROD
 
 # new account: add
 aws cloudfront get-distribution-config --id PROD_ID --profile jbliss-landslidesncgs > /tmp/new.json
-jq '.DistributionConfig | .Aliases.Items += [env.NAME] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/new.json > /tmp/new-config.json
+jq --arg name "$NAME" '.DistributionConfig | .Aliases.Items += [$name] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/new.json > /tmp/new-config.json
+grep -c "$NAME" /tmp/new-config.json      # must print 1 before you continue
 aws cloudfront update-distribution --id PROD_ID --if-match "$(jq -r .ETag /tmp/new.json)" --distribution-config file:///tmp/new-config.json --profile jbliss-landslidesncgs > /dev/null
 aws cloudfront wait distribution-deployed --id PROD_ID --profile jbliss-landslidesncgs
 
@@ -270,8 +280,15 @@ records to the new zones.
 ### 9. Bridge the apex names (hand)
 
 Update the old account's `landslides-rewrite` function so the two apex hosts
-send visitors to `www`, which is already on the new account. Add this at the
-top of its `handler`, after `host` and `uri` are read:
+send visitors to `www`, which is already on the new account. Start from the
+LIVE source, not the repo copy (the repo's piece has no `handler` any more):
+
+```bash
+aws cloudfront get-function --name landslides-rewrite --stage LIVE /tmp/landslides-rewrite-bridge.js
+```
+
+Edit `/tmp/landslides-rewrite-bridge.js` and add this at the top of its
+`handler`, after `host` and `uri` are read:
 
 ```js
 if (host === 'landslidesncgs.org' || host === 'landslidesncgs.com') {
@@ -297,6 +314,10 @@ ETAG=$(aws cloudfront describe-function --name landslides-rewrite --stage DEVELO
 aws cloudfront publish-function --name landslides-rewrite --if-match "$ETAG"
 curl -sI https://landslidesncgs.org/alerts/ | grep -i '^location'
 ```
+
+Expected: `location: https://www.landslidesncgs.org/alerts/`. If the
+function fails to publish or the header is missing, re-publish the
+unmodified LIVE source before going on.
 
 From here every visitor reaches the new account.
 
