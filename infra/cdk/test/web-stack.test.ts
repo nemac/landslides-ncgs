@@ -102,3 +102,10 @@ test('exports the buckets and distributions', () => {
   assert.ok(web.siteBucket && web.dataBucket && web.devSiteBucket);
   assert.ok(web.productionDistribution.distributionId && web.devDistribution.distributionId);
 });
+
+test('outputs what the runbook and workflows need', () => {
+  const { template } = webTemplate('wildcard');
+  for (const name of ['ProductionDistributionId', 'ProductionDomainName', 'DevDistributionId', 'DevDomainName', 'DevAuthStoreArn']) {
+    template.hasOutput(name, Match.anyValue());
+  }
+});

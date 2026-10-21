@@ -1,4 +1,4 @@
-import { RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -33,6 +33,7 @@ export class WebStack extends Stack {
   readonly devSiteBucket: s3.IBucket;
   readonly productionDistribution: cloudfront.IDistribution;
   readonly devDistribution: cloudfront.IDistribution;
+  private devAuthStore!: cloudfront.IKeyValueStore;
 
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, props);
@@ -45,6 +46,16 @@ export class WebStack extends Stack {
 
     this.makeRecords(props, recordedHostnames(props.stage), this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);
+    this.makeOutputs();
+  }
+
+  // Values the cutover runbook (infra/README.md) and the workflows copy.
+  private makeOutputs(): void {
+    new CfnOutput(this, 'ProductionDistributionId', { value: this.productionDistribution.distributionId });
+    new CfnOutput(this, 'ProductionDomainName', { value: this.productionDistribution.distributionDomainName });
+    new CfnOutput(this, 'DevDistributionId', { value: this.devDistribution.distributionId });
+    new CfnOutput(this, 'DevDomainName', { value: this.devDistribution.distributionDomainName });
+    new CfnOutput(this, 'DevAuthStoreArn', { value: this.devAuthStore.keyValueStoreArn });
   }
 
   private makeBucket(id: string, bucketName: string, versioned: boolean): s3.IBucket {
@@ -78,6 +89,7 @@ export class WebStack extends Stack {
       keyValueStoreName: 'landslides-dev-basic-auth',
       comment: 'basic-auth: base64 of user:password for dev.landslidesncgs.org (set by hand)',
     });
+    this.devAuthStore = store;
     const fn = new cloudfront.Function(this, 'DevFunction', {
       functionName: 'landslides-dev',
       code: cloudfront.FunctionCode.fromInline(composeDevFunction()),
