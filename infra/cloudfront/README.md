@@ -1,30 +1,38 @@
-# CloudFront configuration
+# CloudFront Functions
 
-Source of record for pieces of the production CloudFront setup that are
-otherwise only visible in the AWS console. Changes here are applied by hand
-with the AWS CLI; nothing deploys this folder.
+Source of record for the viewer-request functions on the production and dev
+distributions. The CDK app in `infra/cdk/` composes them and deploys them;
+nothing here is applied by hand.
 
-## `landslides-rewrite.js`
+## Pieces
 
-Viewer-request function on distribution `E139BPMQTMFRUH`. It does three
-things:
+Each file defines exactly one top-level function and nothing else, so the
+files can be concatenated into one CloudFront Function:
 
-1. Redirects (301) a directory-style path without a trailing slash, such as
-   `/simple` or `/alerts`, to the slash form. Without this the page would be
-   served at `/simple` and its relative `css/` and `js/` links would resolve
-   from the site root and 403 (seen 2026-10-20).
-2. Maps the `dashboard.landslidesncgs.org` host onto the `/alerts/` prefix.
-3. Appends `index.html` to paths ending in `/`, because the S3 origin (OAC,
-   REST endpoint) does not resolve directory indexes.
+| File | Function | Does |
+|---|---|---|
+| `landslides-rewrite.js` | `rewrite(event)` | 301 a directory path without a trailing slash to the slash form; map the `dashboard.landslidesncgs.org` host onto `/alerts/`; append `index.html` to directory paths (the S3 origin does not resolve indexes). |
+| `landslides-hosted-redirects.js` | `hostedRedirects(event)` | Serve the iframe page for `inventory.landslidesncgs.org`; 301 both mapviewer hosts to the ArcGIS web app viewer; `null` for every other host. |
+| `landslides-basic-auth.js` | `basicAuth(event, kvs)` | 401 challenge unless the Authorization header matches the base64 credential under key `basic-auth` in the function's KeyValueStore; `null` when it matches. |
 
-To update it:
+The CDK app (`infra/cdk/lib/compose-function.ts`) builds:
+
+- **production**: hosted-redirects, then rewrite;
+- **dev**: basic-auth, then rewrite, with the KeyValueStore attached.
+
+Both run on `cloudfront-js-2.0` and must stay under 10 KB combined.
+
+## Tests
+
+Plain Node tests load each piece by name and call it with CloudFront-shaped
+events. No AWS access needed:
 
 ```bash
-ETAG=$(aws cloudfront describe-function --name landslides-rewrite --stage DEVELOPMENT --query ETag --output text)
-aws cloudfront update-function --name landslides-rewrite --if-match "$ETAG" \
-  --function-config Comment="Directory index + dashboard host map; redirect no-slash dirs",Runtime=cloudfront-js-2.0 \
-  --function-code fileb://infra/cloudfront/landslides-rewrite.js
-# test with `aws cloudfront test-function --stage DEVELOPMENT ...`, then:
-ETAG=$(aws cloudfront describe-function --name landslides-rewrite --stage DEVELOPMENT --query ETag --output text)
-aws cloudfront publish-function --name landslides-rewrite --if-match "$ETAG"
+node --test "infra/cloudfront/test/*.test.js"
 ```
+
+## Changing a piece
+
+Edit the file, add or adjust a test, run the tests, then `cdk deploy Web`
+from `infra/cdk/` (see `infra/README.md`). The old `update-function` /
+`publish-function` commands are no longer used.
