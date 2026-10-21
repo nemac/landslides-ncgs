@@ -24,3 +24,7 @@ node_modules/
 # Local Python virtual environments (ruff and other dev tools)
 .venv/
 venv/
+
+# DFENS Simple pipeline outputs (production data lives only in S3)
+simple/data/
+out/
