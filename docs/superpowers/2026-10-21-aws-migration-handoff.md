@@ -145,3 +145,53 @@ Documents, in reading order:
 > branch. Then walk me through runbook step 1. Stop before every (hand)
 > command that changes either AWS account or GoDaddy and show me the exact
 > command first.
+
+## Cutover progress
+
+### 2026-10-21: runbook steps 1 to 5 done
+
+All four stacks are `CREATE_COMPLETE` in 710482330128 and every step 5
+check passed. Nothing visitor-facing has changed. Resume at **step 6**.
+
+| Placeholder | Value |
+|---|---|
+| `PROD_ID` | `E2ERQC7EESP0UJ` |
+| `PROD_DOMAIN` | `d1l2ettg5f95r5.cloudfront.net` |
+| `DEV_ID` | `E3AS4HL2G2AKTI` |
+| `DEV_DOMAIN` | `d25hk2rsm9ccef.cloudfront.net` |
+| `KVS_ARN` | `arn:aws:cloudfront::710482330128:key-value-store/c057491b-60d9-4fb9-aa9b-23f754803a24` |
+| New `.org` zone | `Z004871826306EDVE3SHV` |
+| New `.com` zone | `Z0537419FRWL9VN4J5ZN` |
+| Certificate | `arn:aws:acm:us-east-1:710482330128:certificate/1c053a7f-47b7-4126-82b6-395725f39247` (ISSUED) |
+
+State at the end of the sitting:
+
+- Old account changes so far: two ACM validation CNAMEs added to the old
+  zones; schedules `landslides-refresh-simple-10min` and
+  `landslides-github-token-expiry-reminder` DISABLED. Nothing else.
+- New account: data bucket seeded (102 objects, 914 MB); both site buckets
+  seeded by hand with the workflow's two sync passes (80 objects each), so
+  the step 6 workflow runs only reconcile. Token in the secret (copied
+  from the old secret, never typed); `basic-auth` key set in the KVS and
+  dev tested 401 then 200 with the credential.
+- The new 10-minute schedule is live and dispatches `refresh-simple.yml`
+  on `master`, which until step 6 is the old workflow writing to the old
+  bucket. `landslides-refresh-data-daily` (04:00 UTC) dispatches the old
+  `refresh-data.yml`, which still commits data to `master`: merge `master`
+  into the branch before step 6.
+- Step 5 rehearsal of the step 8 alias move on `cut-test.landslidesncgs.org`
+  passed both halves; the production distribution is back to the two
+  wildcards only.
+- Deferred minors applied: Ci role `grantRead` + `grantPut` on the data
+  bucket (commit 5aa59bd); `--if-match` on `test-function`; `read -rs`.
+- Deferred minors still to apply when their step comes: step 7, UPSERT
+  both A and AAAA for all six names and add `dev.landslidesncgs.org`
+  (A and AAAA to `DEV_DOMAIN`) to the old `.org` zone; step 8, if removing
+  the last alias from `EQE7L8KCKTTWN`, `EOBSDQ691NOUV` or `E2PYK3QNTDCOU`
+  is rejected, set `ViewerCertificate.CloudFrontDefaultCertificate=true`
+  in the same update.
+- Lessons: the CDK needs a live SSO token (`aws sso login --profile
+  jbliss-landslidesncgs`) even when the CLI still works from its cache. A
+  hand seed from a developer checkout needs `--exclude` for
+  `node_modules/*`, `.ruff_cache/*` and `.superpowers/*` on top of the
+  workflow's list; they were uploaded and then removed.
