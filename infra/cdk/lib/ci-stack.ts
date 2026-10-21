@@ -32,7 +32,9 @@ export class CiStack extends Stack {
 
     this.prodRole = this.makeRole(provider, 'ProdRole', 'landslides-github-prod', 'production');
     props.siteBucket.grantReadWrite(this.prodRole);
-    props.dataBucket.grantReadWrite(this.prodRole);
+    // The refresh workflows only read and write data objects; nothing deletes.
+    props.dataBucket.grantRead(this.prodRole);
+    props.dataBucket.grantPut(this.prodRole);
     this.allowInvalidation(this.prodRole, props.productionDistribution);
 
     this.devRole = this.makeRole(provider, 'DevRole', 'landslides-github-dev', 'development');
