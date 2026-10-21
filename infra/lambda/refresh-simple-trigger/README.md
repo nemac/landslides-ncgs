@@ -51,6 +51,20 @@ AWS account (see `BACKLOG.md`).
    A successful invoke returns `{"status": 204, ...}` and a new
    `workflow_dispatch` run appears in the Actions tab within seconds.
 
+## Token expiry reminder
+
+The token expires on the date in `deploy.sh` (`TOKEN_EXPIRES`). A one-time
+EventBridge Scheduler schedule, `landslides-github-token-expiry-reminder`,
+fires at `REMINDER_AT` (a month earlier), invokes the same Lambda with
+`{"workflow_file": "token-expiry-reminder.yml"}`, and that workflow opens a
+GitHub issue titled "Renew the GitHub token for the DFENS Simple trigger"
+with the renewal steps. The schedule deletes itself after firing.
+
+When you renew the token: store the new value (step 3 above), then edit
+`TOKEN_EXPIRES` and `REMINDER_AT` in `deploy.sh` and re-run it to create
+the next reminder. To preview the issue text without creating it:
+`gh workflow run token-expiry-reminder.yml -f dry_run=true`.
+
 ## Updating the code
 
 Edit `handler.py`, run the tests, re-run `deploy.sh`:

@@ -12,6 +12,9 @@ Environment:
   GIT_REF           branch to run on (default master)
   TOKEN_SECRET_ID   Secrets Manager secret holding a GitHub token with
                     Actions: read and write on the repo
+
+Event (optional):
+  {"workflow_file": "other.yml"}   dispatch that workflow instead
 """
 
 import json
@@ -21,17 +24,17 @@ import urllib.request
 
 import boto3
 
-_token_cache: str | None = None
 
 
 def github_token() -> str:
-    """Read the GitHub token from Secrets Manager once per container."""
-    global _token_cache
-    if _token_cache is None:
-        client = boto3.client("secretsmanager")
-        resp = client.get_secret_value(SecretId=os.environ["TOKEN_SECRET_ID"])
-        _token_cache = resp["SecretString"].strip()
-    return _token_cache
+    """Read the GitHub token from Secrets Manager on every invocation.
+
+    Not cached on purpose: a warm container would otherwise keep using a
+    token that has since been rotated (or the setup placeholder) until the
+    container is recycled. One GetSecretValue every 10 minutes is free."""
+    client = boto3.client("secretsmanager")
+    resp = client.get_secret_value(SecretId=os.environ["TOKEN_SECRET_ID"])
+    return resp["SecretString"].strip()
 
 
 def dispatch_workflow(token: str, repo: str, workflow_file: str, ref: str) -> int:
@@ -50,8 +53,13 @@ def dispatch_workflow(token: str, repo: str, workflow_file: str, ref: str) -> in
 
 
 def handler(event, context):
+    """Dispatch WORKFLOW_FILE, or the workflow named in the event.
+
+    The 10-minute schedule sends an empty event. A one-time schedule (the
+    token-expiry reminder) sends {"workflow_file": "..."} to reuse this
+    function for a different workflow."""
     repo = os.environ["GITHUB_REPO"]
-    workflow_file = os.environ["WORKFLOW_FILE"]
+    workflow_file = (event or {}).get("workflow_file") or os.environ["WORKFLOW_FILE"]
     ref = os.environ.get("GIT_REF", "master")
     try:
         status = dispatch_workflow(github_token(), repo, workflow_file, ref)
