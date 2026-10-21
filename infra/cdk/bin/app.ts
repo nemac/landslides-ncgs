@@ -3,6 +3,7 @@ import { ACCOUNT, REGION } from '../lib/config.js';
 import { readCutoverStage } from '../lib/cutover.js';
 import { DnsStack } from '../lib/dns-stack.js';
 import { WebStack } from '../lib/web-stack.js';
+import { CiStack } from '../lib/ci-stack.js';
 
 const app = new App();
 const env = { account: ACCOUNT, region: REGION };
@@ -17,5 +18,14 @@ const web = new WebStack(app, 'Web', {
   certificate: dns.certificate,
 });
 
-// Later stacks (Ci, Trigger) are added here as they are built.
-void web;
+const ci = new CiStack(app, 'Ci', {
+  env,
+  siteBucket: web.siteBucket,
+  dataBucket: web.dataBucket,
+  devSiteBucket: web.devSiteBucket,
+  productionDistribution: web.productionDistribution,
+  devDistribution: web.devDistribution,
+});
+
+// The Trigger stack is added here when it is built.
+void ci;
