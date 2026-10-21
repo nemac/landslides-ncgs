@@ -1,4 +1,4 @@
-function handler(event) {
+function rewrite(event) {
     var request = event.request;
     var host = request.headers.host ? request.headers.host.value : '';
     var uri = request.uri;
