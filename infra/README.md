@@ -250,23 +250,30 @@ NAME=www.landslidesncgs.org
 # old account: remove
 aws cloudfront get-distribution-config --id OLD_PROD > /tmp/old.json
 jq --arg name "$NAME" '.DistributionConfig | .Aliases.Items -= [$name] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/old.json > /tmp/old-config.json
-grep -c "$NAME" /tmp/old-config.json      # must print 0 before you continue
+jq --arg name "$NAME" '[.Aliases.Items[] | select(. == $name)] | length' /tmp/old-config.json   # must print 0
 aws cloudfront update-distribution --id OLD_PROD --if-match "$(jq -r .ETag /tmp/old.json)" --distribution-config file:///tmp/old-config.json > /dev/null
 aws cloudfront wait distribution-deployed --id OLD_PROD
 
 # new account: add
 aws cloudfront get-distribution-config --id PROD_ID --profile jbliss-landslidesncgs > /tmp/new.json
 jq --arg name "$NAME" '.DistributionConfig | .Aliases.Items += [$name] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/new.json > /tmp/new-config.json
-grep -c "$NAME" /tmp/new-config.json      # must print 1 before you continue
+jq --arg name "$NAME" '[.Aliases.Items[] | select(. == $name)] | length' /tmp/new-config.json   # must print 1
 aws cloudfront update-distribution --id PROD_ID --if-match "$(jq -r .ETag /tmp/new.json)" --distribution-config file:///tmp/new-config.json --profile jbliss-landslidesncgs > /dev/null
 aws cloudfront wait distribution-deployed --id PROD_ID --profile jbliss-landslidesncgs
 
 curl -sI https://$NAME/ | head -1
 ```
 
+The check inspects the alias list, not the whole file: a distribution's
+`Comment` may name its host. When the removal leaves an old distribution
+with no alias, the same jq must also replace `.ViewerCertificate` with
+`{CloudFrontDefaultCertificate: true, MinimumProtocolVersion: "TLSv1",
+CertificateSource: "cloudfront"}`, because CloudFront rejects a custom
+certificate with zero aliases.
+
 `inventory.landslidesncgs.org` lives on old distribution `EQE7L8KCKTTWN`,
 `mapviewer.landslidesncgs.org` on `EOBSDQ691NOUV` and
-`mapviewer.landslidesncgs.com` on `E2PYK3QNTDCOU`: use those ids in the
+`mapviewer.landslidesncgs.com` on `E2PYK3QNTDKCOU`: use those ids in the
 "remove" half. Rollback for any one name is the same pair of updates in
 reverse. When all six are moved:
 
@@ -356,6 +363,14 @@ aws cloudfront wait distribution-deployed --id PROD_ID --profile jbliss-landslid
 npx cdk deploy --all --context cutover=done --profile jbliss-landslidesncgs
 ```
 
+**Immediately after the association, before the deploy**, repoint the apex
+A and AAAA records in the old zones to `PROD_DOMAIN` (the step 11 command).
+Disabling the old distribution withdraws its `*.cloudfront.net` name from
+DNS, so the apex alias records resolve to nothing until they are
+repointed; the gap lasts until then, not until the association deploys.
+Resolvers that asked during the gap cache the empty answer for up to the
+SOA TTL (900 s).
+
 The last deploy records the eight exact aliases, drops the wildcards and
 adds the apex records to the new zones. Then edit `cdk.json` so
 `"cutover": "done"` is the default context.
@@ -420,7 +435,7 @@ collection, which can be requested from GitHub Support and is cosmetic.
 In this order, all on the default profile:
 
 1. Distributions: `OLD_PROD` is already disabled; disable `EQE7L8KCKTTWN`,
-   `EOBSDQ691NOUV`, `E2PYK3QNTDCOU` the same way (step 10's jq), wait, then
+   `EOBSDQ691NOUV`, `E2PYK3QNTDKCOU` the same way (step 10's jq), wait, then
    `aws cloudfront delete-distribution --id <id> --if-match <etag>` for all four.
 2. Functions: `aws cloudfront delete-function --name <n> --if-match <etag>` for
    `landslides-rewrite` and `inventory-landslidesncgs-wrapper`.

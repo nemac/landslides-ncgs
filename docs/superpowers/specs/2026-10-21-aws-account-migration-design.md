@@ -108,7 +108,7 @@ thing to recreate later, so the move happens before anything else is built.
 | Site + data bucket `landslides-ncgs` | NEMAC, us-east-1 | 183 objects, 994 MB; site, `alerts/data/`, `simple/data/` |
 | Distribution `E139BPMQTMFRUH` | NEMAC | aliases apex and www for both domains, plus `dashboard.landslidesncgs.org`; OAC origin; function `landslides-rewrite` on viewer-request |
 | Distribution `EQE7L8KCKTTWN` | NEMAC | `inventory.landslidesncgs.org`; function `inventory-landslidesncgs-wrapper` returns an iframe page; placeholder origin |
-| Distributions `EOBSDQ691NOUV`, `E2PYK3QNTDCOU` | NEMAC | `mapviewer.landslidesncgs.org` and `.com`; origin is an empty S3 website bucket whose only job is a redirect to the ArcGIS web app viewer |
+| Distributions `EOBSDQ691NOUV`, `E2PYK3QNTDKCOU` | NEMAC | `mapviewer.landslidesncgs.org` and `.com`; origin is an empty S3 website bucket whose only job is a redirect to the ArcGIS web app viewer |
 | Certs `e509892f` (apex + wildcard, both domains) and `ef7adc33` (apex + mapviewer) | NEMAC | DNS validated |
 | Hosted zones for `.org` and `.com` | NEMAC | registrar GoDaddy, delegated to these zones. Contents: A/AAAA aliases for the eight hostnames, NS, SOA, and ACM validation CNAMEs. No mail, verification or other records. |
 | IAM role `landslides-github-actions-prod` | NEMAC | OIDC trust on `repo:nemac/landslides-ncgs:environment:production` |
