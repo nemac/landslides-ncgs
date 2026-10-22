@@ -28,12 +28,19 @@ test('mapviewer.com redirects the same way', () => {
   assert.equal(out.headers.location.value, VIEWER_URL);
 });
 
+test('dashboard host redirects to DFENS Simple from any path', () => {
+  for (const uri of ['/', '/index.html', '/data/forecast.geojson']) {
+    const out = hostedRedirects(eventFor('dashboard.landslidesncgs.org', uri));
+    assert.equal(out.statusCode, 301);
+    assert.equal(out.headers.location.value, 'https://landslidesncgs.org/simple/');
+  }
+});
+
 for (const host of [
   'landslidesncgs.org',
   'www.landslidesncgs.org',
   'landslidesncgs.com',
   'www.landslidesncgs.com',
-  'dashboard.landslidesncgs.org',
 ]) {
   test(host + ' falls through', () => {
     assert.equal(hostedRedirects(eventFor(host, '/')), null);

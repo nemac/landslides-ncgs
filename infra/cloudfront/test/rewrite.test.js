@@ -10,17 +10,30 @@ test('directory path without slash redirects 301 with query kept', () => {
   assert.equal(out.headers.location.value, '/simple/?a=1');
 });
 
-test('dashboard host is prefixed with /alerts', () => {
-  const out = rewrite(eventFor('dashboard.landslidesncgs.org', '/data/forecast.geojson'));
+for (const uri of ['/alerts', '/alerts/', '/alerts/index.html', '/alerts/js/app.js', '/alerts/data']) {
+  test('retired dashboard path ' + uri + ' redirects to /simple/', () => {
+    const out = rewrite(eventFor('landslidesncgs.org', uri));
+    assert.equal(out.statusCode, 301);
+    assert.equal(out.headers.location.value, '/simple/');
+  });
+}
+
+test('alerts data files still pass through', () => {
+  const out = rewrite(eventFor('landslidesncgs.org', '/alerts/data/forecast.geojson'));
   assert.equal(out.uri, '/alerts/data/forecast.geojson');
 });
 
+test('a path that merely starts with alerts is not redirected', () => {
+  const out = rewrite(eventFor('landslidesncgs.org', '/alertsmap/x.js'));
+  assert.equal(out.uri, '/alertsmap/x.js');
+});
+
 test('trailing slash gets index.html', () => {
-  const out = rewrite(eventFor('landslidesncgs.org', '/alerts/'));
-  assert.equal(out.uri, '/alerts/index.html');
+  const out = rewrite(eventFor('landslidesncgs.org', '/simple/'));
+  assert.equal(out.uri, '/simple/index.html');
 });
 
 test('a file path passes through', () => {
-  const out = rewrite(eventFor('landslidesncgs.org', '/alerts/js/app.js'));
-  assert.equal(out.uri, '/alerts/js/app.js');
+  const out = rewrite(eventFor('landslidesncgs.org', '/simple/js/app.js'));
+  assert.equal(out.uri, '/simple/js/app.js');
 });
