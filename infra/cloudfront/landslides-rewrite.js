@@ -1,7 +1,18 @@
 function rewrite(event) {
     var request = event.request;
-    var host = request.headers.host ? request.headers.host.value : '';
     var uri = request.uri;
+
+    // The SIREN alerts dashboard under /alerts/ was taken offline on
+    // 2026-10-22; its pages redirect to DFENS Simple. The data files under
+    // /alerts/data/ stay reachable because the daily pipeline still writes
+    // them and nothing else serves them.
+    if (uri === '/alerts' || (uri.startsWith('/alerts/') && !uri.startsWith('/alerts/data/'))) {
+        return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: { location: { value: '/simple/' } }
+        };
+    }
 
     // Directory-style URL without a trailing slash (e.g. "/simple",
     // "/alerts"): redirect to the slash form instead of rewriting it.
@@ -23,16 +34,9 @@ function rewrite(event) {
         };
     }
 
-    // The alerts dashboard is served from the dashboard.landslidesncgs.org
-    // hostname but its files live under /alerts/ in the shared bucket.
-    // Map that host onto the /alerts prefix.
-    if (host === 'dashboard.landslidesncgs.org') {
-        uri = '/alerts' + uri;
-    }
-
     // The origin is an S3 REST endpoint (OAC), which does not resolve
     // directory indexes. Append index.html for directory-style URIs so
-    // paths like "/alerts/" or the dashboard root work.
+    // paths like "/simple/" work.
     if (uri.endsWith('/')) {
         uri += 'index.html';
     }

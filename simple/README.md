@@ -1,9 +1,10 @@
 # DFENS Simple
 
-A simplified variant of the DFENS dashboard for emergency responders, for
-A/B usability testing against the full dashboard at
-<https://landslidesncgs.org/alerts/>. It lives in this repo under `simple/`
-and is served at <https://landslidesncgs.org/simple/>.
+A simplified variant of the DFENS dashboard for emergency responders. It
+began as an A/B usability test against the full dashboard under `alerts/`;
+since 2026-10-22 it is the only dashboard users see, and
+<https://dashboard.landslidesncgs.org/> redirects here. It lives in this
+repo under `simple/` and is served at <https://landslidesncgs.org/simple/>.
 
 Built by Ian Johnson (originally in github.com/ijohnson37/dfens-simple).
 

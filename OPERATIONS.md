@@ -326,7 +326,7 @@ This un-tracks it without deleting from disk.
 | Debris flow cache | `cache/debris_flows.gpkg` (NEVER commit) |
 | Conda environment | defns-refresh, created from `environment.yml` |
 | Local URL | `http://localhost:8000/alerts/` |
-| Production URL | `https://landslidesncgs.org/alerts/` (also `https://dashboard.landslidesncgs.org/`) |
+| Production URL | none since 2026-10-22: `/alerts/` and `https://dashboard.landslidesncgs.org/` redirect to `https://landslidesncgs.org/simple/` |
 | Dev URL | `https://dev.landslidesncgs.org/alerts/` (basic auth; ask Jeff) |
 
 ### Quick commands cheat sheet
