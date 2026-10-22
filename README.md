@@ -1,15 +1,17 @@
 # Landslides in Western North Carolina
 
 Public site for the North Carolina Geological Survey's landslide program at
-<https://landslidesncgs.org>, with the SIREN alerts dashboard at
-`/alerts/` (also <https://dashboard.landslidesncgs.org>) and the DFENS
-Simple dashboard at `/simple/`. Plain HTML, CSS and JavaScript; no build
-step. The data pipelines are Python.
+<https://landslidesncgs.org>, with the DFENS Simple dashboard at `/simple/`
+(also reached from <https://dashboard.landslidesncgs.org>, which redirects
+there). Plain HTML, CSS and JavaScript; no build step. The data pipelines
+are Python. The earlier SIREN alerts dashboard under `alerts/` was taken
+offline on 2026-10-22 at Ian's request; its code stays in the repo and its
+daily pipeline still runs, but `/alerts/` pages redirect to `/simple/`.
 
 | Where | What |
 |---|---|
 | `index.html` and the other top-level pages, `assets/` | The main site |
-| `alerts/` | SIREN dashboard (map, alerts table); data in `alerts/data/`, **not in git** |
+| `alerts/` | SIREN dashboard, offline since 2026-10-22 (pages redirect to `/simple/`); data in `alerts/data/`, **not in git** |
 | `simple/` | DFENS Simple dashboard and its own 10-minute pipeline |
 | `scripts/` | The nightly alert pipeline (`refresh.py`) |
 | `infra/` | Every AWS resource, as CDK, plus the cutover runbook |
