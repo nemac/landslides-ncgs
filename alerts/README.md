@@ -3,10 +3,12 @@
 Source files for the **Debris Flow Early Notification System** dashboard.
 
 **Offline since 2026-10-22.** At Ian's request the exploratory dashboard
-was taken down in favor of DFENS Simple (`simple/`): `/alerts/` pages and
-<https://dashboard.landslidesncgs.org/> now redirect to
-<https://landslidesncgs.org/simple/> (see `infra/cloudfront/`). The code is
-kept here, and the daily pipeline still writes `alerts/data/` to S3.
+was taken down in favor of DFENS Simple (`simple/`): `/alerts/` pages
+redirect to <https://landslidesncgs.org/simple/>, and
+<https://dashboard.landslidesncgs.org/> now serves DFENS Simple (see
+`infra/cloudfront/`). The code is kept here, and the daily pipeline still
+writes `alerts/data/` to S3; the simple page loads its building footprints
+from there.
 
 ## Phases
 

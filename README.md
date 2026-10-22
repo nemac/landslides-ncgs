@@ -2,8 +2,8 @@
 
 Public site for the North Carolina Geological Survey's landslide program at
 <https://landslidesncgs.org>, with the DFENS Simple dashboard at `/simple/`
-(also reached from <https://dashboard.landslidesncgs.org>, which redirects
-there). Plain HTML, CSS and JavaScript; no build step. The data pipelines
+(also served as <https://dashboard.landslidesncgs.org>). Plain HTML, CSS
+and JavaScript; no build step. The data pipelines
 are Python. The earlier SIREN alerts dashboard under `alerts/` was taken
 offline on 2026-10-22 at Ian's request; its code stays in the repo and its
 daily pipeline still runs, but `/alerts/` pages redirect to `/simple/`.

@@ -1,13 +1,9 @@
 // Hosts that have no files in the bucket and are answered entirely by this
 // function: inventory.landslidesncgs.org serves a page framing the NCGS
-// ArcGIS Experience, both mapviewer hosts redirect to the ArcGIS web app
-// viewer, and dashboard.landslidesncgs.org redirects to DFENS Simple (the
-// SIREN alerts dashboard it used to serve was taken offline on 2026-10-22).
-// Every other host falls through (returns null) so the rewrite piece can
-// handle it. Composed into the production function by the CDK app.
+// ArcGIS Experience, and both mapviewer hosts redirect to the ArcGIS web
+// app viewer. Every other host falls through (returns null) so the rewrite
+// piece can handle it. Composed into the production function by the CDK app.
 var INVENTORY_HOST = 'inventory.landslidesncgs.org';
-var DASHBOARD_HOST = 'dashboard.landslidesncgs.org';
-var SIMPLE_URL = 'https://landslidesncgs.org/simple/';
 var MAPVIEWER_HOSTS = ['mapviewer.landslidesncgs.org', 'mapviewer.landslidesncgs.com'];
 var MAPVIEWER_URL = 'https://unca.maps.arcgis.com/apps/webappviewer/index.html?id=e9f79de934f24e40a71bab8db8050612';
 
@@ -44,14 +40,6 @@ function hostedRedirects(event) {
             statusCode: 301,
             statusDescription: 'Moved Permanently',
             headers: { location: { value: MAPVIEWER_URL } }
-        };
-    }
-
-    if (host === DASHBOARD_HOST) {
-        return {
-            statusCode: 301,
-            statusDescription: 'Moved Permanently',
-            headers: { location: { value: SIMPLE_URL } }
         };
     }
 
