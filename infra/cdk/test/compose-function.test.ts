@@ -40,8 +40,11 @@ test('both stay under the CloudFront limit', () => {
 test('production handler behaves end to end', () => {
   const handler = new Function(composeProductionFunction() + '\n; return handler;')();
   assert.equal(handler(eventFor('inventory.landslidesncgs.org', '/')).statusCode, 200);
-  const rewritten = handler(eventFor('dashboard.landslidesncgs.org', '/data/x.geojson'));
-  assert.equal(rewritten.uri, '/alerts/data/x.geojson');
+  const dashboard = handler(eventFor('dashboard.landslidesncgs.org', '/'));
+  assert.equal(dashboard.statusCode, 301);
+  assert.equal(dashboard.headers.location.value, 'https://landslidesncgs.org/simple/');
+  const rewritten = handler(eventFor('landslidesncgs.org', '/simple/'));
+  assert.equal(rewritten.uri, '/simple/index.html');
 });
 
 test('oversized piece throws at compose time', () => {

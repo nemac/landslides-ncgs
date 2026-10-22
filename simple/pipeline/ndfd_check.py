@@ -22,6 +22,8 @@ import argparse
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -29,10 +31,16 @@ from pathlib import Path
 
 import settings as S
 
+# The hosted NDFD service stalls for about a minute and then answers a
+# generic 400 ("Cannot perform query. Invalid query parameters.") while
+# Esri reloads the layer each hour. Those answers, timeouts and 5xx are
+# retried; a real client error such as a 404 on status.json is not.
+RETRY_ATTEMPTS = 3
+RETRY_DELAYS = (5, 15)   # seconds to wait before attempts 2 and 3
 
-def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
-    if params:
-        url = url + "?" + urllib.parse.urlencode(params)
+
+def _fetch_json(url: str, timeout: int) -> dict:
+    """One request. Raises on transport errors and on ArcGIS error payloads."""
     req = urllib.request.Request(url, headers={
         "User-Agent": "dfens-simple-refresh",
         # The HUC12 gzip bug noted in the main pipeline doesn't apply to
@@ -44,6 +52,31 @@ def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
     if isinstance(payload, dict) and "error" in payload:
         raise RuntimeError(f"ArcGIS error from {url}: {payload['error']}")
     return payload
+
+
+def _is_transient(exc: Exception) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code == 429 or exc.code >= 500
+    # URLError covers refused/reset connections and socket timeouts;
+    # RuntimeError is the ArcGIS error payload raised by _fetch_json.
+    return isinstance(exc, (urllib.error.URLError, TimeoutError, RuntimeError))
+
+
+def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
+    """GET JSON, retrying transient failures up to RETRY_ATTEMPTS times."""
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            return _fetch_json(url, timeout)
+        except Exception as e:
+            if attempt == RETRY_ATTEMPTS or not _is_transient(e):
+                raise
+            delay = RETRY_DELAYS[attempt - 1]
+            print(f"[check] attempt {attempt} of {RETRY_ATTEMPTS} failed "
+                  f"({type(e).__name__}: {e}); retrying in {delay}s")
+            time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def _iso(dt: datetime | None) -> str | None:

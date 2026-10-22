@@ -11,8 +11,8 @@ files can be concatenated into one CloudFront Function:
 
 | File | Function | Does |
 |---|---|---|
-| `landslides-rewrite.js` | `rewrite(event)` | 301 a directory path without a trailing slash to the slash form; map the `dashboard.landslidesncgs.org` host onto `/alerts/`; append `index.html` to directory paths (the S3 origin does not resolve indexes). |
-| `landslides-hosted-redirects.js` | `hostedRedirects(event)` | Serve the iframe page for `inventory.landslidesncgs.org`; 301 both mapviewer hosts to the ArcGIS web app viewer; `null` for every other host. |
+| `landslides-rewrite.js` | `rewrite(event)` | 301 the retired SIREN dashboard pages (`/alerts`, `/alerts/*` except `/alerts/data/*`) to `/simple/`; 301 a directory path without a trailing slash to the slash form; append `index.html` to directory paths (the S3 origin does not resolve indexes). |
+| `landslides-hosted-redirects.js` | `hostedRedirects(event)` | Serve the iframe page for `inventory.landslidesncgs.org`; 301 both mapviewer hosts to the ArcGIS web app viewer; 301 `dashboard.landslidesncgs.org` to `https://landslidesncgs.org/simple/`; `null` for every other host. |
 | `landslides-basic-auth.js` | `basicAuth(event, kvs)` | 401 challenge unless the Authorization header matches the base64 credential under key `basic-auth` in the function's KeyValueStore; `null` when it matches. |
 
 The CDK app (`infra/cdk/lib/compose-function.ts`) builds:

@@ -57,10 +57,10 @@ test('production distribution aliases follow the stage', () => {
   assert.deepEqual(productionConfig(webTemplate('done').template)?.Aliases, [...PROD_HOSTNAMES]);
 });
 
-test('production has the three data behaviors, compression and one function each', () => {
+test('production has the two data behaviors, compression and one function each', () => {
   const config = productionConfig(webTemplate('done').template);
   const patterns = config.CacheBehaviors.map((b: { PathPattern: string }) => b.PathPattern);
-  assert.deepEqual(patterns, ['alerts/data/*', 'simple/data/*', 'data/*']);
+  assert.deepEqual(patterns, ['alerts/data/*', 'simple/data/*']);
   for (const behavior of [config.DefaultCacheBehavior, ...config.CacheBehaviors]) {
     assert.equal(behavior.Compress, true);
     assert.equal(behavior.ViewerProtocolPolicy, 'redirect-to-https');

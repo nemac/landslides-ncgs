@@ -17,11 +17,10 @@ export interface WebStackProps extends StackProps {
   certificate: acm.ICertificate;
 }
 
-// Paths the browser fetches that live in the data bucket. `data/*` is for the
-// dashboard host, where the request arrives as /data/... and the function
-// rewrites it to /alerts/data/...; CloudFront picks the behavior before the
-// function runs and does not re-match afterwards.
-const DATA_PATHS = ['alerts/data/*', 'simple/data/*', 'data/*'];
+// Paths the browser fetches that live in the data bucket. alerts/data/* is
+// still written by the daily pipeline although the SIREN dashboard itself
+// was taken offline on 2026-10-22.
+const DATA_PATHS = ['alerts/data/*', 'simple/data/*'];
 
 // Site, data and dev-site buckets with the production and dev distributions.
 // All in one stack because the dev distribution reads the production data
