@@ -23,6 +23,29 @@ test('alerts data files still pass through', () => {
   assert.equal(out.uri, '/alerts/data/forecast.geojson');
 });
 
+test('dashboard host serves DFENS Simple from /simple/', () => {
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/')).uri, '/simple/index.html');
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/js/app.js')).uri, '/simple/js/app.js');
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/data/status.json')).uri, '/simple/data/status.json');
+});
+
+test('dashboard host leaves the shared alerts data files alone', () => {
+  const out = rewrite(eventFor('dashboard.landslidesncgs.org', '/alerts/data/buildings/manifest.json'));
+  assert.equal(out.uri, '/alerts/data/buildings/manifest.json');
+});
+
+test('dashboard host sends retired alerts pages to its root', () => {
+  const out = rewrite(eventFor('dashboard.landslidesncgs.org', '/alerts/'));
+  assert.equal(out.statusCode, 301);
+  assert.equal(out.headers.location.value, '/');
+});
+
+test('dashboard host strips a doubled /simple prefix', () => {
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/simple/')).headers.location.value, '/');
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/simple')).headers.location.value, '/');
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/simple/js/app.js')).headers.location.value, '/js/app.js');
+});
+
 test('a path that merely starts with alerts is not redirected', () => {
   const out = rewrite(eventFor('landslidesncgs.org', '/alertsmap/x.js'));
   assert.equal(out.uri, '/alertsmap/x.js');

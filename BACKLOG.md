@@ -12,8 +12,9 @@ details belong in an issue or PR once someone picks it up.
   match how the site is actually built, refreshed and deployed.
 - **Link DFENS Simple from the home page.** The dashboard at `/simple/`
   is not linked from `index.html` yet. When it is ready for the public,
-  add it to the home-page card grid and the site nav. (The SIREN dashboard
-  at `/alerts/` was taken offline on 2026-10-22 and now redirects to
+  add it to the home-page card grid and the site nav, linking
+  `https://dashboard.landslidesncgs.org/`. (The SIREN dashboard at
+  `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
 - **PR checks and tests.** `ci.yml` already runs the CDK typecheck, tests
   and synth plus the CloudFront Function tests on every pull request. Still
