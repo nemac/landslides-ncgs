@@ -148,6 +148,32 @@ Documents, in reading order:
 
 ## Cutover progress
 
+### 2026-10-26: step 12 passed, old account decommissioned
+
+Step 12 checks passed on 2026-10-22 (every public resolver on the new
+servers; `refresh-data.yml` at 04:00 UTC and `refresh-simple.yml` every
+ten minutes, both `workflow_dispatch`; `status.json` fresh) and again on
+2026-10-26 before the teardown. The decommission list ran on 2026-10-26
+between 14:55 and 15:05 UTC, in the runbook's order, after confirming the
+new data bucket held all 102 of the old bucket's data objects:
+
+- Distributions `E139BPMQTMFRUH`, `EQE7L8KCKTTWN`, `EOBSDQ691NOUV`,
+  `E2PYK3QNTDKCOU` (disabled, then deleted); functions `landslides-rewrite`
+  and `inventory-landslidesncgs-wrapper`; certificates `e509892f-...` and
+  `ef7adc33-...` (ACM accepted the deletes at once); hosted zones
+  `Z0975952219HYWK0M3KBW` (17 records) and `Z09867101HKHS3GND0YIE`
+  (11 records); the six empty hostname buckets and `landslides-ncgs`
+  (183 objects, never versioned); schedules, Lambda, secret and the two
+  trigger roles; role `landslides-github-actions-prod` with its inline
+  policy `landslides-s3-cloudfront-deploy`.
+- Nothing else in the NEMAC account was touched. The GitHub OIDC provider
+  there is shared with other NEMAC projects and stays.
+- Every hostname answered 200 or its expected 301/401 afterwards, and the
+  Simple data kept refreshing.
+
+Remaining: step 13 (history rewrite and GitHub Pages retirement), after
+telling Ian.
+
 ### 2026-10-21 evening: runbook steps 6 to 10 done, step 11 apex records done
 
 Every hostname is served by the new account. PR nemac/landslides-ncgs#10
