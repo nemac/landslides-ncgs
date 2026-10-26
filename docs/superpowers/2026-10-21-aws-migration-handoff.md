@@ -148,6 +148,32 @@ Documents, in reading order:
 
 ## Cutover progress
 
+### 2026-10-26: step 13 done, history rewritten, GitHub Pages retired
+
+After Ian was told. Jeff ran the three GitHub-changing commands from his
+terminal (the session's permission layer refuses history-destroying git
+operations); Claude prepared and verified the rewrite in a fresh clone.
+
+- Deleted the merged stale branches `cloudfront-redirect`,
+  `simple-dashboard`, `refresh-simple-trigger`.
+- `git filter-repo --path alerts/data --invert-paths --force` on a fresh
+  clone: `.git` 1.5 GB to 70 MB, master 209 to 116 commits, no commit
+  touches `alerts/data`, the site tree unchanged. Force-pushed `master`
+  (5a0efd8 became f8ba1f0), `development`, `jeffs-improvements` and
+  `dashboard-host-serves-simple`; no tags existed; no PRs were open.
+- `gh api -X DELETE repos/nemac/landslides-ncgs/pages`: the Pages site is
+  gone (the API now returns 404). `development` still deploys to
+  dev.landslidesncgs.org through `deploy-dev.yml`.
+- The force push triggered `deploy-prod.yml` and `deploy-dev.yml`; both
+  green, site and dev answering. A fresh clone is 81 MB. GitHub's reported
+  repository size stays at 1.5 GB until GitHub runs garbage collection
+  (cosmetic; can be requested from GitHub Support).
+- Jeff's checkout was reset to the new history in place, stale local
+  branches dropped, untracked files kept. Ian re-clones.
+
+The migration runbook is complete. Nothing landslides-related remains in
+the NEMAC account except the shared GitHub OIDC provider.
+
 ### 2026-10-26: step 12 passed, old account decommissioned
 
 Step 12 checks passed on 2026-10-22 (every public resolver on the new
