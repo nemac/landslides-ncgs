@@ -166,6 +166,9 @@ new data bucket held all 102 of the old bucket's data objects:
   (183 objects, never versioned); schedules, Lambda, secret and the two
   trigger roles; role `landslides-github-actions-prod` with its inline
   policy `landslides-s3-cloudfront-deploy`.
+- Also removed, found by a final sweep: log group
+  `/aws/lambda/landslides-refresh-simple-trigger` and origin access
+  control `landslides-ncgs-oac` (`E14O35ATI4G7HM`).
 - Nothing else in the NEMAC account was touched. The GitHub OIDC provider
   there is shared with other NEMAC projects and stays.
 - Every hostname answered 200 or its expected 301/401 afterwards, and the
