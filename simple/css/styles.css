@@ -280,6 +280,16 @@ a:hover {
 .stale-banner[hidden] {
   display: none;
 }
+.map-notice {
+  max-width: 22rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
 
 /* ---------------- Body layout ---------------- */
 .app-body {

@@ -259,7 +259,13 @@
     return r.json();
   }
 
+  // Loads can overlap (interval, tab becoming visible, the post-check
+  // timer). Each load takes a number; a response whose number is no longer
+  // the latest is dropped, so an older reply can never overwrite a newer.
+  let _loadSeq = 0;
+
   async function loadData() {
+    const seq = ++_loadSeq;
     _setLoading(true);
     try {
       // The forecast file is fetched only to warn when the layer is
@@ -275,6 +281,7 @@
           return null;
         }),
       ]);
+      if (seq !== _loadSeq) return; // superseded by a newer load
       // Map layer: full NDFD coverage straight from the service, for the
       // same 24-h period as the flagged pathways.
       MAP.setForecastPeriod(fc && fc.meta);
@@ -290,6 +297,7 @@
       _render();
       _scheduleAfterNextCheck();
     } catch (e) {
+      if (seq !== _loadSeq) return; // superseded by a newer load
       console.error('[DFS] Could not load forecast data:', e);
       _showError();
     } finally {
@@ -413,6 +421,10 @@
   }
 
   function _showError() {
+    // The map must agree with the table: drop any pathways drawn by the
+    // last successful load.
+    state.features = [];
+    MAP.setAlerts(null);
     els.statusCount.textContent = '--';
     els.statusWindow.textContent = 'Unavailable';
     els.windowNote.textContent = '';
