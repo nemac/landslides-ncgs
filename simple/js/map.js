@@ -7,7 +7,6 @@
  * per-county building footprints (viewport-loaded, LRU cache).
  * Also: NDFD forecast precip (24 h, full coverage, live), MRMS observed
  * 24-h precip (IEM tiles, reference only) and NEXRAD radar.
- * Removed: MRMS observed precipitation.
  *
  * Public surface (window.DFS_MAP):
  *   init()

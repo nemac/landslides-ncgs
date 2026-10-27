@@ -5,11 +5,10 @@ details belong in an issue or PR once someone picks it up.
 
 ## Committed to
 
-- **Update documentation.** `README.md` was rewritten 2026-10-21.
-  `OPERATIONS.md` still describes a single-machine workflow with another
-  developer's Windows paths, and `alerts/README.md` still describes Phase 1
-  and links to an `accessibility.html` that does not exist. Rewrite both to
-  match how the site is actually built, refreshed and deployed.
+- **Update documentation.** Done 2026-10-27: `README.md`, `OPERATIONS.md`,
+  `scripts/README.md`, `alerts/README.md` and `simple/README.md` describe
+  how the site is actually built, refreshed and deployed. Keep them that
+  way; `CLAUDE.md` has the documentation rules.
 - **Link DFENS Simple from the home page.** The dashboard at `/simple/`
   is not linked from `index.html` yet. When it is ready for the public,
   add it to the home-page card grid and the site nav, linking
@@ -64,17 +63,6 @@ details belong in an issue or PR once someone picks it up.
   number of external hosts. Flagged files above 10 MB are still served
   uncompressed (CloudFront's limit); pre-compressing them at upload is the
   fix if it matters.
-- **Publish partial `refresh.py` results safely.** Any non-zero exit code
-  currently fails the CI step, so the commit and deploy are skipped and no
-  window publishes that day. Exit code 2 covers two different cases that
-  need different handling: some precipitation windows failed but the rest
-  were intersected (safe to publish), and the debris-flow load failed after
-  precipitation was written (must not publish, or fresh precipitation sits
-  next to stale flagged files). Split those into separate codes in
-  `refresh.py`, then have `refresh-data.yml` publish on the first and fail
-  on the second. Low urgency: in 96 runs it has only happened twice, both
-  on 2026-07-20 during setup, and the only realistic trigger is the monthly
-  cold debris-flow cache.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is the intended production
   setting or a leftover from testing.
 - **Explore and resolve config drift between `scripts/config.py` and
@@ -104,3 +92,20 @@ details belong in an issue or PR once someone picks it up.
   `fetch_overture_buildings` log line that still prints "~3m" with
   tolerance 0, and the `_refresh_overture_buildings` docstring that names a
   single-file output that no longer exists.
+
+## Deferred
+
+- **Publish partial `refresh.py` results safely.** Deferred 2026-10-27: this
+  only affects the nightly pipeline for the SIREN alerts dashboard, which
+  has been offline since 2026-10-22. DFENS Simple has its own pipeline and
+  is not affected. Revisit if the alerts dashboard returns.
+  currently fails the CI step, so the commit and deploy are skipped and no
+  window publishes that day. Exit code 2 covers two different cases that
+  need different handling: some precipitation windows failed but the rest
+  were intersected (safe to publish), and the debris-flow load failed after
+  precipitation was written (must not publish, or fresh precipitation sits
+  next to stale flagged files). Split those into separate codes in
+  `refresh.py`, then have `refresh-data.yml` publish on the first and fail
+  on the second. Low urgency: in 96 runs it has only happened twice, both
+  on 2026-07-20 during setup, and the only realistic trigger is the monthly
+  cold debris-flow cache.

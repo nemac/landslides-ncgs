@@ -5,8 +5,9 @@ refresh.py - DEFNS Alerts data pipeline
 Three modes:
 
   python scripts/refresh.py
-      Default: fetch live NDFD forecast, MRMS observed, run debris flow
-      intersections, write four files to alerts/data/.
+      Default: fetch live NDFD forecast and MRMS observed for every window,
+      run the debris flow intersections, refresh the building footprints
+      when their manifest is older than 30 days, write to alerts/data/.
 
   python scripts/refresh.py --hindcast
       Generate historical (hindcast) data for every event in events.py.
@@ -17,11 +18,12 @@ Three modes:
       Only generate hindcast data for a specific event id. Useful when
       adding or re-processing one event without touching the others.
 
-Live mode writes:
-    alerts/data/forecast.geojson         NDFD precipitation polygons
-    alerts/data/observed.geojson         MRMS precipitation polygons
-    alerts/data/flagged_ndfd.geojson     Debris flow polygons + max NDFD cat
-    alerts/data/flagged_mrms.geojson     Debris flow polygons + max MRMS cat
+Live mode writes, to alerts/data/:
+    forecast_{N}h.geojson       NDFD precipitation polygons, N in NDFD_WINDOWS_HOURS
+    flagged_ndfd_{N}h.geojson   Debris flow polygons + max NDFD category
+    observed_{N}h.geojson       MRMS precipitation polygons, N in MRMS_WINDOWS_HOURS
+    flagged_mrms_{N}h.geojson   Debris flow polygons + max MRMS category
+    buildings/                  Overture footprints per county + manifest.json
 
 Hindcast mode writes (per event):
     alerts/data/historical/{event_id}_precip.geojson
@@ -782,8 +784,8 @@ def _to_iso(dt) -> str | None:
 
 
 def _write_json(path: Path, obj) -> None:
-    """Write JSON compactly (no extra whitespace). Bytes saved here
-    accumulate fast across forecast.geojson commits over time."""
+    """Write JSON compactly (no extra whitespace); the files are fetched by
+    every dashboard load, so bytes saved here add up."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, separators=(",", ":"), ensure_ascii=False)

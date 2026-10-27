@@ -27,8 +27,8 @@ export const DEV_SITE_BUCKET = 'landslidesncgs-dev-site';
 
 export const GITHUB_REPO = 'nemac/landslides-ncgs';
 
-// The GitHub token in the dispatch secret expires on TOKEN_EXPIRES; a one-time
-// schedule fires at REMINDER_AT to open a renewal issue. Update both when the
-// token is renewed.
-export const TOKEN_EXPIRES = '2027-10-21';
+// A one-time schedule fires at REMINDER_AT, a month before the GitHub token
+// in the dispatch secret expires, to open a renewal issue. The expiry date
+// itself is the `expires` input default in token-expiry-reminder.yml. Update
+// both when the token is renewed.
 export const REMINDER_AT = '2027-09-21T13:00:00Z';

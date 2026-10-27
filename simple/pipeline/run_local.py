@@ -1,7 +1,7 @@
 """
 run_local.py - run DFENS Simple entirely on this computer.
 
-Does locally what the two GitHub workflows will do in production:
+Does locally what refresh-simple.yml does in production:
   * every --interval minutes, runs the same NDFD check + refresh as
     refresh-simple.yml and writes the results into simple/data/
   * serves the repo root at http://localhost:<port>/, so the page is at
@@ -13,7 +13,7 @@ URL layout (mirrors production, so relative paths in js/config.js work):
   /alerts/data/...   -> alerts/data/ (building footprints)
 
 Usage, from the landslides-ncgs repo root in a terminal whose Python has
-geopandas (e.g. an Anaconda Prompt with the EWS env activated):
+geopandas (the defns-refresh conda env from environment.yml works):
 
   python simple/pipeline/run_local.py           # run until Ctrl+C
   python simple/pipeline/run_local.py --warm    # prepare the debris cache first
