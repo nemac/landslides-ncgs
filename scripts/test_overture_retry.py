@@ -23,7 +23,7 @@ class FakeQuery:
         self.failures = list(failures)
         self.calls = 0
 
-    def __call__(self, kind, bbox):
+    def __call__(self, kind, bbox, release=None):
         self.calls += 1
         assert kind == "building"
         if self.failures:

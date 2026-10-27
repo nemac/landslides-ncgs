@@ -40,12 +40,14 @@ export class TriggerStack extends Stack {
       scheduler.ScheduleExpression.rate(Duration.minutes(10)),
       undefined
     );
+    // Daily check of the two reference datasets (Overture buildings, the
+    // NCGS debris-flow layer); the workflow rebuilds only what changed.
     this.makeSchedule(
-      'Daily',
-      'landslides-refresh-data-daily',
+      'ReferenceDaily',
+      'landslides-refresh-reference-daily',
       fn,
-      scheduler.ScheduleExpression.cron({ minute: '0', hour: '4' }),
-      { workflow_file: 'refresh-data.yml' }
+      scheduler.ScheduleExpression.cron({ minute: '0', hour: '5' }),
+      { workflow_file: 'refresh-reference.yml' }
     );
     this.makeReminder(fn);
   }

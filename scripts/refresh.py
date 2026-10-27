@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import traceback
 from datetime import UTC, datetime
@@ -76,11 +77,51 @@ def main() -> int:
             "events.HISTORICAL_EVENTS."
         ),
     )
+    parser.add_argument(
+        "--buildings",
+        action="store_true",
+        help=(
+            "Only re-extract the Overture building footprints, ignoring the "
+            "manifest age. OVERTURE_RELEASE in the environment pins the release."
+        ),
+    )
+    parser.add_argument(
+        "--debris-cache",
+        action="store_true",
+        help=(
+            "Only re-fetch the NCGS debris-flow layer into cache/, ignoring "
+            "the cache age. Used by refresh-reference.yml when the layer changes."
+        ),
+    )
     args = parser.parse_args()
 
+    if args.buildings or args.debris_cache:
+        return _main_reference(buildings=args.buildings, debris=args.debris_cache)
     if args.hindcast is None:
         return _main_live()
     return _main_hindcast(args.hindcast)
+
+
+def _main_reference(*, buildings: bool, debris: bool) -> int:
+    """Rebuild one or both reference datasets unconditionally. The decision
+    to run this is made upstream by scripts/reference_check.py; here every
+    requested rebuild is a hard failure if it does not complete."""
+    ok = True
+    if debris:
+        ok &= _safely(
+            lambda: defns_data.fetch_debris_flows(force_refresh=True),
+            "Debris flow polygons (forced refresh)",
+        )
+    if buildings:
+        release = os.environ.get("OVERTURE_RELEASE") or None
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        ok &= _safely(
+            lambda: defns_data.fetch_overture_buildings(
+                output_dir=DATA_DIR, force_refresh=True, release=release
+            ),
+            f"Buildings (Overture {release or 'latest'})",
+        )
+    return 0 if ok else 1
 
 
 def _main_live() -> int:

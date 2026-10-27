@@ -1,10 +1,12 @@
-# Nightly alerts pipeline
+# Alerts pipeline and reference-data check
 
 Python that produces the data files under `alerts/data/`. It was written
-for the SIREN alerts dashboard, which has been offline since 2026-10-22,
-but it still runs every night because DFENS Simple reads the building
-footprints it produces and imports its modules for the debris-flow
-intersection. Current as of 2026-10-27.
+for the SIREN alerts dashboard, which has been offline since 2026-10-22.
+Since 2026-10-27 it no longer runs on a schedule; what still runs daily is
+the reference-data check, which rebuilds the two datasets DFENS Simple
+depends on (building footprints and the debris-flow GeoPackage) only when
+their upstreams change. DFENS Simple also imports this folder's modules for
+the debris-flow intersection. Current as of 2026-10-27.
 
 ## Files
 
@@ -12,7 +14,11 @@ intersection. Current as of 2026-10-27.
 scripts/
   refresh.py      Driver. Live mode writes the forecast, observed and
                   flagged files for every window; --hindcast writes the
-                  historical event files.
+                  historical event files; --buildings and --debris-cache
+                  rebuild one reference dataset each.
+  reference_check.py  Daily decision (stdlib): compares Overture's latest
+                  release and the NCGS layer's edit date with what was last
+                  built, applies the 90-day floor and FORCE, logs both.
   data.py         Fetchers: NDFD forecast, MRMS observed, Stage IV hindcast,
                   NCGS debris-flow pathways (cached in cache/debris_flows.gpkg),
                   county and watershed tagging, Overture building footprints.
@@ -40,27 +46,29 @@ Every GeoJSON carries a top-level `meta` object with timestamps and source.
 
 ## How it runs in production
 
-`.github/workflows/refresh-data.yml`, dispatched daily at 04:00 UTC by the
-EventBridge schedule in `infra/cdk/lib/trigger-stack.ts` (the workflow's
-own cron is a late-running backup). The job:
+**Daily: `.github/workflows/refresh-reference.yml`**, dispatched at 05:00
+UTC by the EventBridge schedule in `infra/cdk/lib/trigger-stack.ts`.
+`reference_check.py` runs first on plain Python and decides, per dataset,
+whether to rebuild: Overture published a new release, or the NCGS layer's
+data-last-edit date moved, or the last build is 90 days old, or `force` was
+set. Only then does the job assume the OIDC role, create the pinned
+environment, run `refresh.py --debris-cache` and/or `--buildings`, upload
+the GeoPackage to `s3://landslidesncgs-data/cache/` and the footprints to
+`alerts/data/buildings/` (mirrored with `--delete`), and record the new
+markers in `alerts/data/reference_state.json`. A failed rebuild is retried
+the next day because the state is written only after success.
 
-1. assumes the `landslides-github-prod` role through OIDC (no stored keys);
-2. fetches the buildings manifest from the bucket and restores its
-   modification time, so the monthly Overture extraction only runs when due;
-3. restores `cache/debris_flows.gpkg` from a monthly `actions/cache` key;
-4. creates the environment from `environment.yml` with micromamba;
-5. runs `python scripts/refresh.py`;
-6. uploads `alerts/data/buildings/` with a one-day cache header and the rest
-   of `alerts/data/` with a five-minute one, to
-   `s3://landslidesncgs-data/alerts/data/`.
+**Manual: `.github/workflows/refresh-data.yml`** runs the full alerts
+pipeline from the Actions tab: fetch the buildings manifest (so the
+extraction is skipped), download the GeoPackage from the bucket, create the
+environment, run `python scripts/refresh.py`, and upload `alerts/data/`.
+A non-zero exit fails the job before the upload, so a broken run never
+replaces good files. Exit code 2 (some windows failed but others were
+written) is treated the same way; splitting it so partial results publish
+is a deferred item in `BACKLOG.md`.
 
-A non-zero exit from `refresh.py` fails the job before the upload, so a
-broken run never replaces good files. Exit code 2 (some windows failed
-but others were written) is treated the same way today; splitting it so
-partial results publish is a deferred item in `BACKLOG.md`.
-
-Nothing is committed to git. `--hindcast` never runs in CI; historical
-files are uploaded by hand (`OPERATIONS.md`).
+Nothing is committed to git. `--hindcast` never runs in a workflow;
+historical files are uploaded by hand (`OPERATIONS.md`).
 
 ## Running it locally
 
@@ -72,8 +80,9 @@ python scripts/refresh.py --hindcast  # historical events
 ```
 
 The debris-flow pathways are fetched from the NCGS ArcGIS service on the
-first run and cached in `cache/debris_flows.gpkg` for 30 days. Never commit
-that file.
+first run and cached in `cache/debris_flows.gpkg`; the local copy is
+reused for 120 days, while production rebuilds it on upstream change.
+Never commit that file.
 
 ## Lint
 

@@ -1,20 +1,18 @@
-name: Refresh alert data (daily)
+name: Refresh alert data (manual)
 
-# Runs the DEFNS data pipeline (scripts/refresh.py) and uploads alerts/data/
-# straight to the data bucket. Nothing is committed to git: the data lives
-# only in S3, and the short Cache-Control on the files means CloudFront
-# serves the new versions within minutes with no invalidation.
+# Runs the full SIREN alerts pipeline (scripts/refresh.py) and uploads
+# alerts/data/ straight to the data bucket. Nothing is committed to git.
 #
-# Trigger: EventBridge Scheduler in the AWS account dispatches this workflow
-# at 04:00 UTC every day (infra/lambda/refresh-simple-trigger/). The cron
-# below is only a backup; GitHub's scheduler runs hours late for this repo.
+# Off the schedule since 2026-10-27: the alerts dashboard has been offline
+# since 2026-10-22, and the two datasets DFENS Simple still needs (building
+# footprints and the debris-flow GeoPackage) are kept current by
+# refresh-reference.yml. Run this by hand only to regenerate the alerts
+# dashboard's own files.
 #
 # Cost: $0 — public repo. No secrets: every upstream source is public and
 # the upload assumes an OIDC role (no stored AWS keys).
 
 on:
-  schedule:
-    - cron: "0 4 * * *"
   workflow_dispatch:
 
 # Never run two refreshes at once.
@@ -84,29 +82,14 @@ jobs:
           aws s3 cp "s3://${DATA_BUCKET}/${DATA_PREFIX}/buildings/manifest.json" \
             alerts/data/buildings/manifest.json || echo "No buildings manifest in the bucket yet; extraction will run."
 
-      # The NCGS debris-flow layer is ~225k polygons for the WNC bbox and is
-      # essentially static (last edited 2026-03; a susceptibility model, not a
-      # feed). scripts/refresh.py caches it locally as cache/debris_flows.gpkg
-      # with a 30-day TTL, but CI starts cold every run, so without this the
-      # pipeline re-paginates all 225k features + re-runs the county/HUC12
-      # spatial joins on every run (the dominant cost, ~10-20 min).
-      #
-      # Key by calendar month so the cache rotates ~monthly (matching the code's
-      # 30-day TTL): within a month it's a hit and refresh.py skips the fetch;
-      # the first run of a new month misses, re-fetches, and repopulates.
-      - name: Compute cache month
-        id: cachemonth
-        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache debris-flow gpkg
-        uses: actions/cache@v4
-        with:
-          path: cache
-          key: debris-gpkg-v1-${{ steps.cachemonth.outputs.ym }}
-          # Fall back to the previous month's cache if this month hasn't been
-          # built yet — refresh.py's TTL check then decides whether it's stale.
-          restore-keys: |
-            debris-gpkg-v1-
+      # The NCGS debris-flow layer is ~225k polygons and essentially static.
+      # refresh-reference.yml keeps a GeoPackage of it in the data bucket;
+      # download that rather than re-paginating the service (~10-20 min).
+      - name: Fetch the debris-flow GeoPackage
+        run: |
+          mkdir -p cache
+          aws s3 cp "s3://${DATA_BUCKET}/cache/debris_flows.gpkg" cache/debris_flows.gpkg \
+            || echo "No GeoPackage in the bucket yet; refresh.py will fetch the layer itself."
 
       # The freshness check keys off the manifest file's mtime, and the copy
       # above was written just now. Restore the manifest's true age from its

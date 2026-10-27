@@ -193,12 +193,15 @@ MAP_FILENAME = "debris_flow_alert_map.html"
 # (it's a regional susceptibility model, not a live feed). Fetching it on
 # every run is wasteful, so we cache it locally as a GeoPackage.
 #
-# Set CACHE_TTL_DAYS = 0 to disable caching (every run re-fetches), or pass
-# force_refresh=True to fetch_debris_flows() when you want to bust the cache
-# manually (e.g., after NCGS publishes a new model release).
+# Since 2026-10-27 the cache is rebuilt by refresh-reference.yml when the
+# NCGS layer's edit date moves, or after 90 days regardless, and shared
+# through S3 (see scripts/reference_check.py). The TTL here is only a
+# backstop for a stale local copy and is kept longer than that floor so it
+# never pre-empts the change detection. Set CACHE_TTL_DAYS = 0 to disable
+# caching, or pass force_refresh=True to fetch_debris_flows().
 CACHE_DIR = "cache"
 DEBRIS_CACHE_FILENAME = "debris_flows.gpkg"
-CACHE_TTL_DAYS = 30
+CACHE_TTL_DAYS = 120
 
 
 # -----------------------------------------------------------------------------
