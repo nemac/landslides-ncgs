@@ -94,7 +94,7 @@ details belong in an issue or PR once someone picks it up.
   with each page keeping only its own styles; move inline styles into
   classes; for the repeated header and nav markup either keep one short
   identical block per page or add a 30-line Python script that stitches
-  partials (Ian already runs Python). Keep the existing BEM class names and
+  partials (Python is already in use for the pipelines). Keep the existing BEM class names and
   one file per page. No React or build framework.
 - **Overture buildings layer size and leftovers.** Simplification tolerance
   is not the lever that matters: 841 MB across 77 county files with single

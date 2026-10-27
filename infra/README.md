@@ -36,7 +36,7 @@ site's basic-auth credential in a CloudFront KeyValueStore.
 
 ## Cutover runbook: NEMAC account 104538610210 to 710482330128
 
-Done once, by Jeff with Claude, in order. Every step can be checked before
+Done once, in order. Every step can be checked before
 the next. Nothing in the old account is turned off until step 10, and by
 then it serves only the two apex redirects. The old account is the default
 AWS profile; the new one is `--profile jbliss-landslidesncgs`. Steps marked
@@ -410,8 +410,8 @@ decommission list below.
 
 ### 13. Rewrite history and retire GitHub Pages
 
-Do this after the DNS work, in a quiet moment, and tell Ian first: he
-re-clones once afterwards.
+Do this after the DNS work, in a quiet moment, and tell the other contributors
+first: they re-clone once afterwards.
 
 ```bash
 git push origin --delete cloudfront-redirect simple-dashboard refresh-simple-trigger   # merged, stale
