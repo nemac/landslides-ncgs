@@ -1,39 +1,56 @@
 # Landslides in Western North Carolina
 
-Public site for the North Carolina Geological Survey's landslide program at
-<https://landslidesncgs.org>, with the DFENS Simple dashboard at `/simple/`
-(also served as <https://dashboard.landslidesncgs.org>). Plain HTML, CSS
-and JavaScript; no build step. The data pipelines
-are Python. The earlier SIREN alerts dashboard under `alerts/` was taken
-offline on 2026-10-22 at Ian's request; its code stays in the repo and its
-daily pipeline still runs, but `/alerts/` pages redirect to `/simple/`.
+Public website for the North Carolina Geological Survey's landslide program
+at <https://landslidesncgs.org>, with the DFENS Simple debris-flow dashboard
+at `/simple/` (also served as <https://dashboard.landslidesncgs.org>). The
+site is plain HTML, CSS and JavaScript with no build step; the data
+pipelines are Python.
 
-| Where | What |
+## Repository structure
+
+| Path | What |
 |---|---|
-| `index.html` and the other top-level pages, `assets/` | The main site |
-| `alerts/` | SIREN dashboard, offline since 2026-10-22 (pages redirect to `/simple/`); data in `alerts/data/`, **not in git** |
-| `simple/` | DFENS Simple dashboard and its own 10-minute pipeline |
+| `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` | The main site, one directory per page, served at `/<name>/` |
+| `assets/` | Images shared by every page |
+| `simple/` | DFENS Simple dashboard and its ten-minute data pipeline |
+| `alerts/` | The earlier SIREN dashboard, offline since 2026-10-22; its pages redirect to `/simple/` and its daily pipeline still writes `alerts/data/` |
 | `scripts/` | The nightly alert pipeline (`refresh.py`) |
-| `infra/` | Every AWS resource, as CDK, plus the cutover runbook |
-| `.github/workflows/` | Deploys and data refreshes |
+| `infra/` | Every AWS resource as a CDK app, the CloudFront functions, and the cutover runbook |
+| `.github/workflows/` | CI, site deploys and data refreshes |
+| `BACKLOG.md` | Pending work and known issues |
+| `OPERATIONS.md` | Running the pipelines and the site locally |
 
-## How it runs
+Nothing under `alerts/data/` or `simple/data/` is committed; that data lives
+only in S3.
 
-- **AWS account 710482330128** holds everything: two Route 53 zones, one
-  CloudFront distribution for all production hostnames, a site bucket, a
-  data bucket, and the dev site. Defined in `infra/cdk/`; see
+## Architecture
+
+- **One AWS account** (710482330128) holds everything, defined in
+  `infra/cdk/`: two Route 53 zones and one certificate (`Dns` stack); the
+  production CloudFront distribution for every public hostname, the site
+  bucket, the data bucket, and the dev distribution and bucket (`Web`
+  stack); the GitHub OIDC roles the workflows assume (`Ci` stack); and the
+  EventBridge schedules that trigger the data refreshes (`Trigger` stack).
+- **CloudFront functions** in `infra/cloudfront/` do the URL work the S3
+  origin cannot: append `index.html` to directory URLs, redirect old flat
+  page names, answer 410 for retired pages, map the dashboard host onto
+  `/simple/`, and put basic auth in front of the dev site.
+- **Branches deploy.** A push to `master` deploys production; a push to
+  `development` deploys <https://dev.landslidesncgs.org>, which sits behind
+  basic auth and reads live production data. Both use the reusable
+  `deploy-site.yml` workflow, which syncs the tree to the bucket and
+  invalidates CloudFront.
+- **Data refreshes** run as GitHub Actions workflows dispatched by
+  EventBridge: the alerts pipeline daily at 04:00 UTC and DFENS Simple every
+  ten minutes. They write only to the data bucket.
+- **Infrastructure deploys** run from a developer machine with
+  `npx cdk deploy` from `infra/cdk/`; CI only synthesizes. See
   `infra/README.md`.
-- **`master`** deploys to production on push. **`development`** deploys to
-  <https://dev.landslidesncgs.org> (basic auth), which shows live production
-  data.
-- **Data** is written only to S3 by the refresh workflows, dispatched from
-  EventBridge: the alerts pipeline daily at 04:00 UTC, DFENS Simple every
-  ten minutes. Nothing under `alerts/data/` or `simple/data/` is committed.
 
-## Working on it
+## Tooling
 
-- Running the pipelines and the site locally: `OPERATIONS.md`.
-- Pending work and known issues: `BACKLOG.md`.
-- Lint and format tooling: `npm ci`, then `npm run lint`, `npm run format`
-  for the dashboard JavaScript and CSS, `ruff check scripts` for Python
-  (install dev tools with `pip install -r requirements-dev.txt`).
+`npm ci`, then `npm run lint` and `npm run format` for the dashboard
+JavaScript and CSS; `ruff check scripts` for Python (dev tools from
+`requirements-dev.txt`). CloudFront function tests:
+`node --test "infra/cloudfront/test/*.test.js"`. CDK tests and typecheck:
+`npm test` and `npm run typecheck` in `infra/cdk/`.

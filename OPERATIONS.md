@@ -327,7 +327,7 @@ This un-tracks it without deleting from disk.
 | Conda environment | defns-refresh, created from `environment.yml` |
 | Local URL | `http://localhost:8000/alerts/` |
 | Production URL | none since 2026-10-22: `/alerts/` redirects to `/simple/`, and `https://dashboard.landslidesncgs.org/` now serves DFENS Simple |
-| Dev URL | `https://dev.landslidesncgs.org/alerts/` (basic auth; ask Jeff) |
+| Dev URL | `https://dev.landslidesncgs.org/alerts/` (basic auth; credentials are held by the site maintainers) |
 
 ### Quick commands cheat sheet
 

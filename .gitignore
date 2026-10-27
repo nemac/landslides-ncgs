@@ -35,3 +35,6 @@ infra/cdk/cdk.out/
 
 # Pipeline outputs live only in S3 (see OPERATIONS.md)
 alerts/data/
+
+# Local planning notes from Claude sessions
+docs/superpowers/

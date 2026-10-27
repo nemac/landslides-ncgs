@@ -61,7 +61,7 @@ test('a file path passes through', () => {
   assert.equal(out.uri, '/simple/js/app.js');
 });
 
-for (const page of ['about', 'downloads', 'reducing-landslide-risk', 'learn-more', 'intro-landslides', 'data-tour']) {
+for (const page of ['about', 'downloads', 'reducing-landslide-risk', 'learn-more']) {
   test('old flat page /' + page + '.html redirects to its directory', () => {
     const out = rewrite(eventFor('landslidesncgs.org', '/' + page + '.html'));
     assert.equal(out.statusCode, 301);
@@ -87,4 +87,21 @@ test('an .html file that did not move passes through', () => {
 
 test('dashboard host does not apply the moved page redirects', () => {
   assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/about.html')).uri, '/simple/about.html');
+});
+
+for (const uri of ['/intro-landslides.html', '/intro-landslides', '/intro-landslides/', '/intro-landslides/index.html', '/data-tour.html', '/data-tour/']) {
+  test('retired page ' + uri + ' answers 410 Gone', () => {
+    const out = rewrite(eventFor('landslidesncgs.org', uri));
+    assert.equal(out.statusCode, 410);
+    assert.equal(out.headers['content-type'].value, 'text/plain');
+  });
+}
+
+test('a path that merely starts with a retired page name passes through', () => {
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/data-tour-2/')).uri, '/data-tour-2/index.html');
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/assets/images/intro-landslides/x.png')).uri, '/assets/images/intro-landslides/x.png');
+});
+
+test('dashboard host does not apply the retired page response', () => {
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/data-tour/')).uri, '/simple/data-tour/index.html');
 });

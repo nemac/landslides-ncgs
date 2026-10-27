@@ -7,7 +7,7 @@ under `simple/` and is served at <https://dashboard.landslidesncgs.org/>
 (the CloudFront function maps that host onto `/simple/`) and at
 <https://landslidesncgs.org/simple/>.
 
-Built by Ian Johnson (originally in github.com/ijohnson37/dfens-simple).
+Originally developed in github.com/ijohnson37/dfens-simple.
 
 ## One fixed view
 

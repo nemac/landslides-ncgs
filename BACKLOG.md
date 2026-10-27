@@ -87,14 +87,14 @@ details belong in an issue or PR once someone picks it up.
   Work out which constants are actually read on each side, delete the dead
   ones, and add a small Python test that parses `config.js` and asserts the
   shared values agree (first candidate for the tests item above).
-- **Flat-site cleanup, readable without a framework.** The seven top-level
+- **Flat-site cleanup, readable without a framework.** The five main-site
   pages each carry their own copy of the header, nav, footer and colour
-  token CSS, and `intro-landslides/index.html` has 75 inline `style=` attributes.
+  token CSS.
   Plan: one shared `assets/css/site.css` for tokens, header, nav and footer,
   with each page keeping only its own styles; move inline styles into
   classes; for the repeated header and nav markup either keep one short
   identical block per page or add a 30-line Python script that stitches
-  partials (Ian already runs Python). Keep the existing BEM class names and
+  partials (Python is already in use for the pipelines). Keep the existing BEM class names and
   one file per page. No React or build framework.
 - **Overture buildings layer size and leftovers.** Simplification tolerance
   is not the lever that matters: 841 MB across 77 county files with single
