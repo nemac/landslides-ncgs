@@ -259,6 +259,30 @@ window.DFS_MAP = (function () {
   // requests features in the current view and simplifies geometry by zoom,
   // so zooming out to CONUS stays light.
   let _forecastKey = null;
+
+  // A small notice on the map for when the NDFD service itself fails. The
+  // flagged count comes from our own files, so without this a failed
+  // forecast query would leave an empty map next to "0 flagged", which
+  // reads as a dry day.
+  let _forecastNotice = null;
+  function _setForecastNotice(visible) {
+    if (!map) return;
+    if (visible && !_forecastNotice) {
+      _forecastNotice = L.control({ position: 'topright' });
+      _forecastNotice.onAdd = function () {
+        const div = L.DomUtil.create('div', 'map-notice');
+        div.setAttribute('role', 'status');
+        div.textContent =
+          'The forecast precipitation layer could not be loaded from the ' +
+          'NWS service. Flagged pathways below are unaffected.';
+        return div;
+      };
+      _forecastNotice.addTo(map);
+    } else if (!visible && _forecastNotice) {
+      _forecastNotice.remove();
+      _forecastNotice = null;
+    }
+  }
   function _fmtTs(d) {
     // "YYYY-MM-DD HH:MM:SS" in UTC for ArcGIS SQL
     return d.toISOString().slice(0, 19).replace('T', ' ');
@@ -287,6 +311,7 @@ window.DFS_MAP = (function () {
 
     const wasOn = !layers.forecast || map.hasLayer(layers.forecast);
     if (layers.forecast) map.removeLayer(layers.forecast);
+    _setForecastNotice(false);
     layers.forecast = L.esri.featureLayer({
       url: CFG.NDFD_SOURCE_URL,
       where: where,
@@ -305,6 +330,17 @@ window.DFS_MAP = (function () {
         };
       },
       attribution: 'NOAA NWS NDFD',
+    });
+    layers.forecast.on('requesterror', function (e) {
+      const err = e && e.error;
+      console.warn(
+        '[DFS] NDFD forecast layer request failed: ' +
+          (err && err.message ? err.message : 'unknown error')
+      );
+      _setForecastNotice(true);
+    });
+    layers.forecast.on('requestsuccess', function () {
+      _setForecastNotice(false);
     });
     const cb = document.getElementById('layer-ndfd');
     if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
