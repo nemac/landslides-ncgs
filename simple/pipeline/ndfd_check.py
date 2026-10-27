@@ -26,10 +26,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TypeVar
 
 import settings as S
+
+T = TypeVar("T")
 
 # The hosted NDFD service stalls for about a minute and then answers a
 # generic 400 ("Cannot perform query. Invalid query parameters.") while
@@ -37,6 +41,12 @@ import settings as S
 # retried; a real client error such as a 404 on status.json is not.
 RETRY_ATTEMPTS = 3
 RETRY_DELAYS = (5, 15)  # seconds to wait before attempts 2 and 3
+
+# requests-library exceptions that mean the connection failed or timed
+# out. Matched by class name so this module never imports requests.
+_TRANSIENT_REQUESTS_NAMES = frozenset(
+    {"ConnectionError", "Timeout", "ConnectTimeout", "ReadTimeout", "ChunkedEncodingError"}
+)
 
 
 def _fetch_json(url: str, timeout: int) -> dict:
@@ -57,31 +67,57 @@ def _fetch_json(url: str, timeout: int) -> dict:
     return payload
 
 
+def _is_transient_status(status: int) -> bool:
+    return status == 429 or status >= 500
+
+
+def _is_transient_requests_error(exc: Exception) -> bool:
+    """Recognise a transient requests-library failure (used by the build
+    step) without importing requests, so this module stays stdlib-only."""
+    cls = type(exc)
+    if not cls.__module__.startswith("requests"):
+        return False
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None and _is_transient_status(status):
+        return True
+    return cls.__name__ in _TRANSIENT_REQUESTS_NAMES
+
+
 def _is_transient(exc: Exception) -> bool:
     if isinstance(exc, urllib.error.HTTPError):
-        return exc.code == 429 or exc.code >= 500
+        return _is_transient_status(exc.code)
+    if _is_transient_requests_error(exc):
+        return True
     # URLError covers refused/reset connections and socket timeouts;
-    # RuntimeError is the ArcGIS error payload raised by _fetch_json.
+    # RuntimeError is the ArcGIS error payload raised by _fetch_json
+    # and by refresh_simple.fetch_precip.
     return isinstance(exc, (urllib.error.URLError, TimeoutError, RuntimeError))
 
 
-def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
-    """GET JSON, retrying transient failures up to RETRY_ATTEMPTS times."""
-    if params:
-        url = url + "?" + urllib.parse.urlencode(params)
+def retry(fn: Callable[[], T], *, label: str = "request") -> T:
+    """Call fn() up to RETRY_ATTEMPTS times, waiting RETRY_DELAYS between
+    attempts, while it raises a transient error. A non-transient error, or
+    the error from the last attempt, propagates."""
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
-            return _fetch_json(url, timeout)
+            return fn()
         except Exception as e:
             if attempt == RETRY_ATTEMPTS or not _is_transient(e):
                 raise
             delay = RETRY_DELAYS[attempt - 1]
             print(
                 f"[check] attempt {attempt} of {RETRY_ATTEMPTS} failed "
-                f"({type(e).__name__}: {e}); retrying in {delay}s"
+                f"({type(e).__name__}: {e}); retrying {label} in {delay}s"
             )
             time.sleep(delay)
     raise AssertionError("unreachable")
+
+
+def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
+    """GET JSON, retrying transient failures up to RETRY_ATTEMPTS times."""
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params)
+    return retry(lambda: _fetch_json(url, timeout))
 
 
 def _iso(dt: datetime | None) -> str | None:

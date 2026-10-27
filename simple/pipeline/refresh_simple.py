@@ -61,11 +61,18 @@ def fetch_precip(cycle_start, min_category: int) -> gpd.GeoDataFrame:
         "inSR": "4326",
         "spatialRel": "esriSpatialRelIntersects",
     }
-    r = requests.get(S.NDFD_LAYER_URL + "/query", params=params, timeout=90)
-    r.raise_for_status()
-    page = r.json()
-    if "error" in page:
-        raise RuntimeError(f"NDFD query error: {page['error']}")
+
+    def query() -> dict:
+        r = requests.get(S.NDFD_LAYER_URL + "/query", params=params, timeout=90)
+        r.raise_for_status()
+        page = r.json()
+        if "error" in page:
+            raise RuntimeError(f"NDFD query error: {page['error']}")
+        return page
+
+    # Same retry as the check step: this runs a minute or two later and
+    # can land in the NDFD service's hourly reload just as easily.
+    page = ndfd_check.retry(query, label="NDFD precip query")
     feats = page.get("features") or []
     if not feats:
         return gpd.GeoDataFrame({"category": [], "label": []}, geometry=[], crs=DISPLAY_CRS)
