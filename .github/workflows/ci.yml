@@ -3,9 +3,9 @@ name: CI checks
 # Runs on every pull request. Nothing here touches AWS: `cdk synth` only
 # needs the TypeScript to compile and the stacks to validate, and the
 # CloudFront Function tests run against the source files with plain Node.
-# ESLint, Prettier and ruff are not run here yet: the frontend has
-# pre-existing lint errors and format drift (see the "PR checks and tests"
-# item in BACKLOG.md). Add a lint job once those are cleaned up.
+# The lint job runs ESLint, Prettier and ruff over every source file plus
+# the refresh-simple-trigger Lambda tests; the versions it installs match
+# package.json and requirements-dev.txt.
 
 on:
   pull_request:
@@ -39,5 +39,35 @@ jobs:
         run: node --test "infra/cloudfront/test/*.test.js"
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
+
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install the lint tooling
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier
+        run: npm run format:check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.17.1
+      - name: ruff check
+        run: ruff check scripts simple/pipeline infra/lambda
+      - name: ruff format
+        run: ruff format --check scripts simple/pipeline infra/lambda
+      - name: Test the refresh-simple-trigger Lambda (stdlib only)
+        run: python3 -m unittest
+        working-directory: infra/lambda/refresh-simple-trigger
       - name: Check the dashboards' CDN integrity hashes (downloads from unpkg)
         run: node --test "simple/test/*.test.js"

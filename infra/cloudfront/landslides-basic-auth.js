@@ -5,24 +5,24 @@
 // and null when the request may continue. Composed into the dev function.
 var AUTH_KEY = 'basic-auth';
 var CHALLENGE = {
-    statusCode: 401,
-    statusDescription: 'Unauthorized',
-    headers: { 'www-authenticate': { value: 'Basic realm="landslides dev"' } }
+  statusCode: 401,
+  statusDescription: 'Unauthorized',
+  headers: { 'www-authenticate': { value: 'Basic realm="landslides dev"' } },
 };
 
 async function basicAuth(event, kvs) {
-    var headers = event.request.headers;
-    var provided = headers.authorization ? headers.authorization.value : '';
+  var headers = event.request.headers;
+  var provided = headers.authorization ? headers.authorization.value : '';
 
-    var expected;
-    try {
-        expected = await kvs.get(AUTH_KEY);
-    } catch (err) {
-        return CHALLENGE;
-    }
-
-    if (provided === 'Basic ' + expected) {
-        return null;
-    }
+  var expected;
+  try {
+    expected = await kvs.get(AUTH_KEY);
+  } catch (_err) {
     return CHALLENGE;
+  }
+
+  if (provided === 'Basic ' + expected) {
+    return null;
+  }
+  return CHALLENGE;
 }

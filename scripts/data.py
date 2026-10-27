@@ -12,36 +12,40 @@ directly in Folium. Reproject to an equal-area CRS for area math.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import requests
 import geopandas as gpd
+import requests
 
 from config import (
-    DEBRIS_FLOW_SERVICE_URL,
-    NDFD_PRECIP_SERVICE_URL,
-    DISPLAY_CRS,
     CACHE_DIR,
-    DEBRIS_CACHE_FILENAME,
     CACHE_TTL_DAYS,
-    WNC_BBOX,
-    OVERTURE_BUILDINGS_SUBDIR,
-    OVERTURE_BUILDINGS_MANIFEST_NAME,
+    DEBRIS_CACHE_FILENAME,
+    DEBRIS_FLOW_SERVICE_URL,
+    DISPLAY_CRS,
+    NDFD_PRECIP_SERVICE_URL,
     OVERTURE_BUILDINGS_CACHE_TTL_DAYS,
-    OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
     OVERTURE_BUILDINGS_COORD_PRECISION,
+    OVERTURE_BUILDINGS_MANIFEST_NAME,
     OVERTURE_BUILDINGS_MIN_AREA_SQM,
+    OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
+    OVERTURE_BUILDINGS_SUBDIR,
+    WNC_BBOX,
 )
-
 
 # =============================================================================
 # AGOL request helper with retry-with-backoff
 # =============================================================================
 
-def _agol_request_with_retry(url: str, params: dict, label: str,
-                              max_attempts: int = 5,
-                              accept_encoding: str = "gzip, deflate") -> dict:
+
+def _agol_request_with_retry(
+    url: str,
+    params: dict,
+    label: str,
+    max_attempts: int = 5,
+    accept_encoding: str = "gzip, deflate",
+) -> dict:
     """GET an ArcGIS REST endpoint, retrying transient errors (5xx, timeouts).
 
     AGOL has periodic blips (503, 504, brief socket timeouts) that resolve
@@ -79,6 +83,7 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
     transient failure.
     """
     import time
+
     headers = {"Accept-Encoding": accept_encoding}
 
     last_exc = None
@@ -86,9 +91,7 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
         try:
             r = requests.get(url, params=params, timeout=120, headers=headers)
             if 500 <= r.status_code < 600:
-                raise requests.HTTPError(
-                    f"{r.status_code} Server Error", response=r
-                )
+                raise requests.HTTPError(f"{r.status_code} Server Error", response=r)
             r.raise_for_status()
             try:
                 payload = r.json()
@@ -98,8 +101,7 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
                 # actually got, then raise for retry.
                 snippet = r.text[:200].strip() if r.text else "(empty body)"
                 raise requests.HTTPError(
-                    f"Non-JSON response (probably transient server issue): "
-                    f"{snippet}", response=r
+                    f"Non-JSON response (probably transient server issue): {snippet}", response=r
                 ) from je
             # AGOL error-envelope check (HTTP 200 with an {"error": ...} body).
             # Raise a requests error (not RuntimeError) so it goes through the
@@ -125,17 +127,23 @@ def _agol_request_with_retry(url: str, params: dict, label: str,
             last_exc = e
             if attempt < max_attempts:
                 backoff_s = 2 ** (attempt - 1)
-                print(f"  [retry {attempt}/{max_attempts - 1}] {label}: "
-                      f"{type(e).__name__}, waiting {backoff_s}s...")
+                print(
+                    f"  [retry {attempt}/{max_attempts - 1}] {label}: "
+                    f"{type(e).__name__}, waiting {backoff_s}s..."
+                )
                 time.sleep(backoff_s)
             else:
                 print(f"  [give up] {label}: exhausted {max_attempts} attempts")
     raise last_exc  # type: ignore[misc]
 
 
-def _fetch_features_paginated(query_url: str, base_params: dict,
-                              page_size: int = 2000, max_workers: int = 8,
-                              label: str = "features") -> list[dict]:
+def _fetch_features_paginated(
+    query_url: str,
+    base_params: dict,
+    page_size: int = 2000,
+    max_workers: int = 8,
+    label: str = "features",
+) -> list[dict]:
     """Fetch ALL features from an ArcGIS /query endpoint, paginating pages
     in parallel.
 
@@ -161,8 +169,7 @@ def _fetch_features_paginated(query_url: str, base_params: dict,
         params = dict(base_params)
         params["resultOffset"] = offset
         params["resultRecordCount"] = page_size
-        page = _agol_request_with_retry(
-            query_url, params, label=f"{label} @offset={offset:,}")
+        page = _agol_request_with_retry(query_url, params, label=f"{label} @offset={offset:,}")
         return offset, page.get("features", [])
 
     # Probe the total up front so we can compute all offsets.
@@ -171,12 +178,12 @@ def _fetch_features_paginated(query_url: str, base_params: dict,
     for k in ("outFields", "resultOffset", "resultRecordCount"):
         count_params.pop(k, None)
     try:
-        cp = _agol_request_with_retry(query_url, count_params,
-                                      label=f"{label} count")
+        cp = _agol_request_with_retry(query_url, count_params, label=f"{label} count")
         total = int(cp.get("count"))
     except Exception as e:
-        print(f"  count probe failed ({type(e).__name__}: {e}); "
-              f"falling back to sequential pagination")
+        print(
+            f"  count probe failed ({type(e).__name__}: {e}); falling back to sequential pagination"
+        )
         total = None
 
     # Sequential fallback: page until a short/empty page (the original loop).
@@ -197,8 +204,10 @@ def _fetch_features_paginated(query_url: str, base_params: dict,
         return []
 
     offsets = list(range(0, total, page_size))
-    print(f"  {total:,} features across {len(offsets)} pages "
-          f"(fetching up to {max_workers} concurrently)...")
+    print(
+        f"  {total:,} features across {len(offsets)} pages "
+        f"(fetching up to {max_workers} concurrently)..."
+    )
     pages: dict[int, list[dict]] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = [pool.submit(fetch_page, off) for off in offsets]
@@ -234,6 +243,7 @@ def _fetch_features_paginated(query_url: str, base_params: dict,
 # =============================================================================
 # Debris flow polygons (NCGS CDF_Landslides_Model / WNC_Mosaic)
 # =============================================================================
+
 
 def _cache_path() -> Path:
     return Path(CACHE_DIR) / DEBRIS_CACHE_FILENAME
@@ -281,8 +291,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     if not force_refresh and _cache_is_fresh():
         age_h = (datetime.now().timestamp() - cache_p.stat().st_mtime) / 3600
-        print(f"Loading debris flow polygons from cache "
-              f"({cache_p}, {age_h:.1f}h old)...")
+        print(f"Loading debris flow polygons from cache ({cache_p}, {age_h:.1f}h old)...")
         gdf = gpd.read_file(cache_p)
         print(f"  -> {len(gdf):,} polygons loaded from cache")
 
@@ -307,7 +316,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
                 reasons.append("watershed column all empty")
             print(f"  Cache needs augmentation: {', '.join(reasons)}")
             gdf = _augment_with_admin_boundaries(gdf)
-            print(f"  Saving augmented cache...")
+            print("  Saving augmented cache...")
             gdf.to_file(cache_p, driver="GPKG")
             print(f"  cache updated ({cache_p.stat().st_size / 1e6:.1f} MB)")
 
@@ -335,10 +344,10 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         # rows share a value), so it must NOT be used for paging or as a key.
         "orderByFields": "OBJECTID_1",
         # Server-side spatial filter to WNC bbox
-        "geometry":     bbox_str,
+        "geometry": bbox_str,
         "geometryType": "esriGeometryEnvelope",
-        "inSR":         "4326",
-        "spatialRel":   "esriSpatialRelIntersects",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
     }
     # page_size 1000 (below the 2000 server cap): smaller responses are lighter
     # per request and less likely to trip AGOL's overload 400s. max_workers 4:
@@ -376,8 +385,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
 # US Census Bureau TIGERweb counties layer
 _CENSUS_COUNTIES_URL = (
-    "https://tigerweb.geo.census.gov/arcgis/rest/services/"
-    "TIGERweb/State_County/MapServer/13/query"
+    "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/13/query"
 )
 
 # UNC Asheville-hosted HUC12 watershed boundary dataset.
@@ -410,7 +418,6 @@ _HUC12_QUERY_URL = (
 )
 
 
-
 def _fetch_nc_counties() -> gpd.GeoDataFrame:
     """Fetch counties from NC and neighboring states (TN, GA, SC, VA).
 
@@ -423,8 +430,7 @@ def _fetch_nc_counties() -> gpd.GeoDataFrame:
 
     Returns a GDF in EPSG:4326 with columns NAME and geometry.
     """
-    print("  Fetching NC + neighboring-state county boundaries from "
-          "US Census TIGERweb...")
+    print("  Fetching NC + neighboring-state county boundaries from US Census TIGERweb...")
     # State FIPS: 37=NC, 47=TN, 13=GA, 45=SC, 51=VA
     states = [
         ("37", "NC"),
@@ -437,15 +443,16 @@ def _fetch_nc_counties() -> gpd.GeoDataFrame:
     all_features: list[dict] = []
     for fips, abbrev in states:
         params = {
-            "where":          f"STATE='{fips}'",
-            "outFields":      "NAME,GEOID,STATE",
-            "outSR":          "4326",
-            "f":              "geojson",
+            "where": f"STATE='{fips}'",
+            "outFields": "NAME,GEOID,STATE",
+            "outSR": "4326",
+            "f": "geojson",
             "returnGeometry": "true",
         }
         try:
             page = _agol_request_with_retry(
-                _CENSUS_COUNTIES_URL, params,
+                _CENSUS_COUNTIES_URL,
+                params,
                 label=f"{abbrev} counties",
             )
             feats = page.get("features", [])
@@ -456,8 +463,7 @@ def _fetch_nc_counties() -> gpd.GeoDataFrame:
 
     if not all_features:
         print("  ! No county features returned from any state")
-        return gpd.GeoDataFrame(columns=["NAME", "geometry"],
-                                 geometry="geometry", crs=DISPLAY_CRS)
+        return gpd.GeoDataFrame(columns=["NAME", "geometry"], geometry="geometry", crs=DISPLAY_CRS)
     gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
     print(f"  -> {len(gdf)} counties loaded total")
     return gdf
@@ -479,17 +485,17 @@ def _fetch_wnc_huc12() -> gpd.GeoDataFrame:
     print("  Fetching WNC HUC12 watersheds from Esri Living Atlas...")
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
     params = {
-        "where":          "1=1",
+        "where": "1=1",
         # Request all fields rather than guessing case (Living Atlas
         # schemas can differ from USGS native - sometimes NAME, sometimes
         # name, sometimes huc12 vs HUC12). We normalize after fetch.
-        "outFields":      "*",
-        "geometry":       bbox_str,
-        "geometryType":   "esriGeometryEnvelope",
-        "inSR":           "4326",
-        "spatialRel":     "esriSpatialRelIntersects",
-        "outSR":          "4326",
-        "f":              "geojson",
+        "outFields": "*",
+        "geometry": bbox_str,
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "outSR": "4326",
+        "f": "geojson",
         "returnGeometry": "true",
     }
     # UNC Asheville's services5 host claims Content-Encoding: gzip on its
@@ -497,22 +503,21 @@ def _fetch_wnc_huc12() -> gpd.GeoDataFrame:
     # lengths" / "invalid code lengths set"). Requesting identity encoding
     # tells the server to skip compression entirely. HUC12 payloads for
     # the WNC bbox are ~5-10 MB uncompressed - noticeable but not painful.
-    page = _agol_request_with_retry(_HUC12_QUERY_URL, params,
-                                     label="WNC HUC12 watersheds",
-                                     accept_encoding="identity")
+    page = _agol_request_with_retry(
+        _HUC12_QUERY_URL, params, label="WNC HUC12 watersheds", accept_encoding="identity"
+    )
     feats = page.get("features", [])
     if not feats:
         print("  ! No HUC12 features returned from AGOL")
-        return gpd.GeoDataFrame(columns=["NAME", "HUC12", "geometry"],
-                                 geometry="geometry", crs=DISPLAY_CRS)
+        return gpd.GeoDataFrame(
+            columns=["NAME", "HUC12", "geometry"], geometry="geometry", crs=DISPLAY_CRS
+        )
     gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
 
     # Normalize field names. Try multiple variants since Living Atlas
     # and USGS native services have slightly different schemas.
-    name_col = next((c for c in ("name", "NAME", "Name")
-                     if c in gdf.columns), None)
-    huc_col  = next((c for c in ("huc12", "HUC12", "Huc12")
-                     if c in gdf.columns), None)
+    name_col = next((c for c in ("name", "NAME", "Name") if c in gdf.columns), None)
+    huc_col = next((c for c in ("huc12", "HUC12", "Huc12") if c in gdf.columns), None)
     if name_col and name_col != "NAME":
         gdf = gdf.rename(columns={name_col: "NAME"})
     if huc_col and huc_col != "HUC12":
@@ -520,8 +525,7 @@ def _fetch_wnc_huc12() -> gpd.GeoDataFrame:
 
     if "NAME" not in gdf.columns:
         # Last resort: pick the first string column as the name
-        text_cols = [c for c in gdf.columns
-                     if c != "geometry" and gdf[c].dtype == object]
+        text_cols = [c for c in gdf.columns if c != "geometry" and gdf[c].dtype == object]
         if text_cols:
             print(f"  ! 'NAME' field not found; using '{text_cols[0]}' as watershed name")
             gdf = gdf.rename(columns={text_cols[0]: "NAME"})
@@ -544,8 +548,9 @@ def _augment_with_admin_boundaries(debris_gdf: gpd.GeoDataFrame) -> gpd.GeoDataF
     Failures (e.g. Census service unavailable) are non-fatal: missing
     values become empty strings and the rest of the pipeline continues.
     """
-    print(f"\n  Augmenting {len(debris_gdf):,} debris flow polygons "
-          f"with county + watershed info...")
+    print(
+        f"\n  Augmenting {len(debris_gdf):,} debris flow polygons with county + watershed info..."
+    )
 
     # Cache the auxiliary datasets module-level so multiple calls within
     # one run don't re-fetch.
@@ -563,7 +568,7 @@ def _augment_with_admin_boundaries(debris_gdf: gpd.GeoDataFrame) -> gpd.GeoDataF
             print(f"  ! Watershed fetch failed: {e}; will fill with ''")
             _admin_cache["watersheds"] = None
 
-    counties_gdf  = _admin_cache.get("counties")
+    counties_gdf = _admin_cache.get("counties")
     watersheds_gdf = _admin_cache.get("watersheds")
 
     # Build a one-time points layer (representative_point) for fast sjoins.
@@ -580,7 +585,8 @@ def _augment_with_admin_boundaries(debris_gdf: gpd.GeoDataFrame) -> gpd.GeoDataF
         cj = gpd.sjoin(
             rep_points,
             counties_gdf[["NAME", "geometry"]].rename(columns={"NAME": "county"}),
-            how="left", predicate="within",
+            how="left",
+            predicate="within",
         )
         # Sort back to original order in case sjoin reordered rows.
         cj = cj.sort_values("_join_idx").drop_duplicates("_join_idx", keep="first")
@@ -595,7 +601,8 @@ def _augment_with_admin_boundaries(debris_gdf: gpd.GeoDataFrame) -> gpd.GeoDataF
         wj = gpd.sjoin(
             rep_points,
             watersheds_gdf[["NAME", "geometry"]].rename(columns={"NAME": "watershed"}),
-            how="left", predicate="within",
+            how="left",
+            predicate="within",
         )
         wj = wj.sort_values("_join_idx").drop_duplicates("_join_idx", keep="first")
         debris_gdf["watershed"] = wj["watershed"].fillna("").values
@@ -615,6 +622,7 @@ _admin_cache: dict = {}
 # NDFD "Accumulation by Time" precipitation forecast
 # =============================================================================
 
+
 def _query_latest_forecast_issuance() -> int:
     """Return the most recent `fromdate` (epoch ms) published by NDFD.
 
@@ -631,8 +639,7 @@ def _query_latest_forecast_issuance() -> int:
         "returnGeometry": "false",
         "f": "json",
     }
-    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query",
-                     params=params, timeout=60)
+    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query", params=params, timeout=60)
     r.raise_for_status()
     payload = r.json()
 
@@ -662,8 +669,7 @@ def _query_ndfd_cycle_start() -> datetime:
         "returnGeometry": "false",
         "f": "json",
     }
-    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query",
-                     params=params, timeout=60)
+    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query", params=params, timeout=60)
     r.raise_for_status()
     feats = r.json().get("features", [])
     if not feats:
@@ -672,7 +678,7 @@ def _query_ndfd_cycle_start() -> datetime:
             "start. The service may be unavailable."
         )
     ms = int(feats[0]["attributes"]["fromdate"])
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+    return datetime.fromtimestamp(ms / 1000, tz=UTC)
 
 
 def fetch_ndfd_source_updated() -> datetime | None:
@@ -684,12 +690,11 @@ def fetch_ndfd_source_updated() -> datetime | None:
     changed. Returns None if the metadata can't be read.
     """
     try:
-        r = requests.get(NDFD_PRECIP_SERVICE_URL, params={"f": "json"},
-                         timeout=60)
+        r = requests.get(NDFD_PRECIP_SERVICE_URL, params={"f": "json"}, timeout=60)
         r.raise_for_status()
         info = r.json().get("editingInfo") or {}
         ms = info.get("dataLastEditDate") or info.get("lastEditDate")
-        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc) if ms else None
+        return datetime.fromtimestamp(int(ms) / 1000, tz=UTC) if ms else None
     except Exception as e:  # metadata is nice-to-have; never fail the run
         print(f"  WARNING: could not read NDFD layer edit date: {e}")
         return None
@@ -732,9 +737,7 @@ def fetch_precip_forecast(
         End of the accumulation (valid_start + window_hours).
     """
     if window_hours <= 0 or window_hours % 6 != 0:
-        raise ValueError(
-            f"window_hours must be a positive multiple of 6 (got {window_hours})"
-        )
+        raise ValueError(f"window_hours must be a positive multiple of 6 (got {window_hours})")
 
     valid_start = _query_ndfd_cycle_start()
     valid_end = valid_start + timedelta(hours=window_hours)
@@ -746,8 +749,10 @@ def fetch_precip_forecast(
     lo = period_start - timedelta(minutes=1)
     hi = period_start + timedelta(minutes=1)
 
-    print(f"Fetching NDFD precipitation forecast "
-          f"(window={window_hours}h, min category={min_category})...")
+    print(
+        f"Fetching NDFD precipitation forecast "
+        f"(window={window_hours}h, min category={min_category})..."
+    )
     print(f"  accumulation from: {valid_start:%Y-%m-%d %H:%M UTC} (cycle start)")
     print(f"  accumulation to:   {valid_end:%Y-%m-%d %H:%M UTC}")
 
@@ -767,13 +772,12 @@ def fetch_precip_forecast(
         "outSR": 4326,
         "f": "geojson",
         "returnGeometry": "true",
-        "geometry":      bbox_str,
-        "geometryType":  "esriGeometryEnvelope",
-        "inSR":          "4326",
-        "spatialRel":    "esriSpatialRelIntersects",
+        "geometry": bbox_str,
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
     }
-    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query",
-                     params=params, timeout=90)
+    r = requests.get(f"{NDFD_PRECIP_SERVICE_URL}/query", params=params, timeout=90)
     r.raise_for_status()
     page = r.json()
     if "error" in page:
@@ -797,6 +801,7 @@ def fetch_precip_forecast(
 # =============================================================================
 # Synthetic test polygon (testing-only)
 # =============================================================================
+
 
 def make_test_precip_polygon(
     category: int,
@@ -826,30 +831,46 @@ def make_test_precip_polygon(
     # NDFD's exact label strings for each category - mirror them so the
     # test polygon looks like a real one in the table (except for [TEST]).
     label_lookup = {
-        0:  ".01 - .10\"",   1: ".10 - .25\"",   2: ".25 - .50\"",
-        3:  ".50 - .75\"",   4: ".75 - 1\"",     5: "1 - 1.50\"",
-        6:  "1.50 - 2\"",    7: "2 - 2.50\"",    8: "2.50 - 3\"",
-        9:  "3 - 4\"",      10: "4 - 5\"",      11: "5 - 6\"",
-        12: "6 - 8\"",      13: "8 - 10\"",     14: "10 - 12\"",
-        15: "12 - 14\"",    16: "14 - 16\"",    17: "16 - 18\"",
-        18: "18 - 20\"",    19: "> 20\"",
+        0: '.01 - .10"',
+        1: '.10 - .25"',
+        2: '.25 - .50"',
+        3: '.50 - .75"',
+        4: '.75 - 1"',
+        5: '1 - 1.50"',
+        6: '1.50 - 2"',
+        7: '2 - 2.50"',
+        8: '2.50 - 3"',
+        9: '3 - 4"',
+        10: '4 - 5"',
+        11: '5 - 6"',
+        12: '6 - 8"',
+        13: '8 - 10"',
+        14: '10 - 12"',
+        15: '12 - 14"',
+        16: '14 - 16"',
+        17: '16 - 18"',
+        18: '18 - 20"',
+        19: '> 20"',
     }
     from shapely.geometry import Polygon
-    cx, cy = -82.55, 35.60     # Asheville
-    half = 0.22                # ~15 mi half-width
-    poly = Polygon([
-        (cx - half, cy - half),
-        (cx + half, cy - half),
-        (cx + half, cy + half),
-        (cx - half, cy + half),
-    ])
+
+    cx, cy = -82.55, 35.60  # Asheville
+    half = 0.22  # ~15 mi half-width
+    poly = Polygon(
+        [
+            (cx - half, cy - half),
+            (cx + half, cy - half),
+            (cx + half, cy + half),
+            (cx - half, cy + half),
+        ]
+    )
     return gpd.GeoDataFrame(
         {
             "category": [int(category)],
             "label": [f"[TEST] {label_lookup.get(int(category), 'test')}"],
             "fromdate": [int(fromdate.timestamp() * 1000)],
-            "todate":   [int(todate.timestamp() * 1000)],
-            "is_test":  [True],
+            "todate": [int(todate.timestamp() * 1000)],
+            "is_test": [True],
         },
         geometry=[poly],
         crs=DISPLAY_CRS,
@@ -871,9 +892,10 @@ from shapely.geometry import shape as _shapely_shape  # local alias
 # installed, MRMS mode degrades gracefully - the UI shows a one-line note
 # explaining how to install it, and falls back to NDFD mode.
 try:
-    import rasterio                       # type: ignore
+    import rasterio  # type: ignore
     from rasterio.features import shapes as _raster_shapes  # type: ignore
     from rasterio.windows import from_bounds as _window_from_bounds  # type: ignore
+
     HAS_RASTERIO = True
 except Exception:
     HAS_RASTERIO = False
@@ -884,6 +906,7 @@ def _classify_mrms_inches_to_category(rainfall_inches: float) -> int:
     index 0-19. Uses the same cutoffs as PRECIP_LABELS so the existing
     color ramp and legend work unchanged."""
     from config import MRMS_CATEGORY_CUTOFFS_INCHES
+
     for i, upper in enumerate(MRMS_CATEGORY_CUTOFFS_INCHES):
         if rainfall_inches < upper:
             return i
@@ -935,9 +958,12 @@ def fetch_mrms_qpe(
         )
 
     from config import (
-        MRMS_URL_TEMPLATES, MRMS_HOUR_WINDOWS, WNC_BBOX,
+        MRMS_HOUR_WINDOWS,
+        MRMS_URL_TEMPLATES,
+        WNC_BBOX,
         mrms_product_fallback_for_hours,
     )
+
     if window_hours not in MRMS_HOUR_WINDOWS:
         raise ValueError(
             f"window_hours={window_hours} not in MRMS_HOUR_WINDOWS "
@@ -946,7 +972,7 @@ def fetch_mrms_qpe(
     if bbox is None:
         bbox = WNC_BBOX
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     errors: list[str] = []
     fallback_chain = mrms_product_fallback_for_hours(window_hours)
 
@@ -959,38 +985,35 @@ def fetch_mrms_qpe(
 
         # Target the most recent file likely to be available for this
         # product, then back off hour by hour if we miss.
-        target = (now - timedelta(minutes=lookback)).replace(
-            minute=0, second=0, microsecond=0
-        )
+        target = (now - timedelta(minutes=lookback)).replace(minute=0, second=0, microsecond=0)
 
         for hours_back in range(0, 3):
             valid_time = target - timedelta(hours=hours_back)
             url = url_template.format(
-                Y=valid_time.year, M=valid_time.month,
-                D=valid_time.day, H=valid_time.hour,
+                Y=valid_time.year,
+                M=valid_time.month,
+                D=valid_time.day,
+                H=valid_time.hour,
             )
             try:
-                gdf, max_inches = _read_mrms_grib_to_polygons(
-                    url, bbox, valid_time
-                )
+                gdf, max_inches = _read_mrms_grib_to_polygons(url, bbox, valid_time)
                 fromdate = valid_time - timedelta(hours=window_hours)
                 todate = valid_time
                 minutes_ago = (now - valid_time).total_seconds() / 60.0
                 meta = {
-                    "product":      display_name,
-                    "product_id":   product_name,
-                    "file_url":     url,
-                    "valid_time":   valid_time,
-                    "minutes_ago":  minutes_ago,
-                    "max_inches":   max_inches,
-                    "n_polygons":   len(gdf),
+                    "product": display_name,
+                    "product_id": product_name,
+                    "file_url": url,
+                    "valid_time": valid_time,
+                    "minutes_ago": minutes_ago,
+                    "max_inches": max_inches,
+                    "n_polygons": len(gdf),
                     "window_hours": window_hours,
                 }
                 return gdf, fromdate, todate, meta
             except Exception as e:
                 errors.append(
-                    f"{display_name} @ {valid_time:%Y-%m-%d %H:%MZ}: "
-                    f"{type(e).__name__}: {e}"
+                    f"{display_name} @ {valid_time:%Y-%m-%d %H:%MZ}: {type(e).__name__}: {e}"
                 )
                 continue
 
@@ -1019,7 +1042,6 @@ def _read_mrms_grib_to_polygons(
 
     Returns (gdf, max_inches_in_bbox).
     """
-    import numpy as np
 
     vsi_path = f"/vsigzip//vsicurl/{url}"
 
@@ -1068,11 +1090,13 @@ def _read_mrms_grib_to_polygons(
             geom = _shapely_shape(geom_json)
             if not geom.is_valid or geom.is_empty:
                 continue
-            records.append({
-                "category": cat,
-                "label": _category_label(cat),
-                "geometry": geom,
-            })
+            records.append(
+                {
+                    "category": cat,
+                    "label": _category_label(cat),
+                    "geometry": geom,
+                }
+            )
 
     if not records:
         # No precip in the bbox at any category. Return empty GDF in the
@@ -1093,6 +1117,7 @@ def _category_label(cat: int) -> str:
     dict from map_folium to avoid a circular import."""
     try:
         from map_folium import PRECIP_LABELS
+
         return PRECIP_LABELS.get(cat, f"cat {cat}")
     except Exception:
         return f"cat {cat}"
@@ -1147,7 +1172,8 @@ def fetch_stage_iv_qpe(
     ValueError      if accumulation_days is non-positive
     RuntimeError    if more than half the daily files are unavailable
     """
-    from datetime import datetime as _datetime, timedelta as _timedelta
+    from datetime import datetime as _datetime
+    from datetime import timedelta as _timedelta
 
     if accumulation_days < 1:
         raise ValueError(f"accumulation_days must be >= 1, got {accumulation_days}")
@@ -1156,10 +1182,8 @@ def fetch_stage_iv_qpe(
     days = [end_dt - _timedelta(days=i) for i in range(accumulation_days)]
     days_oldest_first = sorted(days)
 
-    print(f"  Fetching Stage IV {accumulation_days}-day accumulation "
-          f"ending {end_date}")
-    print(f"  Range: {days_oldest_first[0]:%Y-%m-%d} "
-          f"through {days_oldest_first[-1]:%Y-%m-%d}")
+    print(f"  Fetching Stage IV {accumulation_days}-day accumulation ending {end_date}")
+    print(f"  Range: {days_oldest_first[0]:%Y-%m-%d} through {days_oldest_first[-1]:%Y-%m-%d}")
 
     accumulator = None
     accumulator_transform = None
@@ -1169,9 +1193,7 @@ def fetch_stage_iv_qpe(
     days_missing = []
 
     for day in days_oldest_first:
-        url = STAGE_IV_URL_TEMPLATE.format(
-            YYYY=day.year, MM=day.month, DD=day.day
-        )
+        url = STAGE_IV_URL_TEMPLATE.format(YYYY=day.year, MM=day.month, DD=day.day)
         try:
             arr, transform, crs, nodata = _download_stage_iv_one_day(url)
         except requests.HTTPError as e:
@@ -1189,18 +1211,21 @@ def fetch_stage_iv_qpe(
             # this grid (Stage IV files share the same HRAP grid, so this
             # is a safety check, not active reprojection).
             import numpy as np
-            accumulator = np.where(
-                (arr != nodata) & np.isfinite(arr) & (arr > 0),
-                arr, 0
-            ).astype("float64")
+
+            accumulator = np.where((arr != nodata) & np.isfinite(arr) & (arr > 0), arr, 0).astype(
+                "float64"
+            )
             accumulator_transform = transform
             accumulator_crs = crs
             accumulator_nodata = nodata
         else:
             import numpy as np
+
             if arr.shape != accumulator.shape:
-                print(f"  ! {day:%Y-%m-%d}: grid mismatch "
-                      f"({arr.shape} vs {accumulator.shape}), skipping")
+                print(
+                    f"  ! {day:%Y-%m-%d}: grid mismatch "
+                    f"({arr.shape} vs {accumulator.shape}), skipping"
+                )
                 days_missing.append(day.strftime("%Y-%m-%d"))
                 continue
             valid = (arr != nodata) & np.isfinite(arr) & (arr > 0)
@@ -1208,17 +1233,14 @@ def fetch_stage_iv_qpe(
 
     # Bail if too many days were missing
     if accumulator is None:
-        raise RuntimeError(
-            f"All {accumulation_days} daily files failed; nothing to sum"
-        )
+        raise RuntimeError(f"All {accumulation_days} daily files failed; nothing to sum")
     if len(days_missing) > accumulation_days / 2:
         raise RuntimeError(
             f"{len(days_missing)}/{accumulation_days} daily files missing "
             f"({days_missing}); accumulation would be misleading"
         )
 
-    print(f"  Summed {accumulation_days - len(days_missing)} day(s) "
-          f"({len(days_missing)} missing)")
+    print(f"  Summed {accumulation_days - len(days_missing)} day(s) ({len(days_missing)} missing)")
 
     # Polygonize the accumulator. _polygonize_inches_array reuses our
     # MRMS-style logic; the only difference is we already have inches
@@ -1228,12 +1250,12 @@ def fetch_stage_iv_qpe(
     )
 
     meta = {
-        "product":           f"NWPS Stage IV ({accumulation_days}-day sum)",
-        "end_date":          end_date,
+        "product": f"NWPS Stage IV ({accumulation_days}-day sum)",
+        "end_date": end_date,
         "accumulation_days": accumulation_days,
-        "max_inches":        max_inches,
-        "urls_used":         urls_used,
-        "days_missing":      days_missing,
+        "max_inches": max_inches,
+        "urls_used": urls_used,
+        "days_missing": days_missing,
     }
     return gdf, meta
 
@@ -1249,9 +1271,9 @@ def _download_stage_iv_one_day(url: str):
     print(f"    fetching {url.rsplit('/', 1)[-1]}...")
     r = requests.get(url, timeout=120)
 
-    if r.status_code == 404 and url.endswith('.tif'):
+    if r.status_code == 404 and url.endswith(".tif"):
         # Try NetCDF fallback
-        nc_url = url[:-4] + '.nc'
+        nc_url = url[:-4] + ".nc"
         print(f"    .tif missing, trying {nc_url.rsplit('/', 1)[-1]}...")
         r = requests.get(nc_url, timeout=120)
         url = nc_url
@@ -1261,6 +1283,7 @@ def _download_stage_iv_one_day(url: str):
     r.raise_for_status()
 
     from rasterio.io import MemoryFile
+
     with MemoryFile(r.content) as memfile:
         with memfile.open() as src:
             data = src.read(1).astype("float32")
@@ -1281,11 +1304,10 @@ def _polygonize_stage_iv_inches(
     grid); we reproject to a regular lat/lon grid before binning so we get
     rectangular pixel polygons in the output."""
     import numpy as np
-    from rasterio.warp import reproject, Resampling, calculate_default_transform
+    from rasterio.warp import Resampling, calculate_default_transform, reproject
 
     # Reproject to WGS84 at ~native (4km) resolution
-    is_geographic = (src_crs is not None
-                     and (src_crs.to_epsg() == 4326 or src_crs.is_geographic))
+    is_geographic = src_crs is not None and (src_crs.to_epsg() == 4326 or src_crs.is_geographic)
 
     if is_geographic:
         data_wgs84 = data_inches
@@ -1295,11 +1317,15 @@ def _polygonize_stage_iv_inches(
         src_height, src_width = data_inches.shape
         # Get the source bounds for calculate_default_transform
         from rasterio.transform import array_bounds
+
         src_bounds = array_bounds(src_height, src_width, transform)
         dst_transform, dst_width, dst_height = calculate_default_transform(
-            src_crs, dst_crs, src_width, src_height,
+            src_crs,
+            dst_crs,
+            src_width,
+            src_height,
             *src_bounds,
-            resolution=0.04,   # ~4km at WNC latitude
+            resolution=0.04,  # ~4km at WNC latitude
         )
         data_wgs84 = np.full(
             (dst_height, dst_width),
@@ -1313,7 +1339,7 @@ def _polygonize_stage_iv_inches(
             src_crs=src_crs,
             dst_transform=dst_transform,
             dst_crs=dst_crs,
-            src_nodata=0,   # we already replaced nodata with 0 in accumulator
+            src_nodata=0,  # we already replaced nodata with 0 in accumulator
             dst_nodata=0,
             resampling=Resampling.bilinear,
         )
@@ -1325,6 +1351,7 @@ def _polygonize_stage_iv_inches(
 
     # NDFD category bins (same approach as MRMS)
     from config import MRMS_CATEGORY_CUTOFFS_INCHES
+
     cat_bounds: list[tuple[float, float]] = []
     prev = 0.01
     for upper in MRMS_CATEGORY_CUTOFFS_INCHES:
@@ -1348,11 +1375,13 @@ def _polygonize_stage_iv_inches(
             geom = _shapely_shape(geom_json)
             if not geom.is_valid or geom.is_empty:
                 continue
-            records.append({
-                "category": cat,
-                "label": _category_label(cat),
-                "geometry": geom,
-            })
+            records.append(
+                {
+                    "category": cat,
+                    "label": _category_label(cat),
+                    "geometry": geom,
+                }
+            )
 
     if not records:
         empty = gpd.GeoDataFrame(
@@ -1366,12 +1395,12 @@ def _polygonize_stage_iv_inches(
 
     # Clip to WNC bbox
     from shapely.geometry import box as _shapely_box
+
     bbox_geom = _shapely_box(*WNC_BBOX)
     gdf = gdf[gdf.intersects(bbox_geom)].copy()
     print(f"  {len(gdf)} polygons within WNC bbox")
 
     return gdf, max_inches
-
 
 
 # =============================================================================
@@ -1389,6 +1418,7 @@ def _polygonize_stage_iv_inches(
 # OVERTURE_BUILDINGS_CACHE_TTL_DAYS check below means refresh.py only
 # triggers a fresh extract about once a month, while the file feeds the
 # frontend on every page load in between.
+
 
 def _overture_output_dir(output_dir: Path) -> Path:
     """Where the per-county building GeoJSONs and their manifest live.
@@ -1461,13 +1491,17 @@ def fetch_overture_buildings(
 
     if not force_refresh and _overture_cache_is_fresh(output_dir):
         age_days = (datetime.now().timestamp() - manifest_path.stat().st_mtime) / 86400
-        print(f"  Buildings cache is fresh ({age_days:.1f} days old, "
-              f"TTL {OVERTURE_BUILDINGS_CACHE_TTL_DAYS}d). Skipping extraction.")
+        print(
+            f"  Buildings cache is fresh ({age_days:.1f} days old, "
+            f"TTL {OVERTURE_BUILDINGS_CACHE_TTL_DAYS}d). Skipping extraction."
+        )
         return None
 
     print(f"  Extracting Overture buildings for bbox {WNC_BBOX}...")
-    print(f"  This typically takes 5-15 minutes (DuckDB query against "
-          f"Overture's hosted GeoParquet on AWS).")
+    print(
+        "  This typically takes 5-15 minutes (DuckDB query against "
+        "Overture's hosted GeoParquet on AWS)."
+    )
 
     # Lazy import: overturemaps + duckdb are heavy dependencies and we
     # only need them when actually extracting. Importing at module load
@@ -1501,8 +1535,9 @@ def fetch_overture_buildings(
     # NETWORK_CONNECTION: Response body length doesn't match the
     # content-length header") kills the whole extraction. We wrap the
     # call in a retry-with-backoff loop to survive these.
-    print(f"  Querying Overture (theme=buildings, type=building)...")
+    print("  Querying Overture (theme=buildings, type=building)...")
     import time
+
     max_attempts = 4
     table = None
     for attempt in range(1, max_attempts + 1):
@@ -1512,18 +1547,22 @@ def fetch_overture_buildings(
                 bbox=(minx, miny, maxx, maxy),
             )
             break
-        except (OSError, IOError) as exc:
+        except OSError as exc:
             # AWS network errors, Parquet read errors - all typically
             # transient. Log, wait, retry.
             if attempt < max_attempts:
                 wait_s = 2 ** (attempt - 1)  # 1, 2, 4 seconds
-                print(f"  [retry {attempt}/{max_attempts - 1}] Overture "
-                      f"extract failed transiently ({type(exc).__name__}). "
-                      f"Waiting {wait_s}s before retry...")
+                print(
+                    f"  [retry {attempt}/{max_attempts - 1}] Overture "
+                    f"extract failed transiently ({type(exc).__name__}). "
+                    f"Waiting {wait_s}s before retry..."
+                )
                 time.sleep(wait_s)
             else:
-                print(f"  [failed] Overture extract exhausted "
-                      f"{max_attempts} attempts. Last error was:")
+                print(
+                    f"  [failed] Overture extract exhausted "
+                    f"{max_attempts} attempts. Last error was:"
+                )
                 print(f"    {type(exc).__name__}: {str(exc)[:200]}")
                 raise
     if table is None:
@@ -1532,8 +1571,7 @@ def fetch_overture_buildings(
     print(f"  Raw extract: {n_raw:,} buildings.")
 
     if n_raw == 0:
-        print(f"  WARNING: 0 buildings returned. Check Overture release "
-              f"availability for this bbox.")
+        print("  WARNING: 0 buildings returned. Check Overture release availability for this bbox.")
         return table
 
     # Subset to minimal columns: id + geometry only. Every extra field
@@ -1541,11 +1579,14 @@ def fetch_overture_buildings(
     # money in file size for a visual reference layer.
     keep_cols = [c for c in ["id", "geometry"] if c in table.columns]
     if "geometry" not in keep_cols:
-        raise RuntimeError("Overture extract has no 'geometry' column; "
-                           "cannot produce a spatial output.")
+        raise RuntimeError(
+            "Overture extract has no 'geometry' column; cannot produce a spatial output."
+        )
     if "id" not in keep_cols:
-        print(f"  Note: 'id' column not in Overture extract - future "
-              f"spatial joins will need a different join key.")
+        print(
+            "  Note: 'id' column not in Overture extract - future "
+            "spatial joins will need a different join key."
+        )
     gdf = table[keep_cols].copy()
 
     # Ensure WGS84 - Overture publishes in 4326 but be defensive
@@ -1557,20 +1598,22 @@ def fetch_overture_buildings(
     # Filter by minimum building area (drops sheds, gazebos, small
     # outbuildings). Uses EPSG:5070 for square-meter area math.
     if OVERTURE_BUILDINGS_MIN_AREA_SQM > 0:
-        print(f"  Filtering to buildings >= "
-              f"{OVERTURE_BUILDINGS_MIN_AREA_SQM} sq meters...")
+        print(f"  Filtering to buildings >= {OVERTURE_BUILDINGS_MIN_AREA_SQM} sq meters...")
         areas_sqm = gdf.geometry.to_crs("EPSG:5070").area
         keep_mask = areas_sqm >= OVERTURE_BUILDINGS_MIN_AREA_SQM
         n_before = len(gdf)
         gdf = gdf[keep_mask].copy()
         n_after = len(gdf)
         pct_dropped = (n_before - n_after) / n_before * 100 if n_before else 0
-        print(f"  Filtered: {n_before:,} -> {n_after:,} buildings "
-              f"({pct_dropped:.1f}% dropped as too-small).")
+        print(
+            f"  Filtered: {n_before:,} -> {n_after:,} buildings "
+            f"({pct_dropped:.1f}% dropped as too-small)."
+        )
 
     # Simplify geometries for file-size savings.
-    print(f"  Simplifying geometries at {OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG} deg "
-          f"(~3m) tolerance...")
+    print(
+        f"  Simplifying geometries at {OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG} deg (~3m) tolerance..."
+    )
     gdf["geometry"] = gdf.geometry.simplify(
         tolerance=OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
         preserve_topology=True,
@@ -1583,11 +1626,10 @@ def fetch_overture_buildings(
     # Returns a GDF with columns NAME, GEOID, STATE across NC + TN + GA +
     # SC + VA. GEOID is the 5-digit state+county FIPS code, unique across
     # states. We use GEOID as the county file basename.
-    print(f"  Fetching county boundaries for building spatial join...")
+    print("  Fetching county boundaries for building spatial join...")
     counties = _fetch_nc_counties()
     if len(counties) == 0:
-        raise RuntimeError("County fetch returned 0 records; cannot "
-                           "chunk buildings by county.")
+        raise RuntimeError("County fetch returned 0 records; cannot chunk buildings by county.")
 
     # Reproject counties to 4326 if needed (matches our building CRS)
     if str(counties.crs).upper() not in ("EPSG:4326", "WGS 84"):
@@ -1604,8 +1646,10 @@ def fetch_overture_buildings(
     # centroids can be inaccurate. For building-sized polygons the error
     # is negligible in practice, but a correct computation costs almost
     # nothing here and silences the warning.
-    print(f"  Spatial-joining {len(gdf):,} buildings to "
-          f"{len(counties):,} counties (centroid-in-county)...")
+    print(
+        f"  Spatial-joining {len(gdf):,} buildings to "
+        f"{len(counties):,} counties (centroid-in-county)..."
+    )
     centroids_projected = gdf.geometry.to_crs("EPSG:5070").centroid
     centroids_gdf = gdf.copy()
     centroids_gdf["geometry"] = centroids_projected.to_crs("EPSG:4326")
@@ -1627,8 +1671,10 @@ def fetch_overture_buildings(
     n_orphans = joined["GEOID"].isna().sum()
     n_matched = len(joined) - n_orphans
     if n_orphans > 0:
-        print(f"  Note: {n_orphans:,} buildings ({100*n_orphans/len(joined):.1f}%) "
-              f"did not match any county - dropping.")
+        print(
+            f"  Note: {n_orphans:,} buildings ({100 * n_orphans / len(joined):.1f}%) "
+            f"did not match any county - dropping."
+        )
     joined = joined[joined["GEOID"].notna()].copy()
 
     # ---- Write per-county GeoJSON files --------------------------------
@@ -1649,14 +1695,20 @@ def fetch_overture_buildings(
     for geoid, county_group in joined.groupby("GEOID"):
         # Keep only id + geometry in the output; GEOID/NAME/STATE go
         # into the manifest entry, not the individual features
-        county_out = county_group[["id", "geometry"]].copy() \
-            if "id" in county_group.columns \
+        county_out = (
+            county_group[["id", "geometry"]].copy()
+            if "id" in county_group.columns
             else county_group[["geometry"]].copy()
+        )
 
         # Compute the bbox in a stable order for manifest storage
         b = county_out.total_bounds  # [minx, miny, maxx, maxy]
-        bbox = [round(float(b[0]), 5), round(float(b[1]), 5),
-                round(float(b[2]), 5), round(float(b[3]), 5)]
+        bbox = [
+            round(float(b[0]), 5),
+            round(float(b[1]), 5),
+            round(float(b[2]), 5),
+            round(float(b[3]), 5),
+        ]
 
         county_file = buildings_dir / f"{geoid}.geojson"
         county_out.to_file(
@@ -1669,15 +1721,17 @@ def fetch_overture_buildings(
 
         # Get county name + state from any row (all rows in group share these)
         first_row = county_group.iloc[0]
-        manifest_counties.append({
-            "geoid": str(geoid),
-            "name":  str(first_row.get("NAME", "")),
-            "state": str(first_row.get("STATE", "")),
-            "bbox":  bbox,
-            "count": int(len(county_out)),
-            "file":  f"{OVERTURE_BUILDINGS_SUBDIR}/{geoid}.geojson",
-            "size_mb": round(size_mb, 2),
-        })
+        manifest_counties.append(
+            {
+                "geoid": str(geoid),
+                "name": str(first_row.get("NAME", "")),
+                "state": str(first_row.get("STATE", "")),
+                "bbox": bbox,
+                "count": int(len(county_out)),
+                "file": f"{OVERTURE_BUILDINGS_SUBDIR}/{geoid}.geojson",
+                "size_mb": round(size_mb, 2),
+            }
+        )
 
     # Sort manifest for stable ordering (helps diffs and manual inspection)
     manifest_counties.sort(key=lambda c: c["geoid"])
@@ -1688,25 +1742,30 @@ def fetch_overture_buildings(
     # here are their bboxes." Small file (~30 counties x ~200 bytes each
     # = ~6 KB total).
     import json
+
     manifest = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source":       "Overture Maps Foundation",
-        "bbox":         list(WNC_BBOX),
+        "generated_at": datetime.now(UTC).isoformat(),
+        "source": "Overture Maps Foundation",
+        "bbox": list(WNC_BBOX),
         "simplify_tolerance_deg": OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
-        "min_area_sqm":          OVERTURE_BUILDINGS_MIN_AREA_SQM,
-        "county_count":          len(manifest_counties),
-        "total_features":        int(sum(c["count"] for c in manifest_counties)),
-        "total_size_mb":         round(total_size_mb, 2),
-        "counties":              manifest_counties,
+        "min_area_sqm": OVERTURE_BUILDINGS_MIN_AREA_SQM,
+        "county_count": len(manifest_counties),
+        "total_features": int(sum(c["count"] for c in manifest_counties)),
+        "total_size_mb": round(total_size_mb, 2),
+        "counties": manifest_counties,
     }
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    print(f"  Wrote {len(manifest_counties)} per-county files, "
-          f"total {total_size_mb:.1f} MB "
-          f"({n_matched:,} buildings). Avg "
-          f"{total_size_mb / max(len(manifest_counties), 1):.1f} MB per county.")
-    print(f"  Manifest: {manifest_path.name} "
-          f"(loaded first by the frontend to know which counties exist).")
+    print(
+        f"  Wrote {len(manifest_counties)} per-county files, "
+        f"total {total_size_mb:.1f} MB "
+        f"({n_matched:,} buildings). Avg "
+        f"{total_size_mb / max(len(manifest_counties), 1):.1f} MB per county."
+    )
+    print(
+        f"  Manifest: {manifest_path.name} "
+        f"(loaded first by the frontend to know which counties exist)."
+    )
 
     return joined

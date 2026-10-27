@@ -26,7 +26,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import settings as S
@@ -36,17 +36,20 @@ import settings as S
 # Esri reloads the layer each hour. Those answers, timeouts and 5xx are
 # retried; a real client error such as a 404 on status.json is not.
 RETRY_ATTEMPTS = 3
-RETRY_DELAYS = (5, 15)   # seconds to wait before attempts 2 and 3
+RETRY_DELAYS = (5, 15)  # seconds to wait before attempts 2 and 3
 
 
 def _fetch_json(url: str, timeout: int) -> dict:
     """One request. Raises on transport errors and on ArcGIS error payloads."""
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "dfens-simple-refresh",
-        # The HUC12 gzip bug noted in the main pipeline doesn't apply to
-        # this service, but identity is cheap insurance.
-        "Accept-Encoding": "identity",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "dfens-simple-refresh",
+            # The HUC12 gzip bug noted in the main pipeline doesn't apply to
+            # this service, but identity is cheap insurance.
+            "Accept-Encoding": "identity",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         payload = json.loads(r.read().decode("utf-8"))
     if isinstance(payload, dict) and "error" in payload:
@@ -73,44 +76,58 @@ def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
             if attempt == RETRY_ATTEMPTS or not _is_transient(e):
                 raise
             delay = RETRY_DELAYS[attempt - 1]
-            print(f"[check] attempt {attempt} of {RETRY_ATTEMPTS} failed "
-                  f"({type(e).__name__}: {e}); retrying in {delay}s")
+            print(
+                f"[check] attempt {attempt} of {RETRY_ATTEMPTS} failed "
+                f"({type(e).__name__}: {e}); retrying in {delay}s"
+            )
             time.sleep(delay)
     raise AssertionError("unreachable")
 
 
 def _iso(dt: datetime | None) -> str | None:
-    return dt.astimezone(timezone.utc).isoformat() if dt else None
+    return dt.astimezone(UTC).isoformat() if dt else None
 
 
 def _from_ms(ms) -> datetime:
-    return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+    return datetime.fromtimestamp(int(ms) / 1000, tz=UTC)
 
 
 def ndfd_state() -> dict:
     """Read cycle start, last data edit, and the >= threshold count."""
     info = _get_json(S.NDFD_LAYER_URL, {"f": "json"})
-    edit = (info.get("editingInfo") or {})
+    edit = info.get("editingInfo") or {}
     last_edit_ms = edit.get("dataLastEditDate") or edit.get("lastEditDate")
     issued = _from_ms(last_edit_ms) if last_edit_ms else None
 
-    first = _get_json(S.NDFD_LAYER_URL + "/query", {
-        "where": "1=1", "outFields": "fromdate", "orderByFields": "fromdate ASC",
-        "resultRecordCount": 1, "returnGeometry": "false", "f": "json",
-    })
+    first = _get_json(
+        S.NDFD_LAYER_URL + "/query",
+        {
+            "where": "1=1",
+            "outFields": "fromdate",
+            "orderByFields": "fromdate ASC",
+            "resultRecordCount": 1,
+            "returnGeometry": "false",
+            "f": "json",
+        },
+    )
     feats = first.get("features") or []
     if not feats:
         raise RuntimeError("NDFD layer returned no features")
     cycle_start = _from_ms(feats[0]["attributes"]["fromdate"])
     window_end = cycle_start + timedelta(hours=S.WINDOW_HOURS)
 
-    count = _get_json(S.NDFD_LAYER_URL + "/query", {
-        "where": S.period_where(cycle_start, S.WINDOW_HOURS, S.THRESHOLD_CATEGORY),
-        "geometry": ",".join(str(c) for c in S.WNC_BBOX),
-        "geometryType": "esriGeometryEnvelope", "inSR": 4326,
-        "spatialRel": "esriSpatialRelIntersects",
-        "returnCountOnly": "true", "f": "json",
-    }).get("count", 0)
+    count = _get_json(
+        S.NDFD_LAYER_URL + "/query",
+        {
+            "where": S.period_where(cycle_start, S.WINDOW_HOURS, S.THRESHOLD_CATEGORY),
+            "geometry": ",".join(str(c) for c in S.WNC_BBOX),
+            "geometryType": "esriGeometryEnvelope",
+            "inSR": 4326,
+            "spatialRel": "esriSpatialRelIntersects",
+            "returnCountOnly": "true",
+            "f": "json",
+        },
+    ).get("count", 0)
 
     return {
         "issued": issued,
@@ -154,8 +171,15 @@ def build_meta(state: dict, n_flagged: int, now: datetime) -> dict:
 
 
 def build_status(meta: dict, now: datetime, result: str) -> dict:
-    keep = ("issued", "window_start", "window_end", "window_hours",
-            "n_flagged", "generated_at", "ndfd_key")
+    keep = (
+        "issued",
+        "window_start",
+        "window_end",
+        "window_hours",
+        "n_flagged",
+        "generated_at",
+        "ndfd_key",
+    )
     st = {k: meta.get(k) for k in keep}
     st["checked_at"] = _iso(now)
     st["check_interval_minutes"] = S.check_interval_minutes()
@@ -169,16 +193,21 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
     "state": ...}. On skip, writes the refreshed status.json to `out`.
     `prev` is the last published status.json (None on first run)."""
     out.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     state = ndfd_state()
     heavy = state["n_precip_polygons"] > 0
-    print(f"[check] NDFD updated {_iso(state['issued'])}, cycle start "
-          f"{_iso(state['window_start'])}, >= cat {S.THRESHOLD_CATEGORY} "
-          f"polygons in WNC: {state['n_precip_polygons']}")
+    print(
+        f"[check] NDFD updated {_iso(state['issued'])}, cycle start "
+        f"{_iso(state['window_start'])}, >= cat {S.THRESHOLD_CATEGORY} "
+        f"polygons in WNC: {state['n_precip_polygons']}"
+    )
 
-    up_to_date = (prev and prev.get("ndfd_key") == state["ndfd_key"]
-                  and prev.get("pipeline_version") == S.PIPELINE_VERSION)
+    up_to_date = (
+        prev
+        and prev.get("ndfd_key") == state["ndfd_key"]
+        and prev.get("pipeline_version") == S.PIPELINE_VERSION
+    )
     if up_to_date and not force:
         action = "skip"
         status = dict(prev)
@@ -187,13 +216,17 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
         status["result"] = "unchanged"
         write_json(out / "status.json", status)
     else:
-        action = "build"   # refresh_simple.build() writes all files
+        action = "build"  # refresh_simple.build() writes all files
 
-    write_json(out / "check.json", {
-        "action": action, "heavy": heavy,
-        **{k: (_iso(v) if isinstance(v, datetime) else v) for k, v in state.items()},
-        "previous_key": prev.get("ndfd_key") if prev else None,
-    })
+    write_json(
+        out / "check.json",
+        {
+            "action": action,
+            "heavy": heavy,
+            **{k: (_iso(v) if isinstance(v, datetime) else v) for k, v in state.items()},
+            "previous_key": prev.get("ndfd_key") if prev else None,
+        },
+    )
     print(f"[check] action={action} heavy={str(heavy).lower()}")
     return {"action": action, "heavy": heavy, "state": state}
 
@@ -201,8 +234,7 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="out")
-    ap.add_argument("--force", action="store_true",
-                    help="ignore the previous status and rebuild")
+    ap.add_argument("--force", action="store_true", help="ignore the previous status and rebuild")
     args = ap.parse_args()
     force = args.force or os.environ.get("FORCE", "").lower() == "true"
 

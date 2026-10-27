@@ -30,14 +30,24 @@ export class CiStack extends Stack {
       clientIds: ['sts.amazonaws.com'],
     });
 
-    this.prodRole = this.makeRole(provider, 'ProdRole', 'landslides-github-prod', 'production');
+    this.prodRole = this.makeRole(
+      provider,
+      'ProdRole',
+      'landslides-github-prod',
+      'production'
+    );
     props.siteBucket.grantReadWrite(this.prodRole);
     // The refresh workflows only read and write data objects; nothing deletes.
     props.dataBucket.grantRead(this.prodRole);
     props.dataBucket.grantPut(this.prodRole);
     this.allowInvalidation(this.prodRole, props.productionDistribution);
 
-    this.devRole = this.makeRole(provider, 'DevRole', 'landslides-github-dev', 'development');
+    this.devRole = this.makeRole(
+      provider,
+      'DevRole',
+      'landslides-github-dev',
+      'development'
+    );
     props.devSiteBucket.grantReadWrite(this.devRole);
     this.allowInvalidation(this.devRole, props.devDistribution);
 
@@ -45,23 +55,38 @@ export class CiStack extends Stack {
     new CfnOutput(this, 'DevRoleArn', { value: this.devRole.roleArn });
   }
 
-  private makeRole(provider: iam.IOpenIdConnectProvider, id: string, roleName: string, environment: string): iam.Role {
+  private makeRole(
+    provider: iam.IOpenIdConnectProvider,
+    id: string,
+    roleName: string,
+    environment: string
+  ): iam.Role {
     return new iam.Role(this, id, {
       roleName,
       description: `GitHub Actions deploys from the ${environment} environment of ${GITHUB_REPO}`,
-      assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
-        StringEquals: {
-          [`${GITHUB_OIDC_HOST}:aud`]: 'sts.amazonaws.com',
-          [`${GITHUB_OIDC_HOST}:sub`]: `repo:${GITHUB_REPO}:environment:${environment}`,
-        },
-      }),
+      assumedBy: new iam.WebIdentityPrincipal(
+        provider.openIdConnectProviderArn,
+        {
+          StringEquals: {
+            [`${GITHUB_OIDC_HOST}:aud`]: 'sts.amazonaws.com',
+            [`${GITHUB_OIDC_HOST}:sub`]: `repo:${GITHUB_REPO}:environment:${environment}`,
+          },
+        }
+      ),
     });
   }
 
-  private allowInvalidation(role: iam.IRole, distribution: cloudfront.IDistribution): void {
-    role.addToPrincipalPolicy(new iam.PolicyStatement({
-      actions: ['cloudfront:CreateInvalidation'],
-      resources: [`arn:aws:cloudfront::${ACCOUNT}:distribution/${distribution.distributionId}`],
-    }));
+  private allowInvalidation(
+    role: iam.IRole,
+    distribution: cloudfront.IDistribution
+  ): void {
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudfront:CreateInvalidation'],
+        resources: [
+          `arn:aws:cloudfront::${ACCOUNT}:distribution/${distribution.distributionId}`,
+        ],
+      })
+    );
   }
 }

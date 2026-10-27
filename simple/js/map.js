@@ -27,13 +27,13 @@ window.DFS_MAP = (function () {
   let map = null;
   let panes = {};
   let layers = {
-    forecast:  null,
-    observed:  null,
-    radar:     null,
-    alerts:    null,
+    forecast: null,
+    observed: null,
+    radar: null,
+    alerts: null,
     reference: null,
-    parcels:   null,
-    buildings: null
+    parcels: null,
+    buildings: null,
   };
 
   // Geocoder search control - kept here so we can refer to it later if
@@ -45,10 +45,10 @@ window.DFS_MAP = (function () {
   function init() {
     map = L.map('map', {
       center: CFG.MAP_CENTER,
-      zoom:   CFG.MAP_ZOOM,
-      keyboard:        true,
+      zoom: CFG.MAP_ZOOM,
+      keyboard: true,
       keyboardPanDelta: 80,
-      zoomControl:     true
+      zoomControl: true,
     });
 
     // Create dedicated panes for each layer category so they stack
@@ -89,20 +89,24 @@ window.DFS_MAP = (function () {
   //   - Keyboard nav (Tab to focus, arrow keys through suggestions,
   //     Enter to select, Esc to close) is provided by the plugin.
   function _addSearchControl() {
-    if (typeof L.esri === 'undefined'
-        || typeof L.esri.Geocoding === 'undefined'
-        || typeof L.esri.Geocoding.geosearch !== 'function') {
-      console.warn('[DFS] esri-leaflet-geocoder not loaded; map search '
-                 + 'control will be unavailable.');
+    if (
+      typeof L.esri === 'undefined' ||
+      typeof L.esri.Geocoding === 'undefined' ||
+      typeof L.esri.Geocoding.geosearch !== 'function'
+    ) {
+      console.warn(
+        '[DFS] esri-leaflet-geocoder not loaded; map search ' +
+          'control will be unavailable.'
+      );
       return;
     }
     geocoderControl = L.esri.Geocoding.geosearch({
-      position:        'topleft',
-      placeholder:     'Search city, address, or place\u2026',
-      useMapBounds:    false,            // search globally, not just WNC
-      expanded:        true,             // always-visible box, not collapsed icon
-      collapseAfterResult: false,        // keep the input visible after selection
-      title:           'Address & place search',
+      position: 'topleft',
+      placeholder: 'Search city, address, or place\u2026',
+      useMapBounds: false, // search globally, not just WNC
+      expanded: true, // always-visible box, not collapsed icon
+      collapseAfterResult: false, // keep the input visible after selection
+      title: 'Address & place search',
       providers: [
         L.esri.Geocoding.arcgisOnlineProvider({
           // Public free-tier endpoint; no API key required.
@@ -117,7 +121,10 @@ window.DFS_MAP = (function () {
       const inputs = document.querySelectorAll('.geocoder-control input');
       inputs.forEach(function (inp) {
         if (!inp.getAttribute('aria-label')) {
-          inp.setAttribute('aria-label', 'Search for a city, address, or place');
+          inp.setAttribute(
+            'aria-label',
+            'Search for a city, address, or place'
+          );
         }
         if (!inp.getAttribute('autocomplete')) {
           inp.setAttribute('autocomplete', 'off');
@@ -152,7 +159,9 @@ window.DFS_MAP = (function () {
         keyboard: false,
         alt: 'Search result: ' + (r.text || ''),
       }).addTo(map);
-      setTimeout(function () { map.removeLayer(marker); }, 5000);
+      setTimeout(function () {
+        map.removeLayer(marker);
+      }, 5000);
     });
   }
 
@@ -163,24 +172,33 @@ window.DFS_MAP = (function () {
     if (!placeType) return 14;
     const t = placeType.toLowerCase();
     // Tight zoom for specific addresses and POIs
-    if (t.includes('address')
-        || t.includes('postal')
-        || t.includes('building')
-        || t.includes('poi')
-        || t.includes('business')) return 17;
+    if (
+      t.includes('address') ||
+      t.includes('postal') ||
+      t.includes('building') ||
+      t.includes('poi') ||
+      t.includes('business')
+    )
+      return 17;
     // Medium zoom for neighborhoods, populated places (cities, towns)
-    if (t.includes('city')
-        || t.includes('locality')
-        || t.includes('populated')
-        || t.includes('neighborhood')
-        || t.includes('district')
-        || t.includes('subregion')) return 12;
+    if (
+      t.includes('city') ||
+      t.includes('locality') ||
+      t.includes('populated') ||
+      t.includes('neighborhood') ||
+      t.includes('district') ||
+      t.includes('subregion')
+    )
+      return 12;
     // Wider zoom for counties, states, regions
-    if (t.includes('county')
-        || t.includes('state')
-        || t.includes('country')
-        || t.includes('region')
-        || t.includes('province')) return 9;
+    if (
+      t.includes('county') ||
+      t.includes('state') ||
+      t.includes('country') ||
+      t.includes('region') ||
+      t.includes('province')
+    )
+      return 9;
     return 14;
   }
 
@@ -222,15 +240,16 @@ window.DFS_MAP = (function () {
       ),
       'Satellite (Esri World Imagery)': L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/' +
-        'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          'World_Imagery/MapServer/tile/{z}/{y}/{x}',
         { attribution: 'Tiles \u00a9 Esri', maxZoom: 19 }
-      )
+      ),
     };
     // Default = Light (Esri Gray / Light Gray Canvas). All four options remain available
     // via the basemap selector; this just picks which one is on the map
     // when the page first loads.
     basemaps['Light (Esri Gray)'].addTo(map);
-    L.control.layers(basemaps, null, { position: 'topright', collapsed: true })
+    L.control
+      .layers(basemaps, null, { position: 'topright', collapsed: true })
       .addTo(map);
   }
 
@@ -241,14 +260,16 @@ window.DFS_MAP = (function () {
   // requests features in the current view and simplifies geometry by zoom,
   // so zooming out to CONUS stays light.
   let _forecastKey = null;
-  function _fmtTs(d) {   // "YYYY-MM-DD HH:MM:SS" in UTC for ArcGIS SQL
+  function _fmtTs(d) {
+    // "YYYY-MM-DD HH:MM:SS" in UTC for ArcGIS SQL
     return d.toISOString().slice(0, 19).replace('T', ' ');
   }
   function setForecastPeriod(meta) {
     if (!meta || !meta.window_end || typeof L.esri === 'undefined') return;
     const end = new Date(meta.window_end);
-    const key = meta.window_start + '|' + meta.window_end + '|' + (meta.issued || '');
-    if (key === _forecastKey && layers.forecast) return;   // unchanged
+    const key =
+      meta.window_start + '|' + meta.window_end + '|' + (meta.issued || '');
+    if (key === _forecastKey && layers.forecast) return; // unchanged
     _forecastKey = key;
 
     // The layer is cumulative from the cycle start; the 6-h period that
@@ -257,23 +278,34 @@ window.DFS_MAP = (function () {
     const periodStart = new Date(end.getTime() - 6 * 3600 * 1000);
     const lo = new Date(periodStart.getTime() - 60000);
     const hi = new Date(periodStart.getTime() + 60000);
-    const where = "fromdate >= timestamp '" + _fmtTs(lo) + "' AND " +
-                  "fromdate <= timestamp '" + _fmtTs(hi) + "'";
+    const where =
+      "fromdate >= timestamp '" +
+      _fmtTs(lo) +
+      "' AND " +
+      "fromdate <= timestamp '" +
+      _fmtTs(hi) +
+      "'";
 
     const wasOn = !layers.forecast || map.hasLayer(layers.forecast);
     if (layers.forecast) map.removeLayer(layers.forecast);
     layers.forecast = L.esri.featureLayer({
-      url:   CFG.NDFD_SOURCE_URL,
+      url: CFG.NDFD_SOURCE_URL,
       where: where,
       fields: ['OBJECTID', 'category', 'label'],
-      pane:  'forecastPane',
+      pane: 'forecastPane',
       simplifyFactor: 0.5,
       precision: 5,
       style: function (feature) {
         const c = CFG.PRECIP_COLORS[feature.properties.category] || '#888';
-        return { fillColor: c, color: c, weight: 0.5, fillOpacity: 0.45, opacity: 0.6 };
+        return {
+          fillColor: c,
+          color: c,
+          weight: 0.5,
+          fillOpacity: 0.45,
+          opacity: 0.6,
+        };
       },
-      attribution: 'NOAA NWS NDFD'
+      attribution: 'NOAA NWS NDFD',
     });
     const cb = document.getElementById('layer-ndfd');
     if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
@@ -281,21 +313,24 @@ window.DFS_MAP = (function () {
   function setForecastVisible(visible) {
     if (!layers.forecast) return;
     if (visible && !map.hasLayer(layers.forecast)) layers.forecast.addTo(map);
-    if (!visible && map.hasLayer(layers.forecast))  map.removeLayer(layers.forecast);
+    if (!visible && map.hasLayer(layers.forecast))
+      map.removeLayer(layers.forecast);
   }
 
   // ---- MRMS observed 24-hour precipitation (reference tiles) --------------
   // Display only - no intersections. Tiles are cache-busted with a time
   // stamp so an open page picks up IEM's hourly updates on each refresh.
-  function _mrmsStamp() { return String(Math.floor(Date.now() / 600000)); }  // 10-min buckets
+  function _mrmsStamp() {
+    return String(Math.floor(Date.now() / 600000));
+  } // 10-min buckets
   function setObservedVisible(visible) {
     if (visible && !layers.observed) {
       layers.observed = L.tileLayer(CFG.MRMS_24H_TILES_URL, {
-        pane:          'observedPane',
-        attribution:   CFG.MRMS_ATTRIBUTION,
-        opacity:       0.7,
-        maxNativeZoom: 10,     // IEM tiles stop at z10; upscale beyond that
-        t:             _mrmsStamp()
+        pane: 'observedPane',
+        attribution: CFG.MRMS_ATTRIBUTION,
+        opacity: 0.7,
+        maxNativeZoom: 10, // IEM tiles stop at z10; upscale beyond that
+        t: _mrmsStamp(),
       });
       layers.observed.addTo(map);
     } else if (!visible && layers.observed) {
@@ -316,11 +351,11 @@ window.DFS_MAP = (function () {
   function setRadarVisible(visible) {
     if (visible && !layers.radar) {
       layers.radar = L.tileLayer(CFG.NEXRAD_TILES_URL, {
-        pane:        'radarPane',
+        pane: 'radarPane',
         attribution: CFG.NEXRAD_ATTRIBUTION,
-        opacity:     0.75,
-        minZoom:     2,
-        maxZoom:     10
+        opacity: 0.75,
+        minZoom: 2,
+        maxZoom: 10,
       });
       layers.radar.addTo(map);
     } else if (!visible && layers.radar) {
@@ -340,25 +375,32 @@ window.DFS_MAP = (function () {
     layers.alerts = L.geoJSON(geojson, {
       pane: 'alertsPane',
       style: {
-        color:       '#FF6A13',
-        fillColor:   '#FF6A13',
-        weight:      2,
+        color: '#FF6A13',
+        fillColor: '#FF6A13',
+        weight: 2,
         fillOpacity: 0.6,
-        opacity:     1.0
+        opacity: 1.0,
       },
       onEachFeature: function (feature, layer) {
         const p = feature.properties || {};
         layer.bindPopup(
           '<div class="alert-popup">' +
-          '<strong>Flagged pathway ' + _escape(p.OBJECTID) + '</strong>' +
-          '<dl>' +
-          '<dt>Forecast rain</dt><dd>' +
-            _escape(CFG.PRECIP_LABELS[p.max_category] || '--') + '</dd>' +
-          '<dt>County</dt><dd>' + _escape(p.county || '--') + '</dd>' +
-          '<dt>Watershed</dt><dd>' + _escape(p.watershed || '--') + '</dd>' +
-          '</dl></div>'
+            '<strong>Flagged pathway ' +
+            _escape(p.OBJECTID) +
+            '</strong>' +
+            '<dl>' +
+            '<dt>Forecast rain</dt><dd>' +
+            _escape(CFG.PRECIP_LABELS[p.max_category] || '--') +
+            '</dd>' +
+            '<dt>County</dt><dd>' +
+            _escape(p.county || '--') +
+            '</dd>' +
+            '<dt>Watershed</dt><dd>' +
+            _escape(p.watershed || '--') +
+            '</dd>' +
+            '</dl></div>'
         );
-      }
+      },
     }).addTo(map);
   }
 
@@ -366,7 +408,8 @@ window.DFS_MAP = (function () {
     if (!layers.alerts) return;
     let target = null;
     layers.alerts.eachLayer(function (l) {
-      if (String(l.feature.properties.OBJECTID) === String(objectid)) target = l;
+      if (String(l.feature.properties.OBJECTID) === String(objectid))
+        target = l;
     });
     if (!target) return;
     if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
@@ -377,7 +420,7 @@ window.DFS_MAP = (function () {
   function setAlertsVisible(visible) {
     if (!layers.alerts) return;
     if (visible && !map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
-    if (!visible && map.hasLayer(layers.alerts))  map.removeLayer(layers.alerts);
+    if (!visible && map.hasLayer(layers.alerts)) map.removeLayer(layers.alerts);
   }
 
   // ---- NCGS reference layer (debris flows from AGOL) ----------------------
@@ -396,7 +439,7 @@ window.DFS_MAP = (function () {
     }
 
     if (layers.reference) {
-      return Promise.resolve();        // already on; nothing to wait for
+      return Promise.resolve(); // already on; nothing to wait for
     }
 
     if (typeof L.esri === 'undefined') {
@@ -405,14 +448,14 @@ window.DFS_MAP = (function () {
     }
 
     layers.reference = L.esri.featureLayer({
-      url:  CFG.NCGS_FEATURESERVER_URL,
+      url: CFG.NCGS_FEATURESERVER_URL,
       pane: 'ncgs_referencePane',
       style: {
-        color:       '#529866',
-        weight:      0.5,
+        color: '#529866',
+        weight: 0.5,
         fillOpacity: 0.18,
-        opacity:     0.7
-      }
+        opacity: 0.7,
+      },
     });
     const ref = layers.reference;
     ref.addTo(map);
@@ -455,42 +498,53 @@ window.DFS_MAP = (function () {
       }
       return;
     }
-    if (layers.parcels) return;  // already on
+    if (layers.parcels) return; // already on
     if (typeof L.esri === 'undefined') {
       console.warn('[DFS] esri-leaflet not loaded; parcels layer unavailable');
       return;
     }
-    layers.parcels = L.esri.featureLayer({
-      url:     CFG.NCONEMAP_PARCELS_URL,
-      minZoom: CFG.NCONEMAP_PARCELS_MIN_ZOOM,
-      pane:    'parcelsPane',
-      // Pull only the attributes our popup uses - smaller payload, faster
-      // rendering, and lets us be explicit about which fields the popup
-      // can rely on existing.
-      //
-      // Owner name comes from the single `ownname` field (esriFieldTypeString,
-      // alias "Owner Name", length 200). Earlier attempts used ownfrst /
-      // ownlast as parsed subfields but those don't exist on this MapServer
-      // sublayer - the service silently returns undefined for unknown
-      // fields, so the popup was quietly showing em-dash for every parcel.
-      //
-      // In NC, parcel ownership records are public information per the
-      // Public Records Act, so displaying them on a public-facing dashboard
-      // is legitimate. See _parseOwnerName for the "LAST FIRST" -> "LAST,
-      // FIRST" transformation with entity detection.
-      fields:  ['OBJECTID', 'parno', 'siteadd', 'scity', 'szip',
-                'cntyname', 'gisacres', 'transfdate', 'ownname'],
-      style: {
-        // Red outline (#ff0909) at thin weight, no fill so debris flows
-        // underneath remain visible. Keeps the layer present but visually
-        // unobtrusive given how many parcels there are at this zoom.
-        color:       '#ff0909',
-        weight:      0.75,
-        opacity:     0.95,
-        fillOpacity: 0,
-      },
-      attribution: CFG.NCONEMAP_PARCELS_ATTRIBUTION,
-    }).bindPopup(_buildParcelPopup);
+    layers.parcels = L.esri
+      .featureLayer({
+        url: CFG.NCONEMAP_PARCELS_URL,
+        minZoom: CFG.NCONEMAP_PARCELS_MIN_ZOOM,
+        pane: 'parcelsPane',
+        // Pull only the attributes our popup uses - smaller payload, faster
+        // rendering, and lets us be explicit about which fields the popup
+        // can rely on existing.
+        //
+        // Owner name comes from the single `ownname` field (esriFieldTypeString,
+        // alias "Owner Name", length 200). Earlier attempts used ownfrst /
+        // ownlast as parsed subfields but those don't exist on this MapServer
+        // sublayer - the service silently returns undefined for unknown
+        // fields, so the popup was quietly showing em-dash for every parcel.
+        //
+        // In NC, parcel ownership records are public information per the
+        // Public Records Act, so displaying them on a public-facing dashboard
+        // is legitimate. See _parseOwnerName for the "LAST FIRST" -> "LAST,
+        // FIRST" transformation with entity detection.
+        fields: [
+          'OBJECTID',
+          'parno',
+          'siteadd',
+          'scity',
+          'szip',
+          'cntyname',
+          'gisacres',
+          'transfdate',
+          'ownname',
+        ],
+        style: {
+          // Red outline (#ff0909) at thin weight, no fill so debris flows
+          // underneath remain visible. Keeps the layer present but visually
+          // unobtrusive given how many parcels there are at this zoom.
+          color: '#ff0909',
+          weight: 0.75,
+          opacity: 0.95,
+          fillOpacity: 0,
+        },
+        attribution: CFG.NCONEMAP_PARCELS_ATTRIBUTION,
+      })
+      .bindPopup(_buildParcelPopup);
     layers.parcels.addTo(map);
   }
 
@@ -498,14 +552,15 @@ window.DFS_MAP = (function () {
   // gracefully (vacant land has no site address; some counties don't
   // publish all fields).
   function _buildParcelPopup(layer) {
-    const p = layer.feature && layer.feature.properties || {};
-    const addr   = p.siteadd && p.siteadd.trim() ? p.siteadd : null;
-    const cityZ  = [p.scity, p.szip].filter(Boolean).join(' ').trim();
-    const parno  = p.parno && p.parno.trim() ? p.parno : '\u2014';
+    const p = (layer.feature && layer.feature.properties) || {};
+    const addr = p.siteadd && p.siteadd.trim() ? p.siteadd : null;
+    const cityZ = [p.scity, p.szip].filter(Boolean).join(' ').trim();
+    const parno = p.parno && p.parno.trim() ? p.parno : '\u2014';
     const county = p.cntyname || '\u2014';
-    const acres  = (typeof p.gisacres === 'number' && isFinite(p.gisacres))
-                   ? p.gisacres.toFixed(2) + ' ac'
-                   : '\u2014';
+    const acres =
+      typeof p.gisacres === 'number' && isFinite(p.gisacres)
+        ? p.gisacres.toFixed(2) + ' ac'
+        : '\u2014';
     // Owner name comes as a single `ownname` field in NC OneMap format,
     // typically "LAST FIRST" or "LAST FIRST MIDDLE" (space-separated,
     // last-name-first, often all caps). We parse to "LAST, FIRST MIDDLE"
@@ -518,28 +573,38 @@ window.DFS_MAP = (function () {
     if (p.transfdate) {
       const d = new Date(p.transfdate);
       if (!isNaN(d.getTime())) {
-        updated = d.toISOString().slice(0, 10);  // YYYY-MM-DD
+        updated = d.toISOString().slice(0, 10); // YYYY-MM-DD
       }
     }
     return (
-      '<div class="parcel-popup" role="region" aria-label="Parcel details">'
-      +   '<div class="parcel-popup-addr">'
-      +     (addr ? _escape(addr) : '<em>No site address</em>')
-      +   '</div>'
-      +   (cityZ
-            ? '<div class="parcel-popup-city">' + _escape(cityZ) + '</div>'
-            : '')
-      +   '<dl class="parcel-popup-fields">'
-      +     '<dt>Owner</dt><dd>'    + _escape(owner) + '</dd>'
-      +     '<dt>Parcel #</dt><dd>' + _escape(parno) + '</dd>'
-      +     '<dt>County</dt><dd>'   + _escape(county) + '</dd>'
-      +     '<dt>Acres</dt><dd>'    + _escape(acres) + '</dd>'
-      +     '<dt>Updated</dt><dd>'  + _escape(updated) + '</dd>'
-      +   '</dl>'
-      +   '<div class="parcel-popup-source">'
-      +     'Source: NC OneMap'
-      +   '</div>'
-      + '</div>'
+      '<div class="parcel-popup" role="region" aria-label="Parcel details">' +
+      '<div class="parcel-popup-addr">' +
+      (addr ? _escape(addr) : '<em>No site address</em>') +
+      '</div>' +
+      (cityZ
+        ? '<div class="parcel-popup-city">' + _escape(cityZ) + '</div>'
+        : '') +
+      '<dl class="parcel-popup-fields">' +
+      '<dt>Owner</dt><dd>' +
+      _escape(owner) +
+      '</dd>' +
+      '<dt>Parcel #</dt><dd>' +
+      _escape(parno) +
+      '</dd>' +
+      '<dt>County</dt><dd>' +
+      _escape(county) +
+      '</dd>' +
+      '<dt>Acres</dt><dd>' +
+      _escape(acres) +
+      '</dd>' +
+      '<dt>Updated</dt><dd>' +
+      _escape(updated) +
+      '</dd>' +
+      '</dl>' +
+      '<div class="parcel-popup-source">' +
+      'Source: NC OneMap' +
+      '</div>' +
+      '</div>'
     );
   }
 
@@ -574,16 +639,45 @@ window.DFS_MAP = (function () {
   //
   // Returns the display string, or null if the input was empty/missing.
   const _OWNER_ENTITY_KEYWORDS = new Set([
-    'LLC', 'L.L.C.', 'INC', 'INC.', 'CORP', 'CORP.', 'CORPORATION',
-    'LTD', 'LTD.', 'LP', 'LLP', 'PLLC',
-    'TRUST', 'ESTATE', 'FAMILY',
-    'CHURCH', 'MINISTRY', 'MINISTRIES', 'ASSOCIATION', 'ASSN', 'ASSOC',
-    'COMPANY', 'CO', 'CO.',
-    'PARTNERSHIP', 'PARTNERS', 'GROUP',
-    'FARMS', 'PROPERTIES', 'HOLDINGS', 'INVESTMENTS',
-    'ENTERPRISES', 'VENTURES', 'FOUNDATION',
-    'DEVELOPMENT', 'DEVELOPERS',
-    'AUTHORITY', 'DEPARTMENT', 'DEPT',
+    'LLC',
+    'L.L.C.',
+    'INC',
+    'INC.',
+    'CORP',
+    'CORP.',
+    'CORPORATION',
+    'LTD',
+    'LTD.',
+    'LP',
+    'LLP',
+    'PLLC',
+    'TRUST',
+    'ESTATE',
+    'FAMILY',
+    'CHURCH',
+    'MINISTRY',
+    'MINISTRIES',
+    'ASSOCIATION',
+    'ASSN',
+    'ASSOC',
+    'COMPANY',
+    'CO',
+    'CO.',
+    'PARTNERSHIP',
+    'PARTNERS',
+    'GROUP',
+    'FARMS',
+    'PROPERTIES',
+    'HOLDINGS',
+    'INVESTMENTS',
+    'ENTERPRISES',
+    'VENTURES',
+    'FOUNDATION',
+    'DEVELOPMENT',
+    'DEVELOPERS',
+    'AUTHORITY',
+    'DEPARTMENT',
+    'DEPT',
   ]);
   function _parseOwnerName(raw) {
     const s = (raw || '').trim();
@@ -593,18 +687,18 @@ window.DFS_MAP = (function () {
     if (s.indexOf(',') !== -1) return s;
 
     const tokens = s.split(/\s+/);
-    if (tokens.length < 2) return s;   // mononym / truncated / single-name
+    if (tokens.length < 2) return s; // mononym / truncated / single-name
 
     // Entity detection - any token matches a known entity suffix?
     for (const t of tokens) {
       if (_OWNER_ENTITY_KEYWORDS.has(t.toUpperCase())) {
-        return s;   // display raw for entities
+        return s; // display raw for entities
       }
     }
 
     // Individual: "LAST FIRST [MIDDLE...]" -> "LAST, FIRST MIDDLE"
     const lastName = tokens[0];
-    const rest     = tokens.slice(1).join(' ');
+    const rest = tokens.slice(1).join(' ');
     return lastName + ', ' + rest;
   }
 
@@ -642,16 +736,16 @@ window.DFS_MAP = (function () {
   // single-element DOM operation regardless of how many counties are
   // loaded, and (b) the browser only paints one canvas per frame instead
   // of one-per-county.
-  let _buildingsManifest      = null;    // loaded once, kept for the session
-  let _buildingsLayerGroup    = null;    // container in map for county sub-layers
-  let _buildingsCounties      = null;    // Map<GEOID, {layer, lastAccessed}>
-  let _buildingsInFlight      = null;    // Set<GEOID> - dedupe overlapping fetches
-  let _buildingsListenersOn   = false;   // whether moveend/zoomend are wired
-  let _buildingsManifestFetch = null;    // in-flight manifest promise (dedupe)
-  let _buildingsCanvas        = null;    // shared canvas renderer for all counties
+  let _buildingsManifest = null; // loaded once, kept for the session
+  let _buildingsLayerGroup = null; // container in map for county sub-layers
+  let _buildingsCounties = null; // Map<GEOID, {layer, lastAccessed}>
+  let _buildingsInFlight = null; // Set<GEOID> - dedupe overlapping fetches
+  let _buildingsListenersOn = false; // whether moveend/zoomend are wired
+  let _buildingsManifestFetch = null; // in-flight manifest promise (dedupe)
+  let _buildingsCanvas = null; // shared canvas renderer for all counties
 
   function setBuildingsVisible(visible) {
-    const pane = panes.buildings;  // the DOM element for buildingsPane
+    const pane = panes.buildings; // the DOM element for buildingsPane
 
     if (!visible) {
       // Hide by CSS visibility rather than display. `visibility: hidden`
@@ -701,27 +795,38 @@ window.DFS_MAP = (function () {
       _updateBuildingsZoomHint();
       return;
     }
-    if (_buildingsManifestFetch) return;  // dedupe: manifest fetch already in flight
+    if (_buildingsManifestFetch) return; // dedupe: manifest fetch already in flight
 
-    console.log('[DFS] Fetching buildings manifest from',
-                CFG.buildingsBase() + CFG.BUILDINGS_MANIFEST_FILE);
-    _buildingsManifestFetch = fetch(CFG.buildingsBase() + CFG.BUILDINGS_MANIFEST_FILE, {
-      cache: 'default',   // manifest changes ~monthly; browser cache is fine
-    })
+    console.log(
+      '[DFS] Fetching buildings manifest from',
+      CFG.buildingsBase() + CFG.BUILDINGS_MANIFEST_FILE
+    );
+    _buildingsManifestFetch = fetch(
+      CFG.buildingsBase() + CFG.BUILDINGS_MANIFEST_FILE,
+      {
+        cache: 'default', // manifest changes ~monthly; browser cache is fine
+      }
+    )
       .then(function (resp) {
         if (!resp.ok) {
-          throw new Error('HTTP ' + resp.status + ' fetching buildings manifest');
+          throw new Error(
+            'HTTP ' + resp.status + ' fetching buildings manifest'
+          );
         }
         return resp.json();
       })
       .then(function (manifest) {
         _buildingsManifest = manifest;
         _buildingsManifestFetch = null;
-        console.log('[DFS] Buildings manifest loaded: '
-                  + manifest.counties.length + ' counties, '
-                  + (manifest.total_features || 0).toLocaleString()
-                  + ' features, '
-                  + (manifest.total_size_mb || 0) + ' MB total.');
+        console.log(
+          '[DFS] Buildings manifest loaded: ' +
+            manifest.counties.length +
+            ' counties, ' +
+            (manifest.total_features || 0).toLocaleString() +
+            ' features, ' +
+            (manifest.total_size_mb || 0) +
+            ' MB total.'
+        );
         // Confirm the user still wants the layer (they may have toggled
         // off during the manifest fetch).
         const stillRequested =
@@ -735,8 +840,10 @@ window.DFS_MAP = (function () {
       .catch(function (err) {
         _buildingsManifestFetch = null;
         console.error('[DFS] Failed to load buildings manifest:', err);
-        console.error('[DFS] Tip: check BUILDINGS_BASE_URL in config.js points at '
-                    + 'the main dashboard data folder.');
+        console.error(
+          '[DFS] Tip: check BUILDINGS_BASE_URL in config.js points at ' +
+            'the main dashboard data folder.'
+        );
       });
   }
 
@@ -774,18 +881,21 @@ window.DFS_MAP = (function () {
     if (map.getZoom() < CFG.BUILDINGS_MIN_ZOOM) return;
 
     const bounds = map.getBounds();
-    const west  = bounds.getWest();
-    const east  = bounds.getEast();
+    const west = bounds.getWest();
+    const east = bounds.getEast();
     const south = bounds.getSouth();
     const north = bounds.getNorth();
 
     // Find counties whose bbox intersects the viewport
     const now = Date.now();
-    let fetched = 0;
     for (const county of _buildingsManifest.counties) {
-      const b = county.bbox;   // [minX, minY, maxX, maxY]
-      const intersects =
-        !(west > b[2] || east < b[0] || south > b[3] || north < b[1]);
+      const b = county.bbox; // [minX, minY, maxX, maxY]
+      const intersects = !(
+        west > b[2] ||
+        east < b[0] ||
+        south > b[3] ||
+        north < b[1]
+      );
       if (!intersects) continue;
 
       // Already cached? Touch its LRU timestamp and move on.
@@ -798,7 +908,6 @@ window.DFS_MAP = (function () {
 
       // Not yet cached and not yet fetching - kick off the fetch.
       _fetchAndRenderCounty(county);
-      fetched++;
     }
 
     _evictLruCountiesIfNeeded();
@@ -840,11 +949,11 @@ window.DFS_MAP = (function () {
           style: {
             // All-black fill, no stroke - same styling as before, just
             // now applied per-county
-            fillColor:   '#000000',
+            fillColor: '#000000',
             fillOpacity: 1.0,
-            color:       '#000000',
-            weight:      0,
-            stroke:      false,
+            color: '#000000',
+            weight: 0,
+            stroke: false,
           },
           interactive: false,
         });
@@ -859,9 +968,14 @@ window.DFS_MAP = (function () {
         // Silent skip per team's failure-behavior decision: log to
         // console but don't show a user-visible warning. Other
         // counties keep rendering; alert-driving layers are unaffected.
-        console.warn('[DFS] Failed to load buildings for county '
-                   + geoid + ' (' + (countyMeta.name || 'unknown') + '):',
-                   err);
+        console.warn(
+          '[DFS] Failed to load buildings for county ' +
+            geoid +
+            ' (' +
+            (countyMeta.name || 'unknown') +
+            '):',
+          err
+        );
       });
   }
 
@@ -881,7 +995,7 @@ window.DFS_MAP = (function () {
           lruGeoid = geoid;
         }
       }
-      if (!lruGeoid) break;   // shouldn't happen, defensive
+      if (!lruGeoid) break; // shouldn't happen, defensive
       const entry = _buildingsCounties.get(lruGeoid);
       if (_buildingsLayerGroup && entry && entry.layer) {
         _buildingsLayerGroup.removeLayer(entry.layer);
@@ -905,13 +1019,17 @@ window.DFS_MAP = (function () {
   // ---- Public API ---------------------------------------------------------
   return {
     init,
-    setForecastPeriod, setForecastVisible,
+    setForecastPeriod,
+    setForecastVisible,
     setRadarVisible,
-    setObservedVisible, refreshObserved,
-    setAlerts, setAlertsVisible, zoomToAlert,
+    setObservedVisible,
+    refreshObserved,
+    setAlerts,
+    setAlertsVisible,
+    zoomToAlert,
     setReferenceVisible,
     setParcelsVisible,
     setBuildingsVisible,
-    _internalMap: () => map
+    _internalMap: () => map,
   };
 })();
