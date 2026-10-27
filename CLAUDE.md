@@ -13,6 +13,10 @@ for pending work, `OPERATIONS.md` for running things locally, and
 - `development` is permanent. A push to it deploys the dev site; a push to
   `master` deploys production. Never suggest deleting it, even when it shows
   as fully merged.
+- `master` is protected by a repository ruleset: changes land only through
+  a pull request with the "CDK synth and function tests" check passing, and
+  the branch cannot be force-pushed or deleted. The rule binds admins too;
+  there is no bypass list.
 - Delete feature branches once merged.
 
 ## Pull requests
@@ -63,6 +67,9 @@ for pending work, `OPERATIONS.md` for running things locally, and
   composed-function limit).
 - After moving pages or assets, resolve every local `src`, `href`, `url()`
   and `data-img` reference in the pages against the tree.
+- `node --test "simple/test/*.test.js"` after touching a CDN `<script>` or
+  `<link>` tag in a dashboard page: it recomputes every integrity hash
+  against the file unpkg serves and fails on a missing or wrong one.
 - Preview locally with the `static-site` launch config (a Python HTTP server
   on port 8000) and confirm every asset request returns 200.
 

@@ -76,6 +76,7 @@ jobs:
             --exclude "infra/*" \
             --exclude "cache/*" \
             --exclude "simple/pipeline/*" \
+            --exclude "simple/test/*" \
             --exclude "alerts/data/*" \
             --exclude "simple/data/*" \
             --exclude "assets/*" \
