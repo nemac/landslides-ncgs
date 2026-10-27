@@ -174,7 +174,7 @@ distributions by the names only they can answer:
 
 ```bash
 # host-independent pages and the data behaviors, straight at the new distribution
-for p in / /alerts/ /simple/ /alerts/data/forecast.geojson /simple/data/status.json /alerts/data/buildings/manifest.json; do
+for p in / /alerts/ /simple/ /alerts/data/forecast_24h.geojson /simple/data/status.json /alerts/data/buildings/manifest.json; do
   printf '%-45s' "$p"; curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' "https://PROD_DOMAIN$p"
 done
 

@@ -127,8 +127,10 @@ def ndfd_state() -> dict:
 def previous_status() -> dict | None:
     url = os.environ.get("STATUS_URL") or S.PUBLIC_STATUS_URL
     try:
-        # Bust any edge cache for this one small read.
-        return _get_json(url, {"t": int(datetime.now().timestamp())}, timeout=20)
+        # status.json is served with max-age=30 and the cache policy ignores
+        # query strings, so a copy up to 30 s old is the best available and
+        # is fine for a check that runs every 10 minutes.
+        return _get_json(url, timeout=20)
     except Exception as e:
         print(f"[check] no previous status ({type(e).__name__}: {e})")
         return None

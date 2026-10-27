@@ -22,12 +22,15 @@ The page has no mode, window or threshold controls. These values are set in
 in sync.
 
 The page keeps the map (basemap selector and address search), the flagged
-pathways table (click a row to zoom, CSV download), and four layer toggles:
+pathways table (click a row to zoom, CSV download), and seven layer toggles:
 
-- Flagged Debris Flow Pathways
-- Potential Channelized Debris Flow Pathways (NCGS AGOL, live)
+- NDFD forecast precipitation (the 24-hour window, live from the service)
+- MRMS observed precipitation, past 24 hours (Iowa Mesonet tiles, reference only)
+- NEXRAD radar, current (reference only)
+- Flagged debris flow pathways (from this pipeline)
+- Potential channelized debris flow pathways (NCGS AGOL, live)
 - NC Parcels (NC OneMap, live, zoom 14+, clickable)
-- Building footprints (shared with the main dashboard, read from
+- Building footprints (produced by the nightly pipeline, read from
   `../alerts/data/` on the same origin)
 
 ## Data pipeline: its own, every 10 minutes
@@ -118,9 +121,8 @@ into `simple/data/`, and serves the repo root so the page is at
 <http://localhost:8000/simple/> and building footprints load from
 `alerts/data/`.
 
-```bat
-cd %USERPROFILE%\Documents\GitHub\landslides-ncgs
-conda activate EWS              REM any env with geopandas + requests
+```bash
+conda activate defns-refresh    # from environment.yml; any env with geopandas + requests works
 python simple/pipeline/run_local.py
 ```
 

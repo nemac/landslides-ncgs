@@ -44,7 +44,8 @@ The roles for the Lambda and the scheduler are created by the same stack.
 
 ## Token expiry reminder
 
-`TOKEN_EXPIRES` and `REMINDER_AT` live in `infra/cdk/lib/config.ts`. The
+`REMINDER_AT` lives in `infra/cdk/lib/config.ts`; the expiry date shown in
+the issue is the `expires` input default in the workflow. The
 one-time schedule invokes the Lambda with
 `{"workflow_file": "token-expiry-reminder.yml"}`, and that workflow opens a
 GitHub issue titled "Renew the GitHub token for the DFENS Simple trigger"

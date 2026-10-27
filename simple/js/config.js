@@ -21,7 +21,7 @@ window.DFS_CONFIG = (function () {
 
   // ---- Data locations -----------------------------------------------------
   // Forecast data comes from this repo's own pipeline (pipeline/ +
-  // .github/workflows/refresh.yml), which checks NDFD every 10 minutes and
+  // .github/workflows/refresh-simple.yml), which checks NDFD every 10 minutes and
   // uploads to simple/data/ next to this page.
   //   status.json                      heartbeat, rewritten on every check
   //   flagged_ndfd_24h_min11.geojson   flagged pathways >= 5" + window meta

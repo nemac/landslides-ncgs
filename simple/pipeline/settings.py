@@ -28,7 +28,7 @@ PUBLIC_STATUS_URL = "https://landslidesncgs.org/simple/data/status.json"
 
 def check_interval_minutes() -> float:
     """How often checks run, written into status.json so the page can show
-    "next check in N min". Set by refresh.yml / run_local.py."""
+    "next check in N min". Set by refresh-simple.yml / run_local.py."""
     import os
     try:
         return float(os.environ.get("CHECK_INTERVAL_MINUTES", "10"))
