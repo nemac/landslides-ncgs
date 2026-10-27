@@ -60,3 +60,31 @@ test('a file path passes through', () => {
   const out = rewrite(eventFor('landslidesncgs.org', '/simple/js/app.js'));
   assert.equal(out.uri, '/simple/js/app.js');
 });
+
+for (const page of ['about', 'downloads', 'reducing-landslide-risk', 'learn-more', 'intro-landslides', 'data-tour']) {
+  test('old flat page /' + page + '.html redirects to its directory', () => {
+    const out = rewrite(eventFor('landslidesncgs.org', '/' + page + '.html'));
+    assert.equal(out.statusCode, 301);
+    assert.equal(out.headers.location.value, '/' + page + '/');
+  });
+}
+
+test('old flat page redirect keeps the query string', () => {
+  const out = rewrite(eventFor('landslidesncgs.org', '/about.html', { querystring: { utm: { value: 'x' } } }));
+  assert.equal(out.headers.location.value, '/about/?utm=x');
+});
+
+test('moved page directory URL gets index.html', () => {
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/about/')).uri, '/about/index.html');
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/about')).headers.location.value, '/about/');
+});
+
+test('an .html file that did not move passes through', () => {
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/index.html')).uri, '/index.html');
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/about/index.html')).uri, '/about/index.html');
+  assert.equal(rewrite(eventFor('landslidesncgs.org', '/other.html')).uri, '/other.html');
+});
+
+test('dashboard host does not apply the moved page redirects', () => {
+  assert.equal(rewrite(eventFor('dashboard.landslidesncgs.org', '/about.html')).uri, '/simple/about.html');
+});
