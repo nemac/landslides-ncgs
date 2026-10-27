@@ -33,7 +33,7 @@ jobs:
         run: npm run typecheck && npm test
         working-directory: infra/cdk
       - name: Synth every stack (no credentials)
-        run: npx cdk synth --context cutover=done
+        run: npx cdk synth
         working-directory: infra/cdk
       - name: Test the CloudFront Function pieces
         run: node --test "infra/cloudfront/test/*.test.js"

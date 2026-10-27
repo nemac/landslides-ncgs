@@ -19,7 +19,6 @@ export const PROD_HOSTNAMES: readonly string[] = [
   'mapviewer.landslidesncgs.org',
   'mapviewer.landslidesncgs.com',
 ];
-export const APEX_HOSTNAMES: readonly string[] = ['landslidesncgs.org', 'landslidesncgs.com'];
 export const DEV_HOSTNAME = 'dev.landslidesncgs.org';
 
 export const SITE_BUCKET = 'landslidesncgs-site';

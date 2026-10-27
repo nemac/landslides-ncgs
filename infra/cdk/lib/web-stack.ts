@@ -7,11 +7,9 @@ import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { composeDevFunction, composeProductionFunction } from './compose-function.js';
-import { COM_DOMAIN, DATA_BUCKET, DEV_HOSTNAME, DEV_SITE_BUCKET, SITE_BUCKET } from './config.js';
-import { type CutoverStage, productionDomainNames, recordedHostnames } from './cutover.js';
+import { COM_DOMAIN, DATA_BUCKET, DEV_HOSTNAME, DEV_SITE_BUCKET, PROD_HOSTNAMES, SITE_BUCKET } from './config.js';
 
 export interface WebStackProps extends StackProps {
-  stage: CutoverStage;
   orgZone: route53.IHostedZone;
   comZone: route53.IHostedZone;
   certificate: acm.ICertificate;
@@ -46,7 +44,7 @@ export class WebStack extends Stack {
     this.productionDistribution = this.makeProductionDistribution(props);
     this.devDistribution = this.makeDevDistribution(props);
 
-    this.makeRecords(props, recordedHostnames(props.stage), this.productionDistribution);
+    this.makeRecords(props, [...PROD_HOSTNAMES], this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);
     this.makeOutputs();
   }
@@ -78,7 +76,7 @@ export class WebStack extends Stack {
     });
     return this.retained(new cloudfront.Distribution(this, 'ProductionDistribution', {
       comment: 'landslidesncgs.org production site, dashboard, DFENS Simple, inventory and mapviewer hosts',
-      domainNames: productionDomainNames(props.stage),
+      domainNames: [...PROD_HOSTNAMES],
       certificate: props.certificate,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       defaultBehavior: this.makeBehavior(this.originFor(this.siteBucket), fn, true),
