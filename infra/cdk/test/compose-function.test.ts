@@ -12,7 +12,9 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 function eventFor(host: string, uri: string) {
-  return { request: { uri, querystring: {}, headers: { host: { value: host } } } };
+  return {
+    request: { uri, querystring: {}, headers: { host: { value: host } } },
+  };
 }
 
 test('production function defines one handler and both pieces', () => {
@@ -33,14 +35,25 @@ test('dev function imports cloudfront and awaits basicAuth', () => {
 });
 
 test('both stay under the CloudFront limit', () => {
-  assert.ok(Buffer.byteLength(composeProductionFunction(), 'utf8') < MAX_FUNCTION_BYTES);
-  assert.ok(Buffer.byteLength(composeDevFunction(), 'utf8') < MAX_FUNCTION_BYTES);
+  assert.ok(
+    Buffer.byteLength(composeProductionFunction(), 'utf8') < MAX_FUNCTION_BYTES
+  );
+  assert.ok(
+    Buffer.byteLength(composeDevFunction(), 'utf8') < MAX_FUNCTION_BYTES
+  );
 });
 
 test('production handler behaves end to end', () => {
-  const handler = new Function(composeProductionFunction() + '\n; return handler;')();
-  assert.equal(handler(eventFor('inventory.landslidesncgs.org', '/')).statusCode, 200);
-  const dashboard = handler(eventFor('dashboard.landslidesncgs.org', '/data/status.json'));
+  const handler = new Function(
+    composeProductionFunction() + '\n; return handler;'
+  )();
+  assert.equal(
+    handler(eventFor('inventory.landslidesncgs.org', '/')).statusCode,
+    200
+  );
+  const dashboard = handler(
+    eventFor('dashboard.landslidesncgs.org', '/data/status.json')
+  );
   assert.equal(dashboard.uri, '/simple/data/status.json');
   const rewritten = handler(eventFor('landslidesncgs.org', '/simple/'));
   assert.equal(rewritten.uri, '/simple/index.html');

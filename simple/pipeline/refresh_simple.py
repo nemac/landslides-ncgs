@@ -25,24 +25,24 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent          # .../simple/pipeline
-REPO = HERE.parent.parent                       # .../landslides-ncgs
+HERE = Path(__file__).resolve().parent  # .../simple/pipeline
+REPO = HERE.parent.parent  # .../landslides-ncgs
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(REPO / "scripts"))        # shared main-pipeline modules
+sys.path.insert(0, str(REPO / "scripts"))  # shared main-pipeline modules
 
-import requests                       # noqa: E402
-import geopandas as gpd               # noqa: E402
-from shapely.geometry import box      # noqa: E402
-from shapely.ops import unary_union    # noqa: E402
+import geopandas as gpd  # noqa: E402
+import ndfd_check  # noqa: E402
+import requests  # noqa: E402
+import settings as S  # noqa: E402
+from shapely.geometry import box  # noqa: E402
+from shapely.ops import unary_union  # noqa: E402
 
-import settings as S                  # noqa: E402
-import ndfd_check                     # noqa: E402
-import data as shared_data            # noqa: E402  (scripts/data.py)
-import analysis as shared_analysis    # noqa: E402  (scripts/analysis.py)
-from config import DISPLAY_CRS, INTERSECTION_CRS   # noqa: E402
+import analysis as shared_analysis  # noqa: E402  (scripts/analysis.py)
+import data as shared_data  # noqa: E402  (scripts/data.py)
+from config import DISPLAY_CRS, INTERSECTION_CRS  # noqa: E402
 
 
 def log(msg: str) -> None:
@@ -53,9 +53,12 @@ def fetch_precip(cycle_start, min_category: int) -> gpd.GeoDataFrame:
     params = {
         "where": S.period_where(cycle_start, S.WINDOW_HOURS, min_category),
         "outFields": "category,label",
-        "outSR": 4326, "f": "geojson", "returnGeometry": "true",
+        "outSR": 4326,
+        "f": "geojson",
+        "returnGeometry": "true",
         "geometry": ",".join(str(c) for c in S.WNC_BBOX),
-        "geometryType": "esriGeometryEnvelope", "inSR": "4326",
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326",
         "spatialRel": "esriSpatialRelIntersects",
     }
     r = requests.get(S.NDFD_LAYER_URL + "/query", params=params, timeout=90)
@@ -102,6 +105,7 @@ def round_coords(geom_json: dict, nd: int) -> None:
         if c and isinstance(c[0], (int, float)):
             return [round(v, nd) for v in c]
         return [rnd(x) for x in c]
+
     if geom_json and "coordinates" in geom_json:
         geom_json["coordinates"] = rnd(geom_json["coordinates"])
 
@@ -113,8 +117,10 @@ def build(out: Path) -> int:
     t0 = time.time()
 
     state = ndfd_check.ndfd_state()
-    log(f"window {state['window_start']:%Y-%m-%d %H:%M} -> "
-        f"{state['window_end']:%Y-%m-%d %H:%M} UTC, NDFD updated {state['issued']}")
+    log(
+        f"window {state['window_start']:%Y-%m-%d %H:%M} -> "
+        f"{state['window_end']:%Y-%m-%d %H:%M} UTC, NDFD updated {state['issued']}"
+    )
 
     # ---- Forecast layer: every category, clipped to WNC -----------------
     allcat = fetch_precip(state["window_start"], 0)
@@ -123,7 +129,7 @@ def build(out: Path) -> int:
     if not allcat.empty:
         try:
             clipped = gpd.clip(allcat, box(*S.WNC_BBOX))
-        except Exception as e:   # last resort: never let the map layer kill the run
+        except Exception as e:  # last resort: never let the map layer kill the run
             log(f"clip failed ({type(e).__name__}: {e}); writing unclipped polygons")
             clipped = allcat
         clipped = clipped[~clipped.geometry.is_empty][["category", "label", "geometry"]]
@@ -133,7 +139,7 @@ def build(out: Path) -> int:
             f.pop("id", None)
             f["properties"]["category"] = int(f["properties"]["category"])
     forecast_fc["meta"] = {
-        **ndfd_check.build_meta(state, 0, datetime.now(timezone.utc)),
+        **ndfd_check.build_meta(state, 0, datetime.now(UTC)),
         "n_polygons": len(forecast_fc["features"]),
         "min_category_shipped": 0,
     }
@@ -142,13 +148,16 @@ def build(out: Path) -> int:
     log(f"wrote {S.FORECAST_FILENAME} ({len(forecast_fc['features'])} polygons)")
 
     # ---- Flagged pathways: only the >= threshold polygons matter --------
-    precip = allcat[allcat["category"].astype(int) >= S.THRESHOLD_CATEGORY] \
-        if not allcat.empty else allcat
+    precip = (
+        allcat[allcat["category"].astype(int) >= S.THRESHOLD_CATEGORY]
+        if not allcat.empty
+        else allcat
+    )
     log(f"{len(precip)} precip polygons >= cat {S.THRESHOLD_CATEGORY}")
 
     flagged = None
     if not precip.empty:
-        debris = shared_data.fetch_debris_flows()     # cached gpkg, WGS84
+        debris = shared_data.fetch_debris_flows()  # cached gpkg, WGS84
         log(f"debris flows loaded: {len(debris):,} ({time.time() - t0:.0f}s)")
         minx, miny, maxx, maxy = precip.total_bounds
         cand = debris.cx[minx:maxx, miny:maxy]
@@ -171,14 +180,13 @@ def build(out: Path) -> int:
             p["OBJECTID"] = int(p["OBJECTID"])
         features = fc["features"]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     meta = ndfd_check.build_meta(state, len(features), now)
-    ndfd_check.write_json(out / S.FLAGGED_FILENAME,
-                          {"type": "FeatureCollection", "features": features, "meta": meta})
-    ndfd_check.write_json(out / "status.json",
-                          ndfd_check.build_status(meta, now, "updated"))
-    log(f"wrote {S.FLAGGED_FILENAME} ({len(features)} features) "
-        f"in {time.time() - t0:.0f}s total")
+    ndfd_check.write_json(
+        out / S.FLAGGED_FILENAME, {"type": "FeatureCollection", "features": features, "meta": meta}
+    )
+    ndfd_check.write_json(out / "status.json", ndfd_check.build_status(meta, now, "updated"))
+    log(f"wrote {S.FLAGGED_FILENAME} ({len(features)} features) in {time.time() - t0:.0f}s total")
     return len(features)
 
 

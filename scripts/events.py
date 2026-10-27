@@ -53,14 +53,13 @@ HISTORICAL_EVENTS = [
     #     ),
     # },
     {
-        "id":                "may_2026_storm",
-        "name":              "May 2026 WNC Storms",
-        "date_label":        "May 21-26, 2026",
-        "end_date":          "2026-05-27",
+        "id": "may_2026_storm",
+        "name": "May 2026 WNC Storms",
+        "date_label": "May 21-26, 2026",
+        "end_date": "2026-05-27",
         "accumulation_days": 7,
-        "description":       (
-            "Multi-day rainfall event that triggered flooding and "
-            "landslides across Western NC."
+        "description": (
+            "Multi-day rainfall event that triggered flooding and landslides across Western NC."
         ),
     },
 ]

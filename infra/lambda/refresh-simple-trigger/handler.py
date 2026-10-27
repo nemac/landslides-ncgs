@@ -25,7 +25,6 @@ import urllib.request
 import boto3
 
 
-
 def github_token() -> str:
     """Read the GitHub token from Secrets Manager on every invocation.
 
@@ -41,13 +40,18 @@ def dispatch_workflow(token: str, repo: str, workflow_file: str, ref: str) -> in
     """POST a workflow_dispatch event. Returns the HTTP status (204 = queued)."""
     url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_file}/dispatches"
     body = json.dumps({"ref": ref}).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "landslides-refresh-simple-trigger",
-        "Content-Type": "application/json",
-    })
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "landslides-refresh-simple-trigger",
+            "Content-Type": "application/json",
+        },
+    )
     with urllib.request.urlopen(req, timeout=20) as resp:
         return resp.status
 

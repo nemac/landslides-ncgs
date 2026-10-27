@@ -49,8 +49,10 @@ only in S3.
 
 ## Tooling
 
-`npm ci`, then `npm run lint` and `npm run format` for the dashboard
-JavaScript and CSS; `ruff check scripts` for Python (dev tools from
-`requirements-dev.txt`). CloudFront function tests:
-`node --test "infra/cloudfront/test/*.test.js"`. CDK tests and typecheck:
-`npm test` and `npm run typecheck` in `infra/cdk/`.
+`npm ci`, then `npm run lint` and `npm run format:check` for the dashboard
+JavaScript and CSS, the CloudFront Functions and the CDK TypeScript
+(`npm run format` rewrites them); `npm run lint:py` and
+`npm run format:py:check` for Python (`ruff` from `requirements-dev.txt`,
+installed into `.venv`; `npm run format:py` rewrites). CloudFront function
+tests: `node --test "infra/cloudfront/test/*.test.js"`. CDK tests and
+typecheck: `npm test` and `npm run typecheck` in `infra/cdk/`.

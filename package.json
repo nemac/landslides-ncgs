@@ -3,12 +3,13 @@
   "private": true,
   "description": "Landslides in Western North Carolina site and SIREN alerts dashboard. Static HTML/CSS/JS; this package only holds lint and format tooling.",
   "scripts": {
-    "lint": "eslint alerts/js",
-    "lint:fix": "eslint alerts/js --fix",
-    "format": "prettier --write \"alerts/js/**/*.js\" \"alerts/css/**/*.css\"",
-    "format:check": "prettier --check \"alerts/js/**/*.js\" \"alerts/css/**/*.css\"",
-    "lint:py": "ruff check scripts",
-    "format:py": "ruff format scripts"
+    "lint": "eslint alerts/js simple/js simple/test infra/cloudfront",
+    "lint:fix": "eslint alerts/js simple/js simple/test infra/cloudfront --fix",
+    "format": "prettier --write \"alerts/**/*.{js,css}\" \"simple/**/*.{js,css}\" \"infra/cloudfront/**/*.js\" \"infra/cdk/{bin,lib,test}/**/*.ts\"",
+    "format:check": "prettier --check \"alerts/**/*.{js,css}\" \"simple/**/*.{js,css}\" \"infra/cloudfront/**/*.js\" \"infra/cdk/{bin,lib,test}/**/*.ts\"",
+    "lint:py": "ruff check scripts simple/pipeline infra/lambda",
+    "format:py": "ruff format scripts simple/pipeline infra/lambda",
+    "format:py:check": "ruff format --check scripts simple/pipeline infra/lambda"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
