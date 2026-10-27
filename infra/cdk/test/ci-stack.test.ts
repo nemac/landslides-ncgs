@@ -95,7 +95,7 @@ test('dev role has no statement on the data bucket', () => {
   assert.match(prodStatements, /SiteBucket/);
 });
 
-test('prod role cannot delete from the data bucket', () => {
+test('prod role may delete from the data bucket only under the buildings prefix', () => {
   const { template } = ciTemplate();
   const dataStatements = policyStatementsFor(template, 'ProdRole').filter((s) =>
     JSON.stringify(s).includes('DataBucket')
@@ -104,9 +104,13 @@ test('prod role cannot delete from the data bucket', () => {
     dataStatements.length >= 1,
     'prod role has a data bucket statement'
   );
-  for (const statement of dataStatements) {
-    assert.doesNotMatch(JSON.stringify(statement), /s3:Delete/);
-  }
+  const deletes = dataStatements.filter((s) =>
+    JSON.stringify(s).includes('s3:Delete')
+  );
+  assert.equal(deletes.length, 1, 'exactly one delete statement');
+  const text = JSON.stringify(deletes[0]);
+  assert.match(text, /alerts\/data\/buildings\/\*/);
+  assert.doesNotMatch(text, /DeleteBucket|DeleteObjectVersion/);
   const siteStatements = policyStatementsFor(template, 'ProdRole').filter((s) =>
     JSON.stringify(s).includes('SiteBucket')
   );

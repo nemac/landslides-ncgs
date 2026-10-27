@@ -1,4 +1,10 @@
-import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import {
+  CfnOutput,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+} from 'aws-cdk-lib';
 import type * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -13,6 +19,7 @@ import {
 import {
   COM_DOMAIN,
   DATA_BUCKET,
+  DATA_NONCURRENT_VERSION_DAYS,
   DEV_HOSTNAME,
   DEV_SITE_BUCKET,
   PROD_HOSTNAMES,
@@ -87,9 +94,24 @@ export class WebStack extends Stack {
     bucketName: string,
     versioned: boolean
   ): s3.IBucket {
+    // A versioned bucket keeps every overwritten object until told
+    // otherwise; status.json alone is rewritten 144 times a day. Expire old
+    // versions after a while. Current objects, including the archive copies
+    // of runs that flagged pathways under simple/archive/, are untouched.
+    const lifecycleRules = versioned
+      ? [
+          {
+            id: 'expire-noncurrent-versions',
+            noncurrentVersionExpiration: Duration.days(
+              DATA_NONCURRENT_VERSION_DAYS
+            ),
+          },
+        ]
+      : undefined;
     return new s3.Bucket(this, id, {
       bucketName,
       versioned,
+      lifecycleRules,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       removalPolicy: RemovalPolicy.RETAIN,
