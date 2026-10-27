@@ -1,7 +1,24 @@
+// The main-site pages moved from /<name>.html into directories
+// (/<name>/index.html) on 2026-10-27. Old links and bookmarks still use the
+// .html names, so those get a permanent redirect to the directory form.
+var MOVED_PAGES = ['about', 'downloads', 'reducing-landslide-risk', 'learn-more', 'intro-landslides', 'data-tour'];
+
 function rewrite(event) {
     var request = event.request;
     var host = request.headers.host ? request.headers.host.value : '';
     var uri = request.uri;
+
+    // The query string as "?a=1&b=2", or "" when there is none, so a
+    // redirect can carry it along.
+    function queryStringOf() {
+        var qs = '';
+        var keys = Object.keys(request.querystring);
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            qs += (qs ? '&' : '?') + k + '=' + request.querystring[k].value;
+        }
+        return qs;
+    }
 
     // dashboard.landslidesncgs.org shows DFENS Simple at its root: the
     // page lives under /simple/ in the bucket, so the host is mapped onto
@@ -32,6 +49,17 @@ function rewrite(event) {
         };
     }
 
+    // Old flat page URL (e.g. "/about.html") on the main host: send it to
+    // the directory it moved to, keeping any query string.
+    var flatPage = uri.match(/^\/([a-z-]+)\.html$/);
+    if (!isDashboardHost && flatPage && MOVED_PAGES.indexOf(flatPage[1]) !== -1) {
+        return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: { location: { value: '/' + flatPage[1] + '/' + queryStringOf() } }
+        };
+    }
+
     // Directory-style URL without a trailing slash (e.g. "/simple",
     // "/alerts"): redirect to the slash form instead of rewriting it.
     // A rewrite would serve index.html at "/simple", and the page's
@@ -39,16 +67,10 @@ function rewrite(event) {
     // root and 403. The redirect keeps relative URLs correct.
     var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
     if (!uri.endsWith('/') && lastSegment.indexOf('.') === -1) {
-        var qs = '';
-        var keys = Object.keys(request.querystring);
-        for (var i = 0; i < keys.length; i++) {
-            var k = keys[i];
-            qs += (qs ? '&' : '?') + k + '=' + request.querystring[k].value;
-        }
         return {
             statusCode: 301,
             statusDescription: 'Moved Permanently',
-            headers: { location: { value: uri + '/' + qs } }
+            headers: { location: { value: uri + '/' + queryStringOf() } }
         };
     }
 

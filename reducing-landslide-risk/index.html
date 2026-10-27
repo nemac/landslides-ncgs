@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Learn More | Landslides in Western North Carolina</title>
-  <meta name="description" content="Explore storymaps, publications, and supporting resources for landslide hazards in Western North Carolina." />
+  <title>Reducing Landslide Risk | Landslides in Western North Carolina</title>
+  <meta name="description" content="Key messages, personal actions, and downloadable guides for reducing landslide risk in Western North Carolina." />
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="assets/images/shared/ncgs-seal.png" />
-  <link rel="apple-touch-icon" href="assets/images/shared/ncgs-seal.png" />
+  <link rel="icon" type="image/png" href="/assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="/assets/images/shared/ncgs-seal.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -116,7 +116,7 @@
     }
     .featured-banner__bg {
       position: absolute; inset: 0;
-      background-image: url('assets/images/main-site/banner-intro-landslides.jpg');
+      background-image: url('/assets/images/main-site/banner-intro-landslides.jpg');
       background-size: cover; background-position: center 40%;
       opacity: 0.45; transition: opacity 0.3s;
     }
@@ -136,50 +136,17 @@
     .featured-banner__cta:hover,
     .featured-banner__cta:focus-visible { background: #a04000; border-color: var(--clr-focus); }
 
-    /* Coming Soon state for featured banner + badge (matches index.html) */
-    .featured-banner--coming-soon { cursor: not-allowed; pointer-events: none; }
-    .featured-banner--coming-soon .featured-banner__bg { opacity: 0.25; }
-    .featured-banner--coming-soon .featured-banner__title { opacity: 0.6; }
-    .featured-banner--coming-soon .featured-banner__cta { display: none; }
-    .coming-soon-badge {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      z-index: 2;
-      background: transparent;
-      color: #FFD166;
-      border: 1.5px solid #FFD166;
-      font-family: var(--font-main);
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 0.25rem 0.7rem;
-      border-radius: 999px;
-      white-space: nowrap;
-      pointer-events: none;
-    }
-
     .ext-icon { display: inline-block; width: 0.8em; height: 0.8em; margin-left: 0.3em; vertical-align: middle; opacity: 0.8; }
 
     /* Resource Cards */
     .resources-section { margin-bottom: 3rem; }
-    .resources-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; list-style: none; padding-left: 0; }
-    /* Modifier: pair layout — 2 wide cards side by side, wrapping to 1 on narrow screens */
-    .resources-grid--pair { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .resources-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1.75rem; margin-top: 1.5rem; list-style: none; padding-left: 0; }
     .resource-card {
       display: flex; flex-direction: column; align-items: center; text-align: center;
       text-decoration: none; color: var(--clr-text); padding: 1.25rem 1rem 1.5rem;
       background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 8px;
       transition: background 0.2s, border-color 0.2s, transform 0.15s;
     }
-    /* Modifier: landscape card — image on left, text on right */
-    .resource-card--landscape {
-      flex-direction: row; align-items: center; text-align: left;
-      gap: 1.25rem; padding: 1.25rem;
-    }
-    .resource-card--landscape .resource-card__img-wrap { width: 120px; height: 120px; margin-bottom: 0; }
-    .resource-card--landscape .resource-card__content { flex: 1; min-width: 0; }
     .resource-card:not([aria-disabled="true"]):hover,
     .resource-card:not([aria-disabled="true"]):focus-visible {
       background: var(--clr-surface-2); border-color: var(--clr-primary); transform: translateY(-3px);
@@ -192,7 +159,7 @@
     }
     .resource-card:hover .resource-card__img-wrap,
     .resource-card:focus-visible .resource-card__img-wrap { border-color: var(--clr-primary); }
-    .resource-card__img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .resource-card__img-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
     .resource-card__img-placeholder {
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
       background: var(--clr-border); color: var(--clr-text-muted); font-size: 2.5rem;
@@ -206,7 +173,7 @@
     }
     .resource-card__desc { margin-bottom: 0.6rem; }
 
-    /* PDF card grid + card style (imported from downloads.html) */
+    /* PDF card grid + card style (matches learn-more/index.html) */
     .resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.5rem; margin-top: 1.25rem; list-style: none; padding-left: 0; }
     .pdf-card { display: flex; flex-direction: column; background: var(--clr-surface); border: 1px solid var(--clr-border); border-radius: 6px; overflow: hidden; text-decoration: none; color: var(--clr-text); transition: border-color 0.2s, transform 0.15s, background 0.2s; }
     .pdf-card:hover, .pdf-card:focus-visible { border-color: var(--clr-primary); background: var(--clr-surface-2); transform: translateY(-3px); }
@@ -217,14 +184,6 @@
     .pdf-card__title { font-size: 1rem; font-weight: 700; color: var(--clr-text); line-height: 1.3; margin-bottom: 0.4rem; }
     .pdf-card__desc { font-size: 0.85rem; color: var(--clr-text-muted); line-height: 1.5; flex: 1; }
     .pdf-card__badge { display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.75rem; padding: 0.25rem 0.6rem; background: var(--clr-border); color: var(--clr-text-muted); font-size: 0.78rem; font-weight: 700; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; width: fit-content; }
-
-    /* Supporting resources list (imported from downloads.html) */
-    .support-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.25rem; }
-    .support-list__item a { display: flex; align-items: flex-start; gap: 0.9rem; padding: 1rem 1.25rem; background: var(--clr-surface); border: 1px solid var(--clr-border); border-left: 4px solid var(--clr-accent); border-radius: 0 6px 6px 0; text-decoration: none; color: var(--clr-text-muted); font-size: 0.925rem; line-height: 1.55; transition: background 0.2s, border-left-color 0.2s, color 0.2s; }
-    .support-list__item a:hover, .support-list__item a:focus-visible { background: var(--clr-surface-2); border-left-color: var(--clr-primary); color: var(--clr-text); }
-    .support-list__item a .link-icon { flex-shrink: 0; color: var(--clr-accent); font-size: 1.1rem; margin-top: 0.1rem; transition: color 0.2s; }
-    .support-list__item a:hover .link-icon, .support-list__item a:focus-visible .link-icon { color: var(--clr-primary); }
-    .support-list__item a strong { display: block; color: var(--clr-text); font-weight: 700; margin-bottom: 0.2rem; }
 
     /* Reducing Risk */
     .reducing-risk { margin-bottom: 2.5rem; scroll-margin-top: 70px; }
@@ -271,102 +230,79 @@
 
   <header class="site-header" role="banner">
     <a class="site-header__logo" href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer">
-      <img src="assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
+      <img src="/assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
     </a>
     <div class="site-header__text">
       <h1>Landslides in Western North Carolina</h1>
       <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
     </div>
     <a class="site-header__partner-logo" href="https://www.deq.nc.gov/" target="_blank" rel="noopener noreferrer">
-      <img src="assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
+      <img src="/assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
     </a>
   </header>
 
   <nav class="site-nav" aria-label="Main navigation">
     <ul class="site-nav__list" role="list">
-      <li class="site-nav__item"><a href="index.html">Home</a></li>
-      <li class="site-nav__item"><a href="reducing-landslide-risk.html">Reducing Landslide Risk</a></li>
-      <li class="site-nav__item"><a href="learn-more.html" aria-current="page">Learn More</a></li>
-      <li class="site-nav__item"><a href="about.html">About</a></li>
+      <li class="site-nav__item"><a href="/">Home</a></li>
+      <li class="site-nav__item"><a href="/reducing-landslide-risk/" aria-current="page">Reducing Landslide Risk</a></li>
+      <li class="site-nav__item"><a href="/learn-more/">Learn More</a></li>
+      <li class="site-nav__item"><a href="/about/">About</a></li>
     </ul>
   </nav>
 
   <main id="main-content" class="page-wrapper">
 
-    <section class="resources-section" aria-labelledby="heading-storymaps">
-      <h2 class="section-heading" id="heading-storymaps">Select a resource below to explore selected landslide events, historical floods, regional geology, and more.</h2>
-      <!-- Featured banner (Coming Soon)
-           TO ENABLE: (1) remove the featured-banner--coming-soon class;
-           (2) remove aria-disabled and tabindex; (3) delete the coming-soon-badge span;
-           (4) update the aria-label to remove "coming soon".
-           The href already points to the live storymap URL. -->
-      <a class="featured-banner featured-banner--coming-soon"
-        href="https://storymaps.arcgis.com/stories/0c4e18cdf5b542ecb1662afc10965f87"
-        target="_blank" rel="noopener noreferrer"
-        aria-disabled="true" tabindex="-1"
-        aria-label="An Introduction to Landslides in Western North Carolina — coming soon">
-        <div class="featured-banner__bg" aria-hidden="true"></div>
-        <span class="coming-soon-badge" aria-hidden="true">Coming Soon</span>
-        <div class="featured-banner__content">
-          <div class="featured-banner__title">An Introduction to Landslides<br />in Western North Carolina</div>
-          <span class="featured-banner__cta" aria-hidden="true">
-            Click here to learn more
-            <svg class="ext-icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16" fill="none"><path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 2h4v4M14 2L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </div>
-      </a>
-      <ul class="resources-grid resources-grid--pair" role="list">
-
-        <li>
-          <a class="resource-card resource-card--landscape"
-            href="https://storymaps.arcgis.com/stories/4bc6f7d4c1094f5c925a74ccf606be00"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="Historical Landslides in WNC — interactive StoryMap, opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <img src="assets/images/main-site/card-historical-wnc.jpg" alt="A waterfall surrounded by lush green vegetation in Western North Carolina" loading="lazy" />
-            </div>
-            <div class="resource-card__content">
-              <div class="resource-card__title">Historical Landslides in WNC</div>
-              <div class="resource-card__desc">Explore selected landslide events from across the region</div>
-            </div>
-          </a>
-        </li>
-
-        <li>
-          <a class="resource-card resource-card--landscape"
-            href="https://storymaps.arcgis.com/stories/bcb2e5373c21491c9e68e96a8156d92b"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="The Great Flood of 1916 — interactive StoryMap, opens in a new tab">
-            <div class="resource-card__img-wrap">
-              <img src="assets/images/main-site/card-great-flood.jpg" alt="Historical photograph showing flood damage in western North Carolina, circa 1916" loading="lazy" />
-            </div>
-            <div class="resource-card__content">
-              <div class="resource-card__title">The Great Flood of 1916</div>
-              <div class="resource-card__desc">Learn how the Great Flood of 1916 caused destruction in western North Carolina</div>
-            </div>
-          </a>
-        </li>
-
+    <section class="key-messages" aria-labelledby="heading-key-messages">
+      <h2 class="section-heading" id="heading-key-messages">Key Messages</h2>
+      <ul class="key-messages__list">
+        <li>Landslides pose significant risks to public health and safety, local economies, and home and business owners.</li>
+        <li>Extreme weather patterns—such as periods of above-normal rainfall or drought—are associated with a changing climate. They are already impacting people in western North Carolina.</li>
+        <li>These extreme weather patterns are also linked to landslide events.</li>
+        <li>Landslides and debris flows usually occur in areas where they've happened before.</li>
+        <li>Mapping where landslides have occurred in the past helps identify areas where they could happen again.</li>
+        <li>Landslide mapping and other resilience planning allow emergency responders, planners, and city and county staff to be better prepared to help protect people and assets from losses associated with landslide events.</li>
       </ul>
     </section>
 
     <hr class="section-divider" />
 
-    <section aria-labelledby="heading-resources">
-      <h2 class="sr-only" id="heading-resources">Resources</h2>
+    <section class="reducing-risk" id="reducing-risk" aria-labelledby="heading-reducing-risk">
+      <h2 class="section-heading" id="heading-reducing-risk">Reducing Landslide Risk</h2>
+      <div class="reducing-risk__content">
+        <p>Understanding landslide hazards is the first step toward protecting yourself, your family, and your community. Below are key actions you can take to recognize and minimize landslide risk.</p>
+        <ul>
+          <li>Learn whether your property is in a landslide-prone area using the data and maps on this site</li>
+          <li>Watch for warning signs: unusual sounds, tilting trees, bulging ground surfaces, or new cracks in walls</li>
+          <li>Stay informed during periods of heavy or prolonged rainfall (5+ inches in 24 hours increases risk significantly)</li>
+          <li>Avoid modifying high- or moderate-probability-of-sliding slopes without consulting a geologist</li>
+          <li>Know your evacuation routes and have an emergency plan ready before severe weather arrives</li>
+          <li>Contact local emergency management to understand county-specific landslide planning and resources</li>
+        </ul>
+        <a class="btn-primary" href="https://drive.google.com/file/d/1CFu3dEj2A6srZrNOCLXGo-m8gdWjjKPC/view" target="_blank" rel="noopener noreferrer">
+          Download the Reducing Landslide Risk Brochure
+          <svg class="ext-icon" aria-hidden="true" focusable="false" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 7l4 4 4-4M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </section>
+
+    <hr class="section-divider" />
+
+    <section class="resources-section" aria-labelledby="heading-pdf-resources">
+      <h2 class="section-heading" id="heading-pdf-resources">Downloadable Resources</h2>
+      <p style="color:var(--clr-text-muted);font-size:0.95rem;margin-top:-0.5rem;margin-bottom:0.25rem;">Additional PDF guides on landslide preparedness and risk reduction.</p>
       <ul class="resource-grid" role="list">
 
         <li>
           <a class="pdf-card"
-            href="https://drive.google.com/file/d/1CFu3dEj2A6srZrNOCLXGo-m8gdWjjKPC/view"
+            href="https://drive.google.com/file/d/1frUMhTR9jSOXNWzzs2ttewBdz_L0qNa8/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
-            aria-label="Reducing Landslide Risk brochure PDF — opens in a new tab">
+            aria-label="Guide for Homeowner Safety PDF — opens in a new tab">
             <div class="pdf-card__thumb">
-              <img src="assets/images/main-site/pdf-reducing-risk.png" alt="" loading="lazy" />
+              <img src="/assets/images/main-site/HomeownerSafety.png" alt="" loading="lazy" />
             </div>
             <div class="pdf-card__body">
-              <div class="pdf-card__title">Reducing Landslide Risk</div>
-              <div class="pdf-card__desc">Use this brochure to identify actions you can take to recognize and minimize landslide risk</div>
+              <div class="pdf-card__title">Guide for Homeowner Safety</div>
+              <div class="pdf-card__desc">Safety guidance for homeowners in landslide-prone areas</div>
               <span class="pdf-card__badge" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
               </span>
@@ -376,15 +312,15 @@
 
         <li>
           <a class="pdf-card"
-            href="https://drive.google.com/file/d/1HhLdEb5snT3OOgt3iAJ0AHAGNGWrDFQw/view?usp=sharing"
+            href="https://drive.google.com/file/d/1zj2sdyLCAyeypV1u9WB5mQLtwowlTtH0/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
-            aria-label="Guide to Landslides PDF brochure — opens in a new tab">
+            aria-label="Be Prepared for a Landslide, from Ready.gov PDF — opens in a new tab">
             <div class="pdf-card__thumb">
-              <img src="assets/images/main-site/pdf-guide-landslides.png" alt="" loading="lazy" />
+              <img src="/assets/images/main-site/BePrepraredforaLandslide.png" alt="" loading="lazy" />
             </div>
             <div class="pdf-card__body">
-              <div class="pdf-card__title">Guide to Landslides</div>
-              <div class="pdf-card__desc">This four-page brochure provides targeted information about landslides in the region</div>
+              <div class="pdf-card__title">Be Prepared for a Landslide &mdash; Ready.gov</div>
+              <div class="pdf-card__desc">Federal emergency preparedness guidance for landslide events</div>
               <span class="pdf-card__badge" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
               </span>
@@ -394,15 +330,15 @@
 
         <li>
           <a class="pdf-card"
-            href="https://drive.google.com/file/d/1-V8p_rBqpBxd3SVvq0Mo0w7pOWHQYN6k/view?usp=sharing"
+            href="https://drive.google.com/file/d/1CQ2diLNfy__z-tjIs9FPys321r2EzE4b/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
-            aria-label="Polk County Howard Gap Road landslide event PDF — opens in a new tab">
+            aria-label="NWS Weather-Ready Nation Landslide Resources PDF — opens in a new tab">
             <div class="pdf-card__thumb">
-              <img src="assets/images/main-site/pdf-howard-gap.png" alt="" loading="lazy" />
+              <img src="/assets/images/main-site/NWS_WeatherReadyNation.png" alt="" loading="lazy" />
             </div>
             <div class="pdf-card__body">
-              <div class="pdf-card__title">Polk County | Howard Gap Road</div>
-              <div class="pdf-card__desc">This two-page handout describes the December 2018 landslide event</div>
+              <div class="pdf-card__title">NWS Weather-Ready Nation &mdash; Landslide Resources</div>
+              <div class="pdf-card__desc">National Weather Service landslide awareness materials</div>
               <span class="pdf-card__badge" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
               </span>
@@ -412,73 +348,19 @@
 
         <li>
           <a class="pdf-card"
-            href="https://drive.google.com/file/d/1bY-xvSwKVaUxGMJL9YFMO2etStxcyq36/view?usp=sharing"
+            href="https://drive.google.com/file/d/1Ydo9IQQh3_ewxEW-yC9hFXeT7L9ze6ZH/view?usp=drive_link"
             target="_blank" rel="noopener noreferrer"
-            aria-label="Polk County Pacolet River Valley landslide event PDF — opens in a new tab">
+            aria-label="Strategies — Actions you can take to Reduce Your Landslide Risk PDF — opens in a new tab">
             <div class="pdf-card__thumb">
-              <img src="assets/images/main-site/pdf-pacolet-river.png" alt="" loading="lazy" />
+              <img src="/assets/images/main-site/StrategiestoReduceLandslideRisk.png" alt="" loading="lazy" />
             </div>
             <div class="pdf-card__body">
-              <div class="pdf-card__title">Polk County | Pacolet River Valley</div>
-              <div class="pdf-card__desc">This two-page handout describes the May 2018 landslide event</div>
+              <div class="pdf-card__title">Strategies &mdash; Actions you can take to Reduce Your Landslide Risk</div>
+              <div class="pdf-card__desc">Concrete actions and strategies to reduce landslide risk</div>
               <span class="pdf-card__badge" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v6M3 5l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
               </span>
             </div>
-          </a>
-        </li>
-
-      </ul>
-    </section>
-
-    <hr class="section-divider" />
-
-    <section aria-labelledby="heading-supporting">
-      <h2 class="section-heading" id="heading-supporting">Other Supporting Resources</h2>
-      <ul class="support-list" role="list">
-
-        <li class="support-list__item">
-          <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey/geologic-hazards/landslides"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="NCGS Geologic Hazards Landslides page — opens in a new tab">
-            <svg class="link-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            <span><strong>NCGS Geologic Hazards &mdash; Landslides</strong>Official North Carolina Geological Survey page on landslide geologic hazards and programs</span>
-          </a>
-        </li>
-
-        <li class="support-list__item">
-          <a href="https://drive.google.com/file/d/1C6WydeJcLMTShPofeyQ3bGSAjkhmleFe/view?usp=sharing"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="Introduction to Landslides in North Carolina PDF — opens in a new tab">
-            <svg class="link-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><path d="M4 4h8l4 4v8H4V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 4v4h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-            <span><strong>Introduction to Landslides in North Carolina</strong>An introduction to landslides&mdash;one of the most common geologic hazards in North Carolina&mdash;and the processes behind them</span>
-          </a>
-        </li>
-
-        <li class="support-list__item">
-          <a href="https://drive.google.com/file/d/15ZxaOFxI1nhNvyPpkRZG6StlRBQHzJcs/view?usp=sharing"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="Criteria for Preliminary Slope Stability Assessments PDF — opens in a new tab">
-            <svg class="link-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><path d="M4 4h8l4 4v8H4V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 4v4h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-            <span><strong>Criteria for Preliminary Slope Stability Assessments</strong>September 25, 2019 &mdash; This document sets forth the methodology used for assessing slope stability</span>
-          </a>
-        </li>
-
-        <li class="support-list__item">
-          <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey/ncgs-publications"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="NCGS Publications page — opens in a new tab">
-            <svg class="link-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-            <span><strong>NCGS Publications</strong>Explore interactive maps, geologic maps, and miscellaneous publications from the North Carolina Geological Survey</span>
-          </a>
-        </li>
-
-        <li class="support-list__item">
-          <a href="https://appalachianlandslide.com/landslide-hazard-maps/"
-            target="_blank" rel="noopener noreferrer"
-            aria-label="Appalachian Landslide Consultants map viewer — opens in a new tab">
-            <svg class="link-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><path d="M10 2C6.13 2 3 5.13 3 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>
-            <span><strong>Appalachian Landslide Consultants, PLLC</strong>Regional partners who have produced an online map viewer and other materials to assist with understanding landslide hazards in western North Carolina</span>
           </a>
         </li>
 
