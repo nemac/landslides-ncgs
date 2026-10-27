@@ -56,14 +56,27 @@ for (const page of PAGES) {
 
     test(page + ': ' + url + ' has an integrity hash and crossorigin', () => {
       assert.ok(integrity, 'missing integrity attribute on ' + url);
-      assert.ok(/\bcrossorigin\b/.test(tag), 'missing crossorigin attribute on ' + url);
+      assert.ok(
+        /\bcrossorigin\b/.test(tag),
+        'missing crossorigin attribute on ' + url
+      );
     });
 
     test(page + ': ' + url + ' matches its integrity hash', async () => {
       const [algorithm, expected] = integrity.split('-', 2);
-      assert.match(algorithm, /^sha(256|384|512)$/, 'unsupported algorithm on ' + url);
+      assert.match(
+        algorithm,
+        /^sha(256|384|512)$/,
+        'unsupported algorithm on ' + url
+      );
       const actual = hashOf(await download(url), algorithm);
-      assert.equal(actual, expected, 'hash mismatch for ' + url + ': the file served does not match the integrity attribute');
+      assert.equal(
+        actual,
+        expected,
+        'hash mismatch for ' +
+          url +
+          ': the file served does not match the integrity attribute'
+      );
     });
   }
 }

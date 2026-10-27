@@ -34,7 +34,9 @@ function readPiece(pieceDir: string, file: string): string {
 function assertWithinLimit(code: string, mode: FunctionMode): void {
   const bytes = Buffer.byteLength(code, 'utf8');
   if (bytes > MAX_FUNCTION_BYTES) {
-    throw new Error(`Composed ${mode} CloudFront Function is ${bytes} bytes; the limit is ${MAX_FUNCTION_BYTES}`);
+    throw new Error(
+      `Composed ${mode} CloudFront Function is ${bytes} bytes; the limit is ${MAX_FUNCTION_BYTES}`
+    );
   }
 }
 
@@ -56,7 +58,8 @@ function devParts(pieceDir: string): string[] {
 }
 
 export function composeFrom(pieceDir: string, mode: FunctionMode): string {
-  const parts = mode === 'production' ? productionParts(pieceDir) : devParts(pieceDir);
+  const parts =
+    mode === 'production' ? productionParts(pieceDir) : devParts(pieceDir);
   const code = parts.join('\n\n') + '\n';
   assertWithinLimit(code, mode);
   return code;

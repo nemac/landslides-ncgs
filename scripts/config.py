@@ -51,7 +51,7 @@ NDFD_PRECIP_SERVICE_URL = (
 # For TESTING during a dry period, use a low value so the pipeline produces
 # results to inspect. Once you've verified everything looks right, raise to 11.
 #
-PRECIP_THRESHOLD_CATEGORY = 1   # >>> CHANGE TO 11 FOR PRODUCTION <<<
+PRECIP_THRESHOLD_CATEGORY = 1  # >>> CHANGE TO 11 FOR PRODUCTION <<<
 
 
 # -----------------------------------------------------------------------------
@@ -99,7 +99,7 @@ MAP_ZOOM = 8
 # the FeatureServer (the "All debris flow zones (sampled)" sidebar toggle).
 DEBRIS_CONTEXT_TILE_URL = None  # e.g. "https://yourtileservice.com/{z}/{x}/{y}.png"
 DEBRIS_CONTEXT_TILE_ATTRIBUTION = "NC Geological Survey debris flow model"
-DEBRIS_CONTEXT_TILE_OPACITY = 0.55       # 0.0 = invisible, 1.0 = fully opaque
+DEBRIS_CONTEXT_TILE_OPACITY = 0.55  # 0.0 = invisible, 1.0 = fully opaque
 DEBRIS_CONTEXT_TILE_MIN_ZOOM = 6
 DEBRIS_CONTEXT_TILE_MAX_ZOOM = 18
 
@@ -117,8 +117,7 @@ DEBRIS_CONTEXT_TILE_MAX_ZOOM = 18
 # "nexrad-n0q" - the older "nexrad-n0q-900913" name was deprecated and now
 # returns "Layer nexrad-n0q not found".
 NEXRAD_TILES_URL = (
-    "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/"
-    "nexrad-n0q/{z}/{x}/{y}.png"
+    "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q/{z}/{x}/{y}.png"
 )
 NEXRAD_ATTRIBUTION = "NOAA NEXRAD via Iowa Environmental Mesonet"
 
@@ -232,7 +231,7 @@ CACHE_TTL_DAYS = 30
 # per-county means the frontend loads only counties in the current
 # viewport, at higher zoom levels. Each county file is ~1-15 MB;
 # frontend caches up to 20 counties at a time (LRU eviction).
-OVERTURE_BUILDINGS_SUBDIR = "buildings"          # subdirectory under alerts/data
+OVERTURE_BUILDINGS_SUBDIR = "buildings"  # subdirectory under alerts/data
 OVERTURE_BUILDINGS_MANIFEST_NAME = "manifest.json"  # inside that subdir
 OVERTURE_BUILDINGS_CACHE_TTL_DAYS = 30
 # Geometry simplification tolerance in degrees. Set to 0 (2026-07-22) to
@@ -287,8 +286,11 @@ def _mrms_url_template(product_name: str) -> str:
     template still has {Y}/{M}/{D}/{H} placeholders for the caller to fill."""
     return (
         "https://mtarchive.geol.iastate.edu/"
-        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/" + product_name + "/"
-        + product_name + "_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
+        "{Y:04d}/{M:02d}/{D:02d}/mrms/ncep/"
+        + product_name
+        + "/"
+        + product_name
+        + "_00.00_{Y:04d}{M:02d}{D:02d}-{H:02d}0000.grib2.gz"
     )
 
 
@@ -317,15 +319,21 @@ def mrms_product_fallback_for_hours(hours: int) -> list[dict]:
     becomes available after the hour mark; the fetcher uses these to
     compute the most recent valid timestamp likely to have a file."""
     return [
-        {"name":             f"MultiSensor_QPE_{hours:02d}H_Pass1",
-         "lookback_minutes": 15,
-         "display":          f"MultiSensor Pass1 ({hours}H)"},
-        {"name":             f"RadarOnly_QPE_{hours:02d}H",
-         "lookback_minutes": 10,
-         "display":          f"RadarOnly ({hours}H)"},
-        {"name":             f"MultiSensor_QPE_{hours:02d}H_Pass2",
-         "lookback_minutes": 75,
-         "display":          f"MultiSensor Pass2 ({hours}H)"},
+        {
+            "name": f"MultiSensor_QPE_{hours:02d}H_Pass1",
+            "lookback_minutes": 15,
+            "display": f"MultiSensor Pass1 ({hours}H)",
+        },
+        {
+            "name": f"RadarOnly_QPE_{hours:02d}H",
+            "lookback_minutes": 10,
+            "display": f"RadarOnly ({hours}H)",
+        },
+        {
+            "name": f"MultiSensor_QPE_{hours:02d}H_Pass2",
+            "lookback_minutes": 75,
+            "display": f"MultiSensor Pass2 ({hours}H)",
+        },
     ]
 
 
@@ -342,8 +350,25 @@ MRMS_ATTRIBUTION = "NOAA MRMS via Iowa Environmental Mesonet"
 # work without parallel infrastructure. These are the upper-bound inches for
 # each category (matches NDFD bins).
 MRMS_CATEGORY_CUTOFFS_INCHES = [
-    0.10, 0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 4.00,
-    5.00, 6.00, 8.00, 10.00, 12.00, 14.00, 16.00, 18.00, 20.00,
+    0.10,
+    0.25,
+    0.50,
+    0.75,
+    1.00,
+    1.50,
+    2.00,
+    2.50,
+    3.00,
+    4.00,
+    5.00,
+    6.00,
+    8.00,
+    10.00,
+    12.00,
+    14.00,
+    16.00,
+    18.00,
+    20.00,
 ]
 
 # Default MRMS threshold (NDFD category index). 5 corresponds to >= 1.5",

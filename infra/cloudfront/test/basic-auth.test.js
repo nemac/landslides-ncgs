@@ -17,13 +17,23 @@ function kvsWith(value) {
 }
 
 function withAuth(headerValue) {
-  const extra = headerValue ? { headers: { host: { value: 'dev.landslidesncgs.org' }, authorization: { value: headerValue } } } : undefined;
+  const extra = headerValue
+    ? {
+        headers: {
+          host: { value: 'dev.landslidesncgs.org' },
+          authorization: { value: headerValue },
+        },
+      }
+    : undefined;
   return eventFor('dev.landslidesncgs.org', '/', extra);
 }
 
 function assertChallenge(out) {
   assert.equal(out.statusCode, 401);
-  assert.equal(out.headers['www-authenticate'].value, 'Basic realm="landslides dev"');
+  assert.equal(
+    out.headers['www-authenticate'].value,
+    'Basic realm="landslides dev"'
+  );
 }
 
 test('matching credential falls through', async () => {
@@ -44,5 +54,7 @@ test('malformed header gets 401', async () => {
 });
 
 test('missing kvs key gets 401, not a throw', async () => {
-  assertChallenge(await basicAuth(withAuth('Basic ' + GOOD), kvsWith(undefined)));
+  assertChallenge(
+    await basicAuth(withAuth('Basic ' + GOOD), kvsWith(undefined))
+  );
 });

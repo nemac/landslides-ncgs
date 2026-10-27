@@ -62,6 +62,13 @@ for pending work, `OPERATIONS.md` for running things locally, and
 
 ## Checks before a PR
 
+- `npm run lint` and `npm run format:check` (ESLint and Prettier over
+  `alerts`, `simple`, `infra/cloudfront` and the CDK TypeScript).
+- `npm run lint:py` and `npm run format:py:check` (ruff over `scripts`,
+  `simple/pipeline` and `infra/lambda`). ruff lives in `.venv`; create it
+  with the two commands in `requirements-dev.txt` (`python3 -m venv .venv`,
+  then `.venv/bin/pip install -r requirements-dev.txt`) and run the npm
+  scripts with `.venv/bin` on `PATH` or the venv activated.
 - `node --test "infra/cloudfront/test/*.test.js"` after any function change.
 - `npm test` and `npm run typecheck` in `infra/cdk/` (covers the 10 KB
   composed-function limit).

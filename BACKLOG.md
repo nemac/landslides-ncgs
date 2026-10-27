@@ -16,12 +16,12 @@ details belong in an issue or PR once someone picks it up.
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
 - **PR checks and tests.** `ci.yml` already runs the CDK typecheck, tests
-  and synth plus the CloudFront Function tests on every pull request. Still
-  to add: `npm run lint` (fails today on two unused variables in
-  `alerts/js`), `npm run format:check` (Prettier would reformat about 1,300
-  lines across five frontend files; run `npm run format` once and commit),
-  `ruff check scripts`, and tests for `scripts/analysis.py` (the
-  intersection logic) and the frontend's threshold filtering.
+  and synth plus the CloudFront Function tests on every pull request. As of
+  2026-10-27 its `lint` job also runs `npm run lint`, `npm run format:check`,
+  `ruff check` and `ruff format --check` over every source file, and the
+  `infra/lambda/refresh-simple-trigger` unit tests. Still to add: tests for
+  `scripts/analysis.py` (the intersection logic) and the frontend's
+  threshold filtering.
 - **Decommission the NEMAC account resources.** After the cutover in
   `infra/README.md` reaches step 12 (48 hours after the GoDaddy name-server
   change), run its decommission list and record the date here.

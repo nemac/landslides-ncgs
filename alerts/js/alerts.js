@@ -156,7 +156,7 @@ window.DEFNS_ALERTS = (function () {
       'forecast_window',
       'data_timestamp_utc',
       'export_timestamp_utc',
-      'area_acres'
+      'area_acres',
     ];
 
     const exportTs = new Date().toISOString();
@@ -175,7 +175,7 @@ window.DEFNS_ALERTS = (function () {
         ctx.windowLabel || '',
         ctx.timestampISO || '',
         exportTs,
-        _estimateAcres(f.geometry)
+        _estimateAcres(f.geometry),
       ];
       rows.push(fields.map(_csvEscape).join(','));
     }
@@ -188,11 +188,14 @@ window.DEFNS_ALERTS = (function () {
   function _estimateAcres(geometry) {
     if (!geometry) return '--';
     try {
-      const sqMeters = turf.area({ type: 'Feature', geometry: geometry,
-                                   properties: {} });
+      const sqMeters = turf.area({
+        type: 'Feature',
+        geometry: geometry,
+        properties: {},
+      });
       const acres = sqMeters / 4046.86;
       return acres < 1 ? acres.toFixed(2) : acres.toFixed(1);
-    } catch (e) {
+    } catch (_e) {
       return '--';
     }
   }
