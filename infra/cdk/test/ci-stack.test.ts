@@ -12,7 +12,7 @@ const env = { account: ACCOUNT, region: REGION };
 function ciTemplate() {
   const app = new App();
   const dns = new DnsStack(app, 'Dns', { env });
-  const web = new WebStack(app, 'Web', { env, stage: 'done', orgZone: dns.orgZone, comZone: dns.comZone, certificate: dns.certificate });
+  const web = new WebStack(app, 'Web', { env, orgZone: dns.orgZone, comZone: dns.comZone, certificate: dns.certificate });
   const ci = new CiStack(app, 'Ci', {
     env,
     siteBucket: web.siteBucket,
