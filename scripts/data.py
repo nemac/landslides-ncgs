@@ -799,85 +799,6 @@ def fetch_precip_forecast(
 
 
 # =============================================================================
-# Synthetic test polygon (testing-only)
-# =============================================================================
-
-
-def make_test_precip_polygon(
-    category: int,
-    fromdate: datetime,
-    todate: datetime,
-) -> gpd.GeoDataFrame:
-    """Build a synthetic precipitation polygon over Asheville for testing.
-
-    Used by the Streamlit dashboard's "Test mode" to verify the alert
-    pipeline end-to-end on dry days. The polygon is a ~30-mile square
-    centered roughly on Asheville, NC, large enough to intersect a
-    meaningful number of NCGS debris flow zones.
-
-    The `label` is prefixed with '[TEST]' so it cannot be confused with
-    real NDFD features in tooltips, the impacted-zones table, or the
-    summary stats.
-
-    Parameters
-    ----------
-    category : int
-        The synthetic NDFD precipitation category (0-19). Determines the
-        rainfall amount the test polygon claims to be forecasting.
-    fromdate, todate : datetime
-        Times to stamp on the synthetic polygon so it matches the schema
-        of real NDFD features.
-    """
-    # NDFD's exact label strings for each category - mirror them so the
-    # test polygon looks like a real one in the table (except for [TEST]).
-    label_lookup = {
-        0: '.01 - .10"',
-        1: '.10 - .25"',
-        2: '.25 - .50"',
-        3: '.50 - .75"',
-        4: '.75 - 1"',
-        5: '1 - 1.50"',
-        6: '1.50 - 2"',
-        7: '2 - 2.50"',
-        8: '2.50 - 3"',
-        9: '3 - 4"',
-        10: '4 - 5"',
-        11: '5 - 6"',
-        12: '6 - 8"',
-        13: '8 - 10"',
-        14: '10 - 12"',
-        15: '12 - 14"',
-        16: '14 - 16"',
-        17: '16 - 18"',
-        18: '18 - 20"',
-        19: '> 20"',
-    }
-    from shapely.geometry import Polygon
-
-    cx, cy = -82.55, 35.60  # Asheville
-    half = 0.22  # ~15 mi half-width
-    poly = Polygon(
-        [
-            (cx - half, cy - half),
-            (cx + half, cy - half),
-            (cx + half, cy + half),
-            (cx - half, cy + half),
-        ]
-    )
-    return gpd.GeoDataFrame(
-        {
-            "category": [int(category)],
-            "label": [f"[TEST] {label_lookup.get(int(category), 'test')}"],
-            "fromdate": [int(fromdate.timestamp() * 1000)],
-            "todate": [int(todate.timestamp() * 1000)],
-            "is_test": [True],
-        },
-        geometry=[poly],
-        crs=DISPLAY_CRS,
-    )
-
-
-# =============================================================================
 # MRMS Quantitative Precipitation Estimate (1-hour observed accumulation)
 # =============================================================================
 # Real-time observed precipitation from radar mosaics calibrated against
@@ -903,7 +824,7 @@ except Exception:
 
 def _classify_mrms_inches_to_category(rainfall_inches: float) -> int:
     """Map an MRMS rainfall value (inches) to an NDFD-compatible category
-    index 0-19. Uses the same cutoffs as PRECIP_LABELS so the existing
+    index 0-19. Uses the same cutoffs as PRECIP_CATEGORY_LABELS so the existing
     color ramp and legend work unchanged."""
     from config import MRMS_CATEGORY_CUTOFFS_INCHES
 
@@ -1112,15 +1033,39 @@ def _read_mrms_grib_to_polygons(
     return gdf, max_inches
 
 
-def _category_label(cat: int) -> str:
-    """Human-friendly label for category index. Lazy import of the labels
-    dict from map_folium to avoid a circular import."""
-    try:
-        from map_folium import PRECIP_LABELS
+# NDFD precipitation accumulation categories, using NDFD's own label strings.
+# Category 0 is 0.01-0.10 inch and the bins step up through 20 inches
+# (category 19 is anything above). The NDFD service supplies these labels on
+# its features; the MRMS and Stage IV fetches bin their rasters into the same
+# categories (see MRMS_CATEGORY_CUTOFFS_INCHES in config.py) and label them
+# from this table.
+PRECIP_CATEGORY_LABELS: dict[int, str] = {
+    0: '.01 - .10"',
+    1: '.10 - .25"',
+    2: '.25 - .50"',
+    3: '.50 - .75"',
+    4: '.75 - 1"',
+    5: '1 - 1.50"',
+    6: '1.50 - 2"',
+    7: '2 - 2.50"',
+    8: '2.50 - 3"',
+    9: '3 - 4"',
+    10: '4 - 5"',
+    11: '5 - 6"',
+    12: '6 - 8"',
+    13: '8 - 10"',
+    14: '10 - 12"',
+    15: '12 - 14"',
+    16: '14 - 16"',
+    17: '16 - 18"',
+    18: '18 - 20"',
+    19: '> 20"',
+}
 
-        return PRECIP_LABELS.get(cat, f"cat {cat}")
-    except Exception:
-        return f"cat {cat}"
+
+def _category_label(cat: int) -> str:
+    """Human-friendly label for a precipitation category index."""
+    return PRECIP_CATEGORY_LABELS.get(cat, f"cat {cat}")
 
 
 # =============================================================================
