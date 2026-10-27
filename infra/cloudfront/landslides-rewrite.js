@@ -1,7 +1,18 @@
 // The main-site pages moved from /<name>.html into directories
 // (/<name>/index.html) on 2026-10-27. Old links and bookmarks still use the
 // .html names, so those get a permanent redirect to the directory form.
-var MOVED_PAGES = ['about', 'downloads', 'reducing-landslide-risk', 'learn-more', 'intro-landslides', 'data-tour'];
+var MOVED_PAGES = ['about', 'downloads', 'reducing-landslide-risk', 'learn-more'];
+
+// Pages retired on 2026-10-27 and removed from the bucket. Their source is
+// kept in git under the tag archive/retired-pages-2026-10-27. The flat name,
+// the directory and anything under it answer 410 Gone on the main host.
+var RETIRED_PAGES = ['intro-landslides', 'data-tour'];
+var GONE = {
+    statusCode: 410,
+    statusDescription: 'Gone',
+    headers: { 'content-type': { value: 'text/plain' } },
+    body: 'This page has been retired.'
+};
 
 function rewrite(event) {
     var request = event.request;
@@ -47,6 +58,13 @@ function rewrite(event) {
             statusDescription: 'Moved Permanently',
             headers: { location: { value: uri.substring('/simple'.length) || '/' } }
         };
+    }
+
+    // A retired page by any of its URLs: "/data-tour.html", "/data-tour",
+    // "/data-tour/" or a file under it.
+    var retired = uri.match(/^\/([a-z-]+)(\.html|\/.*)?$/);
+    if (!isDashboardHost && retired && RETIRED_PAGES.indexOf(retired[1]) !== -1) {
+        return GONE;
     }
 
     // Old flat page URL (e.g. "/about.html") on the main host: send it to
