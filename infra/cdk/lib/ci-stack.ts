@@ -3,7 +3,13 @@ import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
-import { ACCOUNT, GITHUB_REPO } from './config.js';
+import {
+  ACCOUNT,
+  BUILDINGS_PREFIX,
+  DEV_ROLE_NAME,
+  GITHUB_REPO,
+  PROD_ROLE_NAME,
+} from './config.js';
 
 export interface CiStackProps extends StackProps {
   siteBucket: s3.IBucket;
@@ -33,19 +39,28 @@ export class CiStack extends Stack {
     this.prodRole = this.makeRole(
       provider,
       'ProdRole',
-      'landslides-github-prod',
+      PROD_ROLE_NAME,
       'production'
     );
     props.siteBucket.grantReadWrite(this.prodRole);
-    // The refresh workflows only read and write data objects; nothing deletes.
+    // The refresh workflows read and write data objects. The only deletes
+    // are under the buildings prefix, which refresh-reference.yml mirrors
+    // from a fresh extraction; the bucket is versioned, so even those are
+    // recoverable for DATA_NONCURRENT_VERSION_DAYS.
     props.dataBucket.grantRead(this.prodRole);
     props.dataBucket.grantPut(this.prodRole);
+    this.prodRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:DeleteObject'],
+        resources: [props.dataBucket.arnForObjects(`${BUILDINGS_PREFIX}*`)],
+      })
+    );
     this.allowInvalidation(this.prodRole, props.productionDistribution);
 
     this.devRole = this.makeRole(
       provider,
       'DevRole',
-      'landslides-github-dev',
+      DEV_ROLE_NAME,
       'development'
     );
     props.devSiteBucket.grantReadWrite(this.devRole);

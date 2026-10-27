@@ -27,6 +27,20 @@ export const DEV_SITE_BUCKET = 'landslidesncgs-dev-site';
 
 export const GITHUB_REPO = 'nemac/landslides-ncgs';
 
+// The roles GitHub Actions assume (Ci stack). The workflows carry their ARNs
+// as literals; test/workflows.test.ts checks those literals against these.
+export const PROD_ROLE_NAME = 'landslides-github-prod';
+export const DEV_ROLE_NAME = 'landslides-github-dev';
+
+// The one data-bucket prefix a workflow may delete from: refresh-reference.yml
+// mirrors the building footprints there with `aws s3 sync --delete`.
+export const BUILDINGS_PREFIX = 'alerts/data/buildings/';
+
+// Old versions in the versioned data bucket are kept this long. Runs that
+// flagged pathways are copied to simple/archive/ as current objects, which
+// this does not touch.
+export const DATA_NONCURRENT_VERSION_DAYS = 30;
+
 // A one-time schedule fires at REMINDER_AT, a month before the GitHub token
 // in the dispatch secret expires, to open a renewal issue. The expiry date
 // itself is the `expires` input default in token-expiry-reminder.yml. Update

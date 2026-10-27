@@ -125,6 +125,26 @@ jobs:
             --content-type application/json \
             --cache-control "public, max-age=30"
 
+      # A run that flagged any pathways is kept for good: the three files are
+      # copied to simple/archive/<generated_at>/ in the same bucket, a prefix
+      # CloudFront does not serve and the bucket's lifecycle rule does not
+      # touch. Old versions of the live files expire after 30 days; these
+      # copies are current objects and stay.
+      - name: Archive a run that flagged pathways
+        if: steps.check.outputs.action == 'build'
+        run: |
+          N=$(python3 -c "import json; print(json.load(open('out/status.json')).get('n_flagged', 0))")
+          if [ "$N" -gt 0 ]; then
+            STAMP=$(python3 -c "import json; print(json.load(open('out/status.json'))['generated_at'][:19].replace(':', '') + 'Z')")
+            DEST="s3://landslidesncgs-data/simple/archive/${STAMP}"
+            for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson status.json; do
+              aws s3 cp "out/$f" "$DEST/$f" --content-type application/json
+            done
+            echo "Archived a run with $N flagged pathway(s) to $DEST"
+          else
+            echo "No flagged pathways; nothing archived."
+          fi
+
       - name: Summary
         if: always()
         run: |

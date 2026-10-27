@@ -29,6 +29,12 @@ context key that staged it (`wildcard`, `subdomains`, `done`) was removed on
 hostnames in `lib/config.ts`, and the `--context cutover=...` flags in the
 runbook commands below are historical.
 
+The workflows carry the role ARNs, bucket names and distribution ids as
+literals copied from the stack outputs; `test/workflows.test.ts` checks the
+ARNs and bucket names against `lib/config.ts` on every CI run, so a renamed
+role or bucket fails CI instead of failing a deploy. The distribution ids
+are only checked for shape.
+
 Secrets never live in this repo. Two values are set by hand, once, with the
 commands in step 4 below: the GitHub token in Secrets Manager and the dev
 site's basic-auth credential in a CloudFront KeyValueStore.

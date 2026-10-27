@@ -37,13 +37,29 @@ function devConfig(template: Template) {
   );
 }
 
-test('three private buckets, data versioned', () => {
+test('three private buckets, data versioned with old versions expiring', () => {
   const { template } = webTemplate();
   template.resourceCountIs('AWS::S3::Bucket', 3);
   template.hasResourceProperties('AWS::S3::Bucket', {
     BucketName: 'landslidesncgs-data',
     VersioningConfiguration: { Status: 'Enabled' },
+    LifecycleConfiguration: {
+      Rules: [
+        Match.objectLike({
+          Status: 'Enabled',
+          NoncurrentVersionExpiration: { NoncurrentDays: 30 },
+        }),
+      ],
+    },
   });
+  for (const name of ['landslidesncgs-site', 'landslidesncgs-dev-site']) {
+    const bucket = Object.values(
+      template.findResources('AWS::S3::Bucket', {
+        Properties: { BucketName: name },
+      })
+    )[0];
+    assert.equal(bucket.Properties.LifecycleConfiguration, undefined);
+  }
   for (const name of [
     'landslidesncgs-site',
     'landslidesncgs-data',
