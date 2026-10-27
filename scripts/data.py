@@ -12,6 +12,7 @@ directly in Folium. Reproject to an equal-area CRS for area math.
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -1450,6 +1451,57 @@ def _overture_cache_is_fresh(output_dir: Path) -> bool:
     return age_days < OVERTURE_BUILDINGS_CACHE_TTL_DAYS
 
 
+# The overturemaps client streams Parquet parts from Overture's S3 bucket
+# through DuckDB and has no retry of its own: one transient network error on
+# any part ("AWS Error NETWORK_CONNECTION: Response body length doesn't match
+# the content-length header") fails the whole extraction. DuckDB raises its
+# own exception classes for those, none of which inherit from OSError, so a
+# plain `except OSError` never fires. These are the types worth retrying.
+OVERTURE_RETRY_ATTEMPTS = 5
+OVERTURE_RETRY_BASE_SECONDS = 2  # waits of 2, 4, 8 and 16 s between attempts
+
+
+def overture_transient_errors() -> tuple[type[BaseException], ...]:
+    """Exception types that mean the read hiccupped and is worth retrying."""
+    errors: list[type[BaseException]] = [OSError]
+    try:
+        import duckdb
+    except ImportError:  # the buildings phase is skipped without it anyway
+        return tuple(errors)
+    # HTTPException is a subclass of IOException. BinderException,
+    # ParserException and the like are programming errors and stay out.
+    errors += [duckdb.IOException, duckdb.ConnectionException]
+    return tuple(errors)
+
+
+def overture_query_with_retry(
+    query,
+    bbox: tuple[float, float, float, float],
+    *,
+    attempts: int = OVERTURE_RETRY_ATTEMPTS,
+    sleep=time.sleep,
+):
+    """Call `query("building", bbox=bbox)` up to `attempts` times, backing off
+    between transient failures. Any other exception propagates at once."""
+    transient = overture_transient_errors()
+    for attempt in range(1, attempts + 1):
+        try:
+            return query("building", bbox=bbox)
+        except transient as exc:
+            if attempt == attempts:
+                print(f"  [failed] Overture extract exhausted {attempts} attempts. Last error was:")
+                print(f"    {type(exc).__name__}: {str(exc)[:200]}")
+                raise
+            wait_s = OVERTURE_RETRY_BASE_SECONDS**attempt
+            print(
+                f"  [retry {attempt}/{attempts - 1}] Overture extract failed "
+                f"transiently ({type(exc).__name__}: {str(exc)[:120]}). "
+                f"Waiting {wait_s}s before retry..."
+            )
+            sleep(wait_s)
+    raise AssertionError("unreachable")
+
+
 def fetch_overture_buildings(
     output_dir: Path,
     force_refresh: bool = False,
@@ -1528,43 +1580,8 @@ def fetch_overture_buildings(
     # are sub-parts (architectural details like wings on a building),
     # not full footprints, and would inflate the file without adding
     # value for a reference layer.
-    #
-    # The overturemaps client streams Parquet parts from Overture's S3
-    # bucket via DuckDB. It has NO built-in retry logic - a transient
-    # network hiccup on any single Parquet part ("AWS Error
-    # NETWORK_CONNECTION: Response body length doesn't match the
-    # content-length header") kills the whole extraction. We wrap the
-    # call in a retry-with-backoff loop to survive these.
     print("  Querying Overture (theme=buildings, type=building)...")
-    import time
-
-    max_attempts = 4
-    table = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            table = _overture_geodataframe(
-                "building",
-                bbox=(minx, miny, maxx, maxy),
-            )
-            break
-        except OSError as exc:
-            # AWS network errors, Parquet read errors - all typically
-            # transient. Log, wait, retry.
-            if attempt < max_attempts:
-                wait_s = 2 ** (attempt - 1)  # 1, 2, 4 seconds
-                print(
-                    f"  [retry {attempt}/{max_attempts - 1}] Overture "
-                    f"extract failed transiently ({type(exc).__name__}). "
-                    f"Waiting {wait_s}s before retry..."
-                )
-                time.sleep(wait_s)
-            else:
-                print(
-                    f"  [failed] Overture extract exhausted "
-                    f"{max_attempts} attempts. Last error was:"
-                )
-                print(f"    {type(exc).__name__}: {str(exc)[:200]}")
-                raise
+    table = overture_query_with_retry(_overture_geodataframe, (minx, miny, maxx, maxy))
     if table is None:
         raise RuntimeError("Overture extract returned no data after retries")
     n_raw = len(table)
