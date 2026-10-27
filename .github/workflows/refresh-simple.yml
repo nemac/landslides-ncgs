@@ -90,15 +90,14 @@ jobs:
           aws s3 cp "s3://landslidesncgs-data/cache/debris_flows.gpkg" cache/debris_flows.gpkg \
             || echo "No GeoPackage in the bucket yet; the build will fetch the layer itself."
 
-      - name: Set up geopandas (micromamba)
+      # The same pinned environment as the alerts pipeline, so the shared
+      # modules (scripts/data.py, scripts/analysis.py) run on the same
+      # library versions in both places. Cached by file contents.
+      - name: Set up environment (micromamba)
         if: steps.check.outputs.action == 'build'
         uses: mamba-org/setup-micromamba@v2
         with:
-          environment-name: dfens-simple
-          create-args: >-
-            python=3.11
-            geopandas
-            requests
+          environment-file: environment.yml
           init-shell: bash
           cache-environment: true
 
