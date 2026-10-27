@@ -1478,6 +1478,7 @@ def overture_query_with_retry(
     query,
     bbox: tuple[float, float, float, float],
     *,
+    release: str | None = None,
     attempts: int = OVERTURE_RETRY_ATTEMPTS,
     sleep=time.sleep,
 ):
@@ -1486,7 +1487,7 @@ def overture_query_with_retry(
     transient = overture_transient_errors()
     for attempt in range(1, attempts + 1):
         try:
-            return query("building", bbox=bbox)
+            return query("building", bbox=bbox, release=release)
         except transient as exc:
             if attempt == attempts:
                 print(f"  [failed] Overture extract exhausted {attempts} attempts. Last error was:")
@@ -1505,6 +1506,7 @@ def overture_query_with_retry(
 def fetch_overture_buildings(
     output_dir: Path,
     force_refresh: bool = False,
+    release: str | None = None,
 ) -> gpd.GeoDataFrame | None:
     """Extract Overture building footprints for the WNC bbox, chunk by
     county, and write per-county GeoJSON files + a manifest describing
@@ -1530,6 +1532,9 @@ def fetch_overture_buildings(
         output_dir: parent directory (typically alerts/data). The
             "buildings" subdirectory is created inside it.
         force_refresh: if True, ignore the TTL and re-extract anyway.
+        release: Overture release id to read (e.g. "2026-10-21.0"). None
+            lets the client pick the latest. The id used is written to
+            the manifest as `overture_release`.
 
     Raises:
         RuntimeError if the `overturemaps` Python client isn't installed.
@@ -1581,7 +1586,10 @@ def fetch_overture_buildings(
     # not full footprints, and would inflate the file without adding
     # value for a reference layer.
     print("  Querying Overture (theme=buildings, type=building)...")
-    table = overture_query_with_retry(_overture_geodataframe, (minx, miny, maxx, maxy))
+    print(f"  Overture release: {release or 'latest'}")
+    table = overture_query_with_retry(
+        _overture_geodataframe, (minx, miny, maxx, maxy), release=release
+    )
     if table is None:
         raise RuntimeError("Overture extract returned no data after retries")
     n_raw = len(table)
@@ -1763,6 +1771,7 @@ def fetch_overture_buildings(
     manifest = {
         "generated_at": datetime.now(UTC).isoformat(),
         "source": "Overture Maps Foundation",
+        "overture_release": release,
         "bbox": list(WNC_BBOX),
         "simplify_tolerance_deg": OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
         "min_area_sqm": OVERTURE_BUILDINGS_MIN_AREA_SQM,

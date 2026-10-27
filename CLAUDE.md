@@ -53,6 +53,9 @@ for pending work, `OPERATIONS.md` for running things locally, and
 ## Deploying
 
 - Site content deploys itself on push to `development` or `master`.
+- The scheduled workflows are dispatched by EventBridge; `README.md` has the
+  table of every workflow, its trigger and what it does. Changing a schedule
+  means editing `infra/cdk/lib/trigger-stack.ts` and deploying `Trigger`.
 - CloudFront functions and every other AWS change deploy from a developer
   machine: `cd infra/cdk && npx cdk diff Web --profile jbliss-landslidesncgs`
   to review, then `npx cdk deploy Web --profile jbliss-landslidesncgs`.

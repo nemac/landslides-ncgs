@@ -1,0 +1,127 @@
+name: Refresh reference data (daily check)
+
+# Keeps the two slow-changing reference datasets current without rebuilding
+# them on a calendar:
+#   * Overture building footprints (alerts/data/buildings/, read by the
+#     DFENS Simple page) are rebuilt when Overture publishes a new release.
+#   * The NCGS debris-flow GeoPackage (cache/debris_flows.gpkg, which the
+#     Simple pipeline intersects against when heavy rain is forecast) is
+#     rebuilt when the layer's data-last-edit date moves.
+# Either is also rebuilt once its last build is 90 days old, in case an
+# upstream republishes without moving its marker, and both are rebuilt when
+# `force` is set. scripts/reference_check.py makes the decision in seconds,
+# logging both upstream values next to the recorded ones on every run; the
+# heavy steps run only when it says so. The GeoPackage is shared through the
+# data bucket under cache/, a prefix CloudFront does not serve.
+#
+# Trigger: EventBridge Scheduler dispatches this at 05:00 UTC every day
+# (infra/cdk/lib/trigger-stack.ts); the cron below is a late-running backup.
+# This replaced the nightly refresh-data.yml schedule on 2026-10-27.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild both datasets even if nothing changed upstream"
+        type: boolean
+        default: false
+
+concurrency:
+  group: refresh-reference
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # assume the AWS role with OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ROLE: arn:aws:iam::710482330128:role/landslides-github-prod
+  DATA_BUCKET: landslidesncgs-data
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # Most days this is the check alone, well under a minute. The headroom is
+    # for a rebuild: ~10-20 min for the debris layer, 5-15 min for buildings.
+    timeout-minutes: 90
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python (stdlib check)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check both upstreams for changes
+        id: check
+        env:
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        run: python scripts/reference_check.py --out out
+
+      # ---- Rebuild path: something changed, is 90 days old, or was forced ----
+      - name: Configure AWS credentials (OIDC)
+        if: steps.check.outputs.any == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up environment (micromamba)
+        if: steps.check.outputs.any == 'true'
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          init-shell: bash
+          cache-environment: true
+
+      - name: Rebuild the debris-flow GeoPackage
+        if: steps.check.outputs.debris == 'true'
+        shell: bash -el {0}
+        run: |
+          python scripts/refresh.py --debris-cache
+          aws s3 cp cache/debris_flows.gpkg "s3://${DATA_BUCKET}/cache/debris_flows.gpkg"
+
+      - name: Rebuild the building footprints
+        if: steps.check.outputs.buildings == 'true'
+        shell: bash -el {0}
+        env:
+          OVERTURE_RELEASE: ${{ steps.check.outputs.overture_release }}
+        run: python scripts/refresh.py --buildings
+
+      # The extraction writes a complete set of per-county files, so the
+      # bucket is made to mirror it: counties that stop being produced are
+      # removed rather than left behind.
+      - name: Upload the building footprints (one day)
+        if: steps.check.outputs.buildings == 'true'
+        run: |
+          aws s3 sync alerts/data/buildings "s3://${DATA_BUCKET}/alerts/data/buildings" \
+            --delete \
+            --content-type application/json \
+            --cache-control "public, max-age=86400"
+
+      # Recorded only after every requested rebuild succeeded, so a failed
+      # rebuild is retried on the next daily check.
+      - name: Record what was built
+        if: steps.check.outputs.any == 'true'
+        run: |
+          aws s3 cp out/reference_state.json "s3://${DATA_BUCKET}/alerts/data/reference_state.json" \
+            --content-type application/json \
+            --cache-control "public, max-age=60"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Reference data check"
+            [ -f out/check.json ] && echo '```json' && cat out/check.json && echo && echo '```'
+            echo "- Outcome: \`${{ job.status }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

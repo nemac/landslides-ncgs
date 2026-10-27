@@ -43,7 +43,7 @@ test('secret, function and three schedules exist by name', () => {
   });
   template.resourceCountIs('AWS::Scheduler::Schedule', 3);
   scheduleNamed(template, 'landslides-refresh-simple-10min');
-  scheduleNamed(template, 'landslides-refresh-data-daily');
+  scheduleNamed(template, 'landslides-refresh-reference-daily');
   scheduleNamed(template, 'landslides-github-token-expiry-reminder-2027-09-21');
 });
 
@@ -57,15 +57,15 @@ test('ten-minute schedule is enabled with rate(10 minutes) and no input', () => 
   assert.equal(props.Target.Input, undefined);
 });
 
-test('daily schedule runs at 04:00 UTC with the refresh-data payload', () => {
+test('daily schedule runs at 05:00 UTC with the refresh-reference payload', () => {
   const props = scheduleNamed(
     triggerTemplate(),
-    'landslides-refresh-data-daily'
+    'landslides-refresh-reference-daily'
   );
-  assert.equal(props.ScheduleExpression, 'cron(0 4 * * ? *)');
+  assert.equal(props.ScheduleExpression, 'cron(0 5 * * ? *)');
   assert.equal(props.State, 'ENABLED');
   assert.deepEqual(JSON.parse(props.Target.Input), {
-    workflow_file: 'refresh-data.yml',
+    workflow_file: 'refresh-reference.yml',
   });
 });
 

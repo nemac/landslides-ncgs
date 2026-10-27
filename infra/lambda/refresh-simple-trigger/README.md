@@ -15,7 +15,7 @@ workflow's concurrency group.
 | Secrets Manager secret | `landslides/github-dispatch-token` | |
 | Lambda function | `landslides-refresh-simple-trigger` (python3.12, `handler.py`) | |
 | Schedule | `landslides-refresh-simple-10min` | `rate(10 minutes)`, dispatches `refresh-simple.yml` |
-| Schedule | `landslides-refresh-data-daily` | `cron(0 4 * * ? *)` UTC, dispatches `refresh-data.yml` |
+| Schedule | `landslides-refresh-reference-daily` | `cron(0 5 * * ? *)` UTC, dispatches `refresh-reference.yml` |
 | Schedule | `landslides-github-token-expiry-reminder-<date>` | once, a month before the token expires, dispatches `token-expiry-reminder.yml` |
 
 The roles for the Lambda and the scheduler are created by the same stack.
@@ -70,6 +70,6 @@ Edit `handler.py`, run the tests, deploy the stack:
   Each run prints `Dispatched <workflow> ... HTTP 204` or a GitHub API
   error (401 means the token expired, was revoked, or is still the placeholder).
 - GitHub side: Actions tab, runs with event `workflow_dispatch` about every
-  10 minutes for DFENS Simple and once a day at 04:00 UTC for the alerts.
+  10 minutes for DFENS Simple and once a day at 05:00 UTC for the reference check.
 - Page side: https://landslidesncgs.org/simple/data/status.json
   `checked_at` should never be more than about 12 minutes old.

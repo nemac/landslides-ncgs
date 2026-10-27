@@ -14,12 +14,12 @@ alerts/
   index.html      The dashboard page (not reachable in production)
   css/styles.css  Dark theme
   js/             config.js, map.js, alerts.js, app.js
-  data/           not in git; written nightly to S3 by refresh-data.yml
+  data/           not in git; buildings/ written to S3 by refresh-reference.yml, the rest by a manual refresh-data.yml run
 ```
 
-- `alerts/data/` is live. The nightly pipeline in `scripts/` still writes
-  it, and DFENS Simple reads the building footprints from
-  `alerts/data/buildings/`.
+- `alerts/data/buildings/` is live: the daily reference check rebuilds it
+  when Overture publishes a release, and DFENS Simple reads it. The rest of
+  `alerts/data/` is refreshed only by a manual `refresh-data.yml` run.
 - The page and its JavaScript are kept in case the full view comes back.
   `simple/js/map.js` began as a copy of `alerts/js/map.js`; the two have
   since diverged, and consolidating them into one shared module is a

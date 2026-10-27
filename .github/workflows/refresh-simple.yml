@@ -1,10 +1,11 @@
 name: Refresh DFENS Simple data (every 10 min)
 
 # Data pipeline for the DFENS Simple dashboard at /simple/ (simple/pipeline/).
-# Independent of the nightly refresh-data.yml: nothing is committed to git,
-# outputs go straight to s3://landslidesncgs-data/simple/data/. The debris-flow
-# actions/cache key is deliberately the same as refresh-data.yml's so the
-# monthly cold fetch happens once for both workflows.
+# Nothing is committed to git; outputs go straight to
+# s3://landslidesncgs-data/simple/data/. The debris-flow GeoPackage it
+# intersects against is kept current in the same bucket under cache/ by
+# refresh-reference.yml, so a heavy-rain build downloads it instead of
+# re-fetching 225k polygons.
 #
 # Each run:
 #   1. ndfd_check.py (stdlib, ~5 s): has NDFD changed since the last
@@ -23,7 +24,7 @@ name: Refresh DFENS Simple data (every 10 min)
 # the concurrency group. Runs can still start a few minutes late under
 # load. Worst-case lag from an Esri update to the page is roughly
 # cron interval + start delay + run time (~30 s skip, ~1-2 min build,
-# ~3-5 min build with heavy rain, ~20 min on the monthly cache rebuild).
+# ~3-5 min build with heavy rain, ~20 min if the GeoPackage must be fetched).
 
 on:
   schedule:
@@ -72,22 +73,22 @@ jobs:
           FORCE: ${{ github.event.inputs.force || 'false' }}
         run: python simple/pipeline/ndfd_check.py --out out
 
-      # ---- Build path: NDFD changed ------------------------------------
-      # The debris-flow cache (~570 MB) is only restored when there is
-      # >= 5" rain over WNC to intersect.
-      - name: Compute cache month
-        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
-        id: cachemonth
-        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache debris-flow gpkg
-        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
-        uses: actions/cache@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          path: cache
-          key: debris-gpkg-v1-${{ steps.cachemonth.outputs.ym }}
-          restore-keys: |
-            debris-gpkg-v1-
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ---- Build path: NDFD changed ------------------------------------
+      # The debris-flow GeoPackage (~570 MB) is only needed when there is
+      # >= 5" rain over WNC to intersect. If the bucket has none yet,
+      # refresh_simple.py fetches the layer itself (~20 min).
+      - name: Fetch the debris-flow GeoPackage
+        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
+        run: |
+          mkdir -p cache
+          aws s3 cp "s3://landslidesncgs-data/cache/debris_flows.gpkg" cache/debris_flows.gpkg \
+            || echo "No GeoPackage in the bucket yet; the build will fetch the layer itself."
 
       - name: Set up geopandas (micromamba)
         if: steps.check.outputs.action == 'build'
@@ -107,12 +108,6 @@ jobs:
         run: python simple/pipeline/refresh_simple.py --out out
 
       # ---- Publish ------------------------------------------------------
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
-
       # Data files first, then status, so the status never points at
       # data that isn't up yet. Short max-age so CloudFront and browsers
       # pick up new files within a minute without an invalidation.

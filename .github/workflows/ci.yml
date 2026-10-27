@@ -40,7 +40,7 @@ jobs:
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
 
-  # The nightly pipeline's tests import scripts/data.py, which needs
+  # The alerts pipeline's tests import scripts/data.py, which needs
   # geopandas and duckdb, so they run in the same pinned environment the
   # pipeline itself uses. The environment is cached by file contents.
   pipeline:
@@ -55,7 +55,7 @@ jobs:
           environment-file: environment.yml
           init-shell: bash
           cache-environment: true
-      - name: Test the nightly pipeline modules
+      - name: Test the alerts pipeline modules
         shell: bash -el {0}
         run: python -m unittest discover -s scripts -p "test_*.py" -v
 

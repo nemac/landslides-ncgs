@@ -10,17 +10,19 @@ AWS setup is in `infra/README.md`.
 |---|---|---|---|
 | Main site and both dashboards (static files) | `deploy-prod.yml` on push to `master`; `deploy-dev.yml` on push to `development` | site bucket, dev-site bucket | `https://landslidesncgs.org`, `https://dev.landslidesncgs.org` (basic auth) |
 | DFENS Simple pipeline (`simple/pipeline/`) | `refresh-simple.yml`, dispatched every 10 minutes by EventBridge Scheduler | `s3://landslidesncgs-data/simple/data/` | `/simple/data/` on both hosts |
-| Nightly alerts pipeline (`scripts/refresh.py`) | `refresh-data.yml`, dispatched daily at 04:00 UTC by EventBridge Scheduler | `s3://landslidesncgs-data/alerts/data/` | `/alerts/data/` on both hosts |
+| Reference data: building footprints and the debris-flow GeoPackage | `refresh-reference.yml`, dispatched daily at 05:00 UTC by EventBridge Scheduler; rebuilds only on upstream change, after 90 days, or on `force` | `alerts/data/buildings/`, `cache/debris_flows.gpkg` and `alerts/data/reference_state.json` in the data bucket | `/alerts/data/` on both hosts (`cache/` is not served) |
+| Alerts pipeline (`scripts/refresh.py`) | `refresh-data.yml`, by hand only since 2026-10-27 | `s3://landslidesncgs-data/alerts/data/` | `/alerts/data/` on both hosts |
 | AWS resources (`infra/cdk/`) | by hand from a developer machine | CloudFormation stacks | |
 
 Nothing under `alerts/data/` or `simple/data/` is in git. The dev site reads
 the production data bucket, so it always shows live data.
 
 The SIREN alerts dashboard under `alerts/` has been offline since
-2026-10-22; its pages redirect to `/simple/`. Its nightly pipeline still
-runs because DFENS Simple reads the building footprints it produces, and
-because the two pipelines share `scripts/data.py`, `scripts/analysis.py`
-and `scripts/config.py`.
+2026-10-22; its pages redirect to `/simple/`. Its pipeline no longer runs
+on a schedule. The two things DFENS Simple still needs from it, the
+building footprints and the debris-flow GeoPackage, are kept current by
+the daily reference check instead, and the two pipelines share
+`scripts/data.py`, `scripts/analysis.py` and `scripts/config.py`.
 
 ## Local preview of the site
 
@@ -87,7 +89,7 @@ debris-flow layer into `cache/debris_flows.gpkg` (about 560 MB, kept for 30
 days). That one-time load takes 15 to 20 minutes; later builds take one to
 two minutes. Details of the pipeline are in `simple/README.md`.
 
-## Nightly alerts pipeline locally
+## Alerts pipeline locally
 
 ```bash
 conda activate defns-refresh
@@ -102,17 +104,25 @@ with its timestamps and source. The run also refreshes the building
 footprints under `alerts/data/buildings/` when their manifest is older
 than 30 days (5 to 15 minutes the first time; see below).
 
-A non-zero exit means something failed. In CI nothing is uploaded on a
-non-zero exit, so the bucket keeps the previous day's files. See
-`scripts/README.md` for the exit codes.
+A non-zero exit means something failed. When run from the Actions tab
+nothing is uploaded on a non-zero exit, so the bucket keeps the previous
+files. See `scripts/README.md` for the exit codes.
+
+To rebuild only the reference datasets, as the daily workflow does:
+
+```bash
+python scripts/refresh.py --debris-cache                        # re-fetch the NCGS layer into cache/
+OVERTURE_RELEASE=2026-10-21.0 python scripts/refresh.py --buildings   # re-extract footprints from that release
+python scripts/reference_check.py --out out                     # see what the daily check would decide
+```
 
 ### Historical events
 
 `python scripts/refresh.py --hindcast` regenerates the historical event
 files under `alerts/data/historical/` for every event in
-`scripts/events.py`; `--hindcast <event_id>` does one. The nightly run never
-does this, and the nightly upload never deletes, so historical files reach
-the bucket only by hand:
+`scripts/events.py`; `--hindcast <event_id>` does one. No workflow does
+this, and the manual workflow's upload never deletes, so historical files
+reach the bucket only by hand:
 
 ```bash
 aws s3 sync alerts/data/historical s3://landslidesncgs-data/alerts/data/historical \
@@ -157,7 +167,7 @@ These files were read only by the offline alerts dashboard.
 |---|---|
 | Main site pages | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` |
 | DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
-| Alerts dashboard (offline) and nightly pipeline | `alerts/`, `scripts/` |
+| Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
 | Python environment | `defns-refresh`, from `environment.yml` |
 | Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |
@@ -169,27 +179,37 @@ The "Building footprints" layer on the dashboard comes from Overture Maps
 Foundation through their Python client, chunked by county so the page can
 load only what is in view.
 
-1. `scripts/refresh.py` runs the buildings phase on every run.
-2. `fetch_overture_buildings` in `scripts/data.py` skips the slow work when
-   `alerts/data/buildings/manifest.json` is younger than
-   `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` (30). In CI the manifest is fetched
-   from the bucket first and its modification time restored, so the
-   extraction runs about monthly.
-3. When stale or missing, it queries Overture's hosted GeoParquet through
-   DuckDB for the WNC bounding box, drops footprints under 20 square
-   metres, spatially joins with counties, and writes one GeoJSON per county
-   plus the manifest. Geometry simplification is off
+1. `refresh-reference.yml` runs `scripts/reference_check.py` daily. It
+   reads the latest Overture release id from Overture's STAC catalog and
+   compares it with the release recorded in `reference_state.json` from
+   the last build. The footprints are rebuilt when the release changed,
+   when the last build is 90 days old, or when the workflow's `force`
+   input is set.
+2. A rebuild runs `python scripts/refresh.py --buildings` with
+   `OVERTURE_RELEASE` pinned to that release. `fetch_overture_buildings` in
+   `scripts/data.py` queries Overture's hosted GeoParquet through DuckDB
+   for the WNC bounding box, retrying transient network errors, drops
+   footprints under 20 square metres, spatially joins with counties, and
+   writes one GeoJSON per county plus the manifest, which records the
+   release id. Geometry simplification is off
    (`OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0`); the files are large, which is
    a known backlog item.
+3. The workflow syncs the folder to the bucket with `--delete`, so the
+   bucket mirrors the extraction.
 4. The page loads the manifest once and fetches county files on demand
    above zoom 12, keeping up to 20 counties in memory.
+
+The debris-flow GeoPackage is handled the same way by the same workflow,
+keyed on the NCGS layer's data-last-edit date, and stored in the bucket
+under `cache/` where CloudFront does not serve it. The Simple pipeline
+downloads it when heavy rain is forecast.
 
 Output under `alerts/data/buildings/`: `manifest.json` (generated time,
 bbox, county list with counts and sizes) and one `{GEOID}.geojson` per
 county, each feature carrying only the Overture id and the polygon.
 
-The first extraction takes 5 to 15 minutes. To force a fresh one, delete
-`alerts/data/buildings/manifest.json` and run `python scripts/refresh.py`.
+An extraction takes 5 to 15 minutes. To force one in production, run
+`refresh-reference.yml` from the Actions tab with `force` checked.
 The `overturemaps`, `duckdb` and `pyarrow` packages come from the `pip:`
 section of `environment.yml` and are imported lazily, so the rest of the
 pipeline runs without them.
