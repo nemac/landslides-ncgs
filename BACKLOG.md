@@ -5,6 +5,15 @@ details belong in an issue or PR once someone picks it up.
 
 ## Committed to
 
+- **Deploy the three stacks once PR #33 (development into master) merges.**
+  Added 2026-10-27. The reference-check schedule, the scoped delete grant and
+  the bucket lifecycle rule exist only in code until then. From `infra/cdk/`
+  with a fresh `aws sso login --profile jbliss-landslidesncgs`:
+  `npx cdk deploy Trigger Ci Web --profile jbliss-landslidesncgs`. Then run
+  `refresh-reference.yml` by hand from the Actions tab (no `force` needed;
+  with no recorded state it rebuilds both datasets, 20 to 30 minutes) and
+  confirm `alerts/data/reference_state.json` and `cache/debris_flows.gpkg`
+  appear in the data bucket. Done 2026-10-28.
 - **Update documentation.** Done 2026-10-27: `README.md`, `OPERATIONS.md`,
   `scripts/README.md`, `alerts/README.md` and `simple/README.md` describe
   how the site is actually built, refreshed and deployed. Keep them that
