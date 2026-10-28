@@ -429,6 +429,7 @@ def _fetch_nc_counties(strict: bool = False) -> gpd.GeoDataFrame:
     The per-state loop also makes failures granular. By default a failed
     state is skipped: the debris-flow augmentation would rather tag most
     polygons than none. With strict=True the first failure propagates,
+    and a state that answers with no counties at all raises RuntimeError,
     for callers that must have every state or nothing (the buildings
     rebuild, whose output is mirrored to the bucket with --delete).
 
@@ -459,14 +460,17 @@ def _fetch_nc_counties(strict: bool = False) -> gpd.GeoDataFrame:
                 params,
                 label=f"{abbrev} counties",
             )
-            feats = page.get("features", [])
-            print(f"    {abbrev}: {len(feats)} counties")
-            all_features.extend(feats)
         except Exception as e:
             if strict:
                 print(f"    ! {abbrev} county fetch failed: {e}")
                 raise
             print(f"    ! {abbrev} county fetch failed: {e}; continuing")
+            continue
+        feats = page.get("features", [])
+        print(f"    {abbrev}: {len(feats)} counties")
+        if strict and not feats:
+            raise RuntimeError(f"{abbrev} county fetch returned no counties")
+        all_features.extend(feats)
 
     if not all_features:
         print("  ! No county features returned from any state")

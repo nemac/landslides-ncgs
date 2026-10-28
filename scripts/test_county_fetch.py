@@ -13,6 +13,10 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# The buildings rebuild imports duckdb, whose native module cannot be loaded
+# twice in one process. Import it here so the sys.modules snapshot that
+# patch.dict restores below still contains it between rebuild tests.
+import duckdb  # noqa: E402, F401
 import geopandas as gpd  # noqa: E402
 from shapely.geometry import box  # noqa: E402
 
@@ -40,6 +44,19 @@ def _census_failing_for(failing_fips: str):
     return request
 
 
+def _census_empty_for(empty_fips: str):
+    """A stand-in for _agol_request_with_retry: one state's query succeeds
+    but returns no counties, every other state returns one county."""
+
+    def request(url, params, label, **kwargs):
+        fips = params["where"].split("'")[1]
+        if fips == empty_fips:
+            return {"features": []}
+        return {"features": [_county_feature(fips, f"County {fips}")]}
+
+    return request
+
+
 class CountyFetchTest(unittest.TestCase):
     def test_lenient_fetch_keeps_the_states_that_answered(self):
         with mock.patch.object(data, "_agol_request_with_retry", _census_failing_for("47")):
@@ -50,6 +67,11 @@ class CountyFetchTest(unittest.TestCase):
     def test_strict_fetch_fails_when_one_state_fails(self):
         with mock.patch.object(data, "_agol_request_with_retry", _census_failing_for("47")):
             with self.assertRaises(ConnectionError):
+                data._fetch_nc_counties(strict=True)
+
+    def test_strict_fetch_fails_when_one_state_returns_no_counties(self):
+        with mock.patch.object(data, "_agol_request_with_retry", _census_empty_for("51")):
+            with self.assertRaises(RuntimeError):
                 data._fetch_nc_counties(strict=True)
 
 
@@ -76,6 +98,16 @@ class BuildingsRebuildTest(unittest.TestCase):
             mock.patch.object(data, "_agol_request_with_retry", _census_failing_for("47")),
         ):
             with self.assertRaises(ConnectionError):
+                data.fetch_overture_buildings(output_dir=Path(out), release="2026-10-21.0")
+            self.assertEqual(list(Path(out).rglob("*.geojson")), [])
+
+    def test_rebuild_fails_when_a_state_returns_no_counties(self):
+        with (
+            tempfile.TemporaryDirectory() as out,
+            mock.patch.dict(sys.modules, {"overturemaps": self._fake_overture()}),
+            mock.patch.object(data, "_agol_request_with_retry", _census_empty_for("51")),
+        ):
+            with self.assertRaises(RuntimeError):
                 data.fetch_overture_buildings(output_dir=Path(out), release="2026-10-21.0")
             self.assertEqual(list(Path(out).rglob("*.geojson")), [])
 
