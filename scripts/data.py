@@ -1488,10 +1488,10 @@ def fetch_overture_buildings(
         "Overture's hosted GeoParquet on AWS)."
     )
 
-    # Lazy import: overturemaps + duckdb are heavy dependencies and we
-    # only need them when actually extracting. Importing at module load
-    # would slow every refresh.py invocation, including the 99% that
-    # hit the cache and skip this work.
+    # Lazy import: overturemaps + duckdb are heavy dependencies that only
+    # a `refresh.py --buildings` run (the daily refresh-reference.yml
+    # workflow) needs. Importing at module load would slow every other
+    # refresh.py invocation, none of which extracts footprints.
     try:
         # The top-level `geodataframe` function is the canonical API per
         # Overture's docs and README examples. Internally it uses DuckDB

@@ -786,8 +786,9 @@ window.DEFNS_MAP = (function () {
         _buildingsManifestFetch = null;
         console.error('[DEFNS] Failed to load buildings manifest:', err);
         console.error(
-          '[DEFNS] Tip: ensure scripts/refresh.py has been run ' +
-            'at least once so data/buildings/manifest.json exists.'
+          '[DEFNS] Tip: the daily refresh-reference.yml workflow writes ' +
+            'data/buildings/. Locally, run scripts/refresh.py --buildings ' +
+            'or sync that folder from S3 so manifest.json exists.'
         );
       });
   }
