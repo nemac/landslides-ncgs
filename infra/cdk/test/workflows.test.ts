@@ -120,13 +120,35 @@ test('refresh workflows use the production role and the data bucket', () => {
 // The building footprints have one owner: the daily reference workflow
 // rebuilds them from a pinned Overture release and records what it built.
 // If the manual alerts run also wrote them, the recorded release would no
-// longer describe what is in the bucket.
+// longer describe what is in the bucket. refresh-data.yml syncs the whole
+// alerts data folder, so its protection is the --exclude flag on that sync;
+// the commands are read with their continuation lines joined so the check
+// does not depend on which line the flag sits on.
+const EXCLUDE_BUILDINGS = /--exclude ["']?buildings\/\*["']?/;
+
+function s3Commands(workflow: string): string[] {
+  const joined = workflow.replace(/\\\n\s*/g, ' ');
+  return joined.match(/aws s3 [^\n]*/g) ?? [];
+}
+
 test('only refresh-reference.yml reads or writes the buildings prefix', () => {
   const all = workflows();
-  const touchesBuildings = /aws s3 (sync|cp)[^\n]*buildings/;
-  assert.match(all['refresh-reference.yml'], touchesBuildings);
-  assert.doesNotMatch(all['refresh-data.yml'], touchesBuildings);
-  assert.doesNotMatch(all['refresh-simple.yml'], touchesBuildings);
+  const buildingsPrefix = /\balerts\/data\/buildings\b/;
+  assert.ok(
+    s3Commands(all['refresh-reference.yml']).some((cmd) =>
+      buildingsPrefix.test(cmd)
+    ),
+    'refresh-reference.yml syncs the buildings prefix'
+  );
+  for (const file of ['refresh-data.yml', 'refresh-simple.yml']) {
+    for (const cmd of s3Commands(all[file])) {
+      const withoutExclude = cmd.replace(EXCLUDE_BUILDINGS, '');
+      assert.doesNotMatch(withoutExclude, /buildings/, `${file}: ${cmd}`);
+      if (/^aws s3 sync \S*alerts\/data\b/.test(cmd)) {
+        assert.match(cmd, EXCLUDE_BUILDINGS, `${file}: ${cmd}`);
+      }
+    }
+  }
 });
 
 test('deploy workflows name the right buckets and a plausible distribution id', () => {
