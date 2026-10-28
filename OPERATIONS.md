@@ -66,11 +66,11 @@ days.
 A fresh checkout has empty `alerts/data/` and `simple/data/` folders. The
 dashboard shows its stale-data banner until `simple/data/` exists.
 
-With AWS access (profile `jbliss-landslidesncgs`):
+With AWS access (the `landslidesncgs` SSO profile; `infra/README.md` sets it up):
 
 ```bash
-aws s3 sync s3://landslidesncgs-data/simple/data simple/data --profile jbliss-landslidesncgs
-aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile jbliss-landslidesncgs   # ~870 MB, mostly building footprints
+aws s3 sync s3://landslidesncgs-data/simple/data simple/data --profile landslidesncgs
+aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile landslidesncgs   # ~870 MB, mostly building footprints
 ```
 
 Without AWS access, run the pipelines below; they write the same files.
@@ -147,7 +147,7 @@ reach the bucket only by hand:
 
 ```bash
 aws s3 sync alerts/data/historical s3://landslidesncgs-data/alerts/data/historical \
-  --content-type application/json --cache-control "public, max-age=300" --profile jbliss-landslidesncgs
+  --content-type application/json --cache-control "public, max-age=300" --profile landslidesncgs
 ```
 
 These files were read only by the offline alerts dashboard.
@@ -159,9 +159,8 @@ These files were read only by the offline alerts dashboard.
   the tree to the bucket and invalidate CloudFront; they take about a
   minute. `master` only accepts pull requests whose CI check passed.
 - **CloudFront functions and every other AWS change:** from `infra/cdk/`,
-  `npx cdk diff Web --profile jbliss-landslidesncgs` to review, then
-  `npx cdk deploy Web --profile jbliss-landslidesncgs` (log in first with
-  `aws sso login --profile jbliss-landslidesncgs`). See `infra/README.md`.
+  `npx cdk diff Web` to review, then `npx cdk deploy Web` (log in first
+  with `aws sso login --profile landslidesncgs`). See `infra/README.md`.
 - **Pipelines:** nothing to deploy. The workflows run from the `master`
   branch on their schedules. Run one by hand from the Actions tab
   (`refresh-simple.yml` has a `force` input to rebuild even when NDFD has

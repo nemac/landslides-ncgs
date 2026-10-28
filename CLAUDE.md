@@ -57,9 +57,11 @@ for pending work, `OPERATIONS.md` for running things locally, and
   table of every workflow, its trigger and what it does. Changing a schedule
   means editing `infra/cdk/lib/trigger-stack.ts` and deploying `Trigger`.
 - CloudFront functions and every other AWS change deploy from a developer
-  machine: `cd infra/cdk && npx cdk diff Web --profile jbliss-landslidesncgs`
-  to review, then `npx cdk deploy Web --profile jbliss-landslidesncgs`.
-  Log in first with `aws sso login --profile jbliss-landslidesncgs`.
+  machine: `cd infra/cdk && npx cdk diff Web` to review, then
+  `npx cdk deploy Web`. `cdk.json` names the `landslidesncgs` SSO profile
+  (set up as in `infra/README.md`), so no flag is needed. `aws` commands
+  always pass `--profile landslidesncgs`, because `AWS_PROFILE` may point
+  at another account. Log in first with `aws sso login --profile landslidesncgs`.
 - When a change needs both a function update and new site files, deploy the
   function first, then merge to `master`, so old links never 404 for long.
 
@@ -92,18 +94,17 @@ for pending work, `OPERATIONS.md` for running things locally, and
 
 Details live in `BACKLOG.md`; this is the short list.
 
-- Rewrite `OPERATIONS.md` and `alerts/README.md` to match how the site is
-  actually built, refreshed and deployed.
 - Link DFENS Simple from the home page when it is ready for the public.
-- Add lint, format check, ruff and pipeline tests to `ci.yml`.
-- Reproducible snapshots of flagged pipeline runs in S3.
+- Require all five CI checks in the master ruleset; test `scripts/analysis.py`.
+- Make the archived flagged Simple runs reproducible (inputs, thresholds,
+  commit).
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
+- Slack dev requests: a Slack request opens a GitHub issue, an agent run in
+  Actions opens a PR with a `<branch>.landslidesncgs.org` preview.
 - Content-Security-Policy header, started in report-only mode.
-- Publish partial `refresh.py` results safely by splitting its exit codes.
+- A custom 404 page: a missing object currently returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
-- Resolve config drift between `scripts/config.py` and `alerts/js/config.js`.
 - Flat-site cleanup: one shared stylesheet for header, nav, footer and tokens.
 - Overture buildings layer: vector tiles instead of per-county GeoJSON.
-- A custom 404 page: a missing object currently returns S3's raw 403 XML.
-- Slack dev requests: a Slack request opens a GitHub issue, an agent run in
-  Actions opens a PR with a `pr-N.landslidesncgs.org` preview.
+- Deferred while the alerts dashboard is offline: publish partial
+  `refresh.py` results safely; a config parity test for `alerts/js/config.js`.

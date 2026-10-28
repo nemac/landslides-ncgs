@@ -7,8 +7,8 @@
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "synth": "cdk synth",
-    "diff": "cdk diff --all --profile jbliss-landslidesncgs",
-    "deploy": "cdk deploy --all --profile jbliss-landslidesncgs"
+    "diff": "cdk diff --all",
+    "deploy": "cdk deploy --all"
   },
   "dependencies": {
     "@types/node": "22.20.5",

@@ -22,7 +22,7 @@ The roles for the Lambda and the scheduler are created by the same stack.
 
 ## First-time setup
 
-1. `cd infra/cdk && npx cdk deploy Trigger --profile jbliss-landslidesncgs`.
+1. `cd infra/cdk && npx cdk deploy Trigger`.
    The secret is created with a random placeholder and every schedule is
    enabled; until the real token is set the Lambda logs a GitHub 401 every
    run, which is harmless.
@@ -33,11 +33,11 @@ The roles for the Lambda and the scheduler are created by the same stack.
    2026-10-21 expires 2027-10-21 and can be reused.
 3. Store it without echoing it anywhere:
    ```bash
-   read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token --secret-string "$TOKEN" --profile jbliss-landslidesncgs && unset TOKEN
+   read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token --secret-string "$TOKEN" --profile landslidesncgs && unset TOKEN
    ```
 4. Test one invocation:
    ```bash
-   aws lambda invoke --function-name landslides-refresh-simple-trigger --profile jbliss-landslidesncgs /dev/stdout
+   aws lambda invoke --function-name landslides-refresh-simple-trigger --profile landslidesncgs /dev/stdout
    ```
    A successful invoke returns `{"status": 204, ...}` and a new
    `workflow_dispatch` run appears in the Actions tab within seconds.
@@ -61,7 +61,7 @@ Edit `handler.py`, run the tests, deploy the stack:
 
 ```bash
 (cd infra/lambda/refresh-simple-trigger && python3 -m unittest test_handler)
-(cd infra/cdk && npx cdk deploy Trigger --profile jbliss-landslidesncgs)
+(cd infra/cdk && npx cdk deploy Trigger)
 ```
 
 ## Checking on it

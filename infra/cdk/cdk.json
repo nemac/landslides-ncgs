@@ -1,5 +1,6 @@
 {
   "app": "npx tsx bin/app.ts",
+  "profile": "landslidesncgs",
   "context": {
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
