@@ -61,7 +61,7 @@ jobs:
       environment: preview
       role_arn: arn:aws:iam::710482330128:role/landslides-github-preview
       bucket: landslidesncgs-preview-site
-      distribution_id: PREVIEW_DISTRIBUTION_ID
+      distribution_id: E1W9MDWC0X94YW
       site_url: https://${{ needs.slug.outputs.slug }}.landslidesncgs.org
       folder: ${{ needs.slug.outputs.slug }}
 
@@ -93,6 +93,6 @@ jobs:
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id PREVIEW_DISTRIBUTION_ID \
+            --distribution-id E1W9MDWC0X94YW \
             --paths "/*" \
             --query 'Invalidation.Id' --output text
