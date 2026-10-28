@@ -1,0 +1,98 @@
+name: PR preview site
+
+# Every open pull request into development gets its own password-protected
+# site at <slug>.landslidesncgs.org, where <slug> is the branch name made
+# into a DNS label (infra/preview/preview-slug.js). Each push redeploys it
+# from the merge of the branch into development, so it shows what merging
+# would do; closing or merging the pull request deletes it.
+#
+# All previews share one bucket, one folder per slug, and one distribution
+# that claims *.landslidesncgs.org (the Web stack). The role ARN and
+# distribution id come from the CDK outputs (infra/README.md). Pull requests
+# from forks are skipped: they get no OIDC token, and the preview role
+# should only ever run this repo's own branches.
+
+on:
+  pull_request:
+    branches: [development]
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  id-token: write
+  contents: read
+
+# A newer push, or the close, supersedes whatever this pull request's
+# previous run was still doing.
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  slug:
+    name: Name the preview
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      slug: ${{ steps.slug.outputs.slug }}
+    steps:
+      # The head commit, not the merge ref: a closed pull request may no
+      # longer have a merge ref to check out.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: infra/preview
+      - name: Make the branch name a DNS label
+        id: slug
+        env:
+          BRANCH: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          SLUG=$(node infra/preview/preview-slug.js "$BRANCH" "$PR_NUMBER")
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "Preview for $BRANCH: https://$SLUG.landslidesncgs.org"
+
+  deploy:
+    name: Deploy the preview
+    needs: slug
+    if: github.event.action != 'closed'
+    uses: ./.github/workflows/deploy-site.yml
+    with:
+      environment: preview
+      role_arn: arn:aws:iam::710482330128:role/landslides-github-preview
+      bucket: landslidesncgs-preview-site
+      distribution_id: PREVIEW_DISTRIBUTION_ID
+      site_url: https://${{ needs.slug.outputs.slug }}.landslidesncgs.org
+      folder: ${{ needs.slug.outputs.slug }}
+
+  remove:
+    name: Remove the preview
+    needs: slug
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: preview
+    env:
+      SLUG: ${{ needs.slug.outputs.slug }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::710482330128:role/landslides-github-preview
+          aws-region: us-east-1
+
+      # An empty slug would make this the whole bucket; refuse it.
+      - name: Delete the preview's folder
+        run: |
+          if [ -z "$SLUG" ]; then
+            echo "No slug; refusing to delete from the bucket root." >&2
+            exit 1
+          fi
+          aws s3 rm "s3://landslidesncgs-preview-site/$SLUG/" --recursive
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id PREVIEW_DISTRIBUTION_ID \
+            --paths "/*" \
+            --query 'Invalidation.Id' --output text

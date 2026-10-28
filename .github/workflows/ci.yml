@@ -37,6 +37,8 @@ jobs:
         working-directory: infra/cdk
       - name: Test the CloudFront Function pieces
         run: node --test "infra/cloudfront/test/*.test.js"
+      - name: Test the preview-site naming script
+        run: node --test "infra/preview/test/*.test.js"
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
 

@@ -37,7 +37,43 @@ are only checked for shape.
 
 Secrets never live in this repo. Two values are set by hand, once, with the
 commands in step 4 below: the GitHub token in Secrets Manager and the dev
-site's basic-auth credential in a CloudFront KeyValueStore.
+site's basic-auth credential in a CloudFront KeyValueStore. The pull request
+preview sites share that KeyValueStore, so the same credential opens them.
+
+## Pull request previews
+
+`.github/workflows/pr-preview.yml` deploys every open pull request into
+`development` to `<slug>.landslidesncgs.org` (see `OPERATIONS.md` for how
+the slug is chosen). The pieces, all in the `Web` and `Ci` stacks:
+
+| Piece | Name |
+|---|---|
+| Bucket, one folder per slug, objects expire after 60 days | `landslidesncgs-preview-site` |
+| Distribution with the alias `*.landslidesncgs.org` | `Web` output `PreviewDistributionId` |
+| Viewer-request function: basic auth, rewrite, then the slug prefix | `landslides-preview` |
+| Wildcard A and AAAA records in the `.org` zone | `*.landslidesncgs.org` |
+| OIDC role, trusted by the `preview` GitHub environment only | `landslides-github-preview` |
+
+The wildcard covers only names nothing else claims: CloudFront sends a
+request to the distribution with the exact alias when there is one, and
+Route 53 answers from an exact record before the wildcard, so production,
+dev and the other named hosts are unaffected. The certificate already
+covers `*.landslidesncgs.org`. GitHub creates the `preview` environment on
+the first run; it needs no branch restriction, since any branch may have a
+pull request.
+
+To set it up, or after changing any of the above:
+
+```bash
+cd infra/cdk
+npx cdk diff Web Ci --profile jbliss-landslidesncgs
+npx cdk deploy Web --profile jbliss-landslidesncgs
+npx cdk deploy Ci --profile jbliss-landslidesncgs
+```
+
+Copy the `Web` output `PreviewDistributionId` into both places in
+`pr-preview.yml` (the `distribution_id` input and the `--distribution-id`
+flag); `test/workflows.test.ts` checks that they agree.
 
 ---
 

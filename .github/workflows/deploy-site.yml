@@ -1,8 +1,9 @@
 name: Deploy a site bucket (reusable)
 
 # Syncs the static site in this repo to an S3 bucket and invalidates its
-# CloudFront distribution. Called by deploy-prod.yml (master -> production)
-# and deploy-dev.yml (development -> dev.landslidesncgs.org). The site is
+# CloudFront distribution. Called by deploy-prod.yml (master -> production),
+# deploy-dev.yml (development -> dev.landslidesncgs.org) and pr-preview.yml
+# (a pull request -> one folder of the preview bucket). The site is
 # plain HTML/CSS/JS with no build step; the two sync passes differ only in
 # the Cache-Control they set. Data never comes from the repo: alerts/data/
 # and simple/data/ live only in the data bucket, written by the refresh
@@ -27,6 +28,11 @@ on:
       site_url:
         required: true
         type: string
+      folder:
+        description: "Folder in the bucket to deploy into; empty for the bucket root"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   id-token: write
@@ -39,12 +45,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # One group per folder: the preview environment deploys many folders, and
+    # a shared group would let a newer preview cancel another's queued run.
     concurrency:
-      group: deploy-${{ inputs.environment }}
+      group: deploy-${{ inputs.environment }}-${{ inputs.folder }}
       cancel-in-progress: false
     environment:
       name: ${{ inputs.environment }}
       url: ${{ inputs.site_url }}
+    env:
+      DEST: s3://${{ inputs.bucket }}${{ inputs.folder && format('/{0}', inputs.folder) || '' }}
 
     steps:
       - name: Checkout
@@ -62,7 +72,7 @@ jobs:
       # its own pass below.
       - name: Sync pages, CSS and JS (no-cache)
         run: |
-          aws s3 sync . "s3://${{ inputs.bucket }}" \
+          aws s3 sync . "$DEST" \
             --delete \
             --cache-control "no-cache" \
             --exclude ".git/*" \
@@ -95,7 +105,7 @@ jobs:
       # Pass two: images, fonts and other static assets, cached for a day.
       - name: Sync assets (one day)
         run: |
-          aws s3 sync assets "s3://${{ inputs.bucket }}/assets" \
+          aws s3 sync assets "$DEST/assets" \
             --delete \
             --cache-control "public, max-age=86400"
 
@@ -114,7 +124,7 @@ jobs:
         run: |
           {
             echo "### Deploy summary (${{ inputs.environment }})"
-            echo "- Bucket: \`s3://${{ inputs.bucket }}\`"
+            echo "- Destination: \`$DEST\`"
             echo "- CloudFront: \`${{ inputs.distribution_id }}\` (invalidation \`${{ steps.invalidate.outputs.invalidation_id }}\`)"
             echo "- Commit: \`${GITHUB_SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"

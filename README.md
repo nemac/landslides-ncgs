@@ -28,18 +28,25 @@ only in S3.
 - **One AWS account** (710482330128) holds everything, defined in
   `infra/cdk/`: two Route 53 zones and one certificate (`Dns` stack); the
   production CloudFront distribution for every public hostname, the site
-  bucket, the data bucket, and the dev distribution and bucket (`Web`
-  stack); the GitHub OIDC roles the workflows assume (`Ci` stack); and the
+  bucket, the data bucket, the dev distribution and bucket, and the pull
+  request preview distribution and bucket (`Web` stack); the GitHub OIDC roles the workflows assume (`Ci` stack); and the
   EventBridge schedules that trigger the data refreshes (`Trigger` stack).
 - **CloudFront functions** in `infra/cloudfront/` do the URL work the S3
   origin cannot: append `index.html` to directory URLs, redirect old flat
   page names, answer 410 for retired pages, map the dashboard host onto
-  `/simple/`, and put basic auth in front of the dev site.
+  `/simple/`, put basic auth in front of the dev and preview sites, and
+  point each preview hostname at its own folder of the preview bucket.
 - **Branches deploy.** A push to `master` deploys production; a push to
   `development` deploys <https://dev.landslidesncgs.org>, which sits behind
   basic auth and reads live production data. Both use the reusable
   `deploy-site.yml` workflow, which syncs the tree to the bucket and
   invalidates CloudFront.
+- **Pull requests preview.** Every open pull request into `development`
+  from a branch of this repository is deployed to
+  `<branch>.landslidesncgs.org`, behind the same basic auth as dev, and
+  removed when the pull request closes. One distribution claims
+  `*.landslidesncgs.org` for all of them; the named hostnames take
+  precedence over the wildcard.
 - **Data refreshes** run as GitHub Actions workflows dispatched by
   EventBridge: DFENS Simple every ten minutes, and a daily check of the two
   slow-changing reference datasets that rebuilds only what changed. They
@@ -63,7 +70,8 @@ stored in GitHub. Nothing any workflow produces is committed to git.
 | `ci.yml` | Every pull request | Three jobs: CDK typecheck, tests and synth plus the CloudFront function and Simple-pipeline tests; ESLint, Prettier, ruff, the Lambda tests and the CDN integrity-hash check; and the `scripts/` tests in the pinned Python environment. `master` requires the first job to pass. |
 | `deploy-dev.yml` | Push to `development` | Deploys the tree to the dev bucket and invalidates the dev distribution, via `deploy-site.yml`. |
 | `deploy-prod.yml` | Push to `master` | The same for production. |
-| `deploy-site.yml` | Called by the two above | Syncs pages, CSS and JS with `no-cache` and `assets/` with a one-day cache, deleting files that left the repo, then invalidates CloudFront. Pipelines, infra, docs and data folders are excluded. |
+| `pr-preview.yml` | Pull request into `development` opened, pushed to, reopened or closed | Turns the branch name into a DNS label (`infra/preview/preview-slug.js`; `pr-<number>` when the name is unusable or taken), deploys the merge result into that folder of the preview bucket via `deploy-site.yml`, and deletes the folder when the pull request closes. Skips pull requests from forks. |
+| `deploy-site.yml` | Called by the three above | Syncs pages, CSS and JS with `no-cache` and `assets/` with a one-day cache, deleting files that left the repo, then invalidates CloudFront. Pipelines, infra, docs and data folders are excluded. |
 | `refresh-simple.yml` | Every 10 minutes (EventBridge) | The DFENS Simple pipeline. A stdlib check asks NDFD whether the forecast changed; if not, only `status.json` is re-uploaded as a heartbeat. If it did, the forecast and flagged files are rebuilt, downloading the debris-flow GeoPackage from the bucket only when rain at or above the threshold is forecast. Any run that flags pathways is also copied to `simple/archive/<timestamp>/` in the data bucket and kept for good. A `force` input rebuilds regardless. |
 | `refresh-reference.yml` | Daily at 05:00 UTC (EventBridge) | Keeps the building footprints and the debris-flow GeoPackage current. `scripts/reference_check.py` reads Overture's latest release id and the NCGS layer's edit date, logs both next to the values recorded at the last build, and rebuilds a dataset only when its marker changed, when its last build is 90 days old, or when `force` is set. What was built is recorded in `alerts/data/reference_state.json`. |
 | `refresh-data.yml` | Manual only | The full alerts pipeline for the offline SIREN dashboard. Off the schedule since 2026-10-27; run it from the Actions tab to regenerate that dashboard's files. |
