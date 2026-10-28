@@ -60,8 +60,11 @@ markers in `alerts/data/reference_state.json`. A failed rebuild is retried
 the next day because the state is written only after success. The buildings
 rebuild fails rather than writes a partial set when one state's counties
 cannot be fetched, since the mirror would otherwise delete that state's
-files. Only a missing state file (HTTP 403 or 404) counts as a first run;
-any other error reading it fails the check so the job retries the next day.
+files. Only a missing state file (HTTP 404) counts as a first run; a 403,
+like any other error reading it, fails the check so the job retries the next
+day, since the file has existed since 2026-10-28 and a 403 now points at the
+bucket policy or origin access. A `force=true` dispatch accepts a 403 and
+records a fresh state, which is the way back if the file really is gone.
 
 **Manual: `.github/workflows/refresh-data.yml`** runs the full alerts
 pipeline from the Actions tab: download the GeoPackage from the bucket,
