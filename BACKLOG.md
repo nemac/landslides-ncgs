@@ -13,7 +13,7 @@ details belong in an issue or PR once someone picks it up.
   `refresh-reference.yml` by hand from the Actions tab (no `force` needed;
   with no recorded state it rebuilds both datasets, 20 to 30 minutes) and
   confirm `alerts/data/reference_state.json` and `cache/debris_flows.gpkg`
-  appear in the data bucket. Done: ____-__-__.
+  appear in the data bucket. Done 2026-10-28.
 - **Update documentation.** Done 2026-10-27: `README.md`, `OPERATIONS.md`,
   `scripts/README.md`, `alerts/README.md` and `simple/README.md` describe
   how the site is actually built, refreshed and deployed. Keep them that
