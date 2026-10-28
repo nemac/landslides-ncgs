@@ -77,9 +77,14 @@ for pending work, `OPERATIONS.md` for running things locally, and
   composed-function limit).
 - After moving pages or assets, resolve every local `src`, `href`, `url()`
   and `data-img` reference in the pages against the tree.
-- `node --test "simple/test/*.test.js"` after touching a CDN `<script>` or
-  `<link>` tag in a dashboard page: it recomputes every integrity hash
-  against the file unpkg serves and fails on a missing or wrong one.
+- `npm run test:simple` after any change under `simple/`: the config,
+  table and page-contract tests, app.js in jsdom, map.js against a Leaflet
+  stand-in, and the CDN integrity check (it recomputes every hash against
+  the file unpkg serves and fails on a missing or wrong one).
+- `npm run test:e2e` after a change that a browser would show (page
+  structure, CSS state hooks, Leaflet drawing, downloads): the real page in
+  Chromium against `simple/test/fixtures/`. Needs
+  `npx playwright install chromium` once.
 - Preview locally with the `static-site` launch config (a Python HTTP server
   on port 8000) and confirm every asset request returns 200.
 
