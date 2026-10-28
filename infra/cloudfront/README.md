@@ -1,7 +1,7 @@
 # CloudFront Functions
 
-Source of record for the viewer-request functions on the production and dev
-distributions. The CDK app in `infra/cdk/` composes them and deploys them;
+Source of record for the viewer-request functions on the production, dev
+and preview distributions. The CDK app in `infra/cdk/` composes them and deploys them;
 nothing here is applied by hand.
 
 ## Pieces
@@ -14,13 +14,17 @@ files can be concatenated into one CloudFront Function:
 | `landslides-rewrite.js` | `rewrite(event)` | 301 the retired SIREN dashboard pages (`/alerts`, `/alerts/*` except `/alerts/data/*`) to `/simple/`, or to `/` on the dashboard host; answer 410 Gone for the pages retired on 2026-10-27 (`/intro-landslides` and `/data-tour`, flat or directory form; source kept under the git tag `archive/retired-pages-2026-10-27`); 301 the old flat main-site pages (`/about.html` and the other pages that moved into directories on 2026-10-27) to their directory form; 301 a directory path without a trailing slash to the slash form; map the `dashboard.landslidesncgs.org` host onto `/simple/` (leaving `/alerts/data/*`, the shared building footprints, alone, and 301ing a doubled `/simple/...` to the root form); append `index.html` to directory paths (the S3 origin does not resolve indexes). |
 | `landslides-hosted-redirects.js` | `hostedRedirects(event)` | Serve the iframe page for `inventory.landslidesncgs.org`; 301 both mapviewer hosts to the ArcGIS web app viewer; `null` for every other host. |
 | `landslides-basic-auth.js` | `basicAuth(event, kvs)` | 401 challenge unless the Authorization header matches the base64 credential under key `basic-auth` in the function's KeyValueStore; `null` when it matches. |
+| `landslides-preview-prefix.js` | `previewPrefix(request)` | Prefix the URI with the host's first label (`update-name.landslidesncgs.org/about/index.html` reads `/update-name/about/index.html`), leaving `/alerts/data/*` and `/simple/data/*` alone because those come from the data bucket; 404 for a host that is not one DNS label under `landslidesncgs.org`. |
 
 The CDK app (`infra/cdk/lib/compose-function.ts`) builds:
 
 - **production**: hosted-redirects, then rewrite;
-- **dev**: basic-auth, then rewrite, with the KeyValueStore attached.
+- **dev**: basic-auth, then rewrite, with the KeyValueStore attached;
+- **preview**: basic-auth, then rewrite, then preview-prefix on whatever
+  rewrite lets through, sharing the dev KeyValueStore and so the dev
+  credential.
 
-Both run on `cloudfront-js-2.0` and must stay under 10 KB combined.
+All three run on `cloudfront-js-2.0` and each must stay under 10 KB.
 
 ## Tests
 

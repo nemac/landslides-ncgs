@@ -26,8 +26,8 @@ function distributionConfigs(template: Template) {
 }
 
 function productionConfig(template: Template) {
-  return distributionConfigs(template).find(
-    (c) => !c.Aliases.includes('dev.landslidesncgs.org')
+  return distributionConfigs(template).find((c) =>
+    c.Aliases.includes('landslidesncgs.org')
   );
 }
 
@@ -37,9 +37,15 @@ function devConfig(template: Template) {
   );
 }
 
-test('three private buckets, data versioned with old versions expiring', () => {
+function previewConfig(template: Template) {
+  return distributionConfigs(template).find((c) =>
+    c.Aliases.includes('*.landslidesncgs.org')
+  );
+}
+
+test('four private buckets, data versioned with old versions expiring', () => {
   const { template } = webTemplate();
-  template.resourceCountIs('AWS::S3::Bucket', 3);
+  template.resourceCountIs('AWS::S3::Bucket', 4);
   template.hasResourceProperties('AWS::S3::Bucket', {
     BucketName: 'landslidesncgs-data',
     VersioningConfiguration: { Status: 'Enabled' },
@@ -64,6 +70,7 @@ test('three private buckets, data versioned with old versions expiring', () => {
     'landslidesncgs-site',
     'landslidesncgs-data',
     'landslidesncgs-dev-site',
+    'landslidesncgs-preview-site',
   ]) {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: name,
@@ -75,6 +82,19 @@ test('three private buckets, data versioned with old versions expiring', () => {
       },
     });
   }
+});
+
+test('preview bucket is unversioned and expires objects after 60 days', () => {
+  const { template } = webTemplate();
+  const bucket = Object.values(
+    template.findResources('AWS::S3::Bucket', {
+      Properties: { BucketName: 'landslidesncgs-preview-site' },
+    })
+  )[0];
+  assert.equal(bucket.Properties.VersioningConfiguration, undefined);
+  assert.deepEqual(bucket.Properties.LifecycleConfiguration.Rules, [
+    { Id: 'expire-objects', Status: 'Enabled', ExpirationInDays: 60 },
+  ]);
 });
 
 test('production distribution claims exactly the eight production hostnames', () => {
@@ -119,15 +139,46 @@ test('dev distribution has one alias and a key value store on its function', () 
     Name: 'landslides-dev-basic-auth',
   });
   template.hasResourceProperties('AWS::CloudFront::Function', {
+    Name: 'landslides-dev',
     FunctionConfig: Match.objectLike({
       Runtime: 'cloudfront-js-2.0',
       KeyValueStoreAssociations: Match.anyValue(),
     }),
   });
-  template.resourceCountIs('AWS::CloudFront::Function', 2);
+  template.resourceCountIs('AWS::CloudFront::Function', 3);
 });
 
-test('every production hostname and the dev hostname get A and AAAA records', () => {
+test('preview distribution claims only the .org wildcard', () => {
+  const { template } = webTemplate();
+  assert.deepEqual(previewConfig(template)?.Aliases, ['*.landslidesncgs.org']);
+  assert.equal(distributionConfigs(template).length, 3);
+});
+
+test('preview function shares the dev credential store', () => {
+  const { template } = webTemplate();
+  const functions = Object.values(
+    template.findResources('AWS::CloudFront::Function')
+  );
+  const byName = (name: string) =>
+    functions.find((f) => f.Properties.Name === name)?.Properties.FunctionConfig
+      .KeyValueStoreAssociations;
+  assert.ok(byName('landslides-preview'));
+  assert.deepEqual(byName('landslides-preview'), byName('landslides-dev'));
+});
+
+test('preview reads its own bucket and the production data bucket', () => {
+  const config = previewConfig(webTemplate().template);
+  const patterns = config.CacheBehaviors.map(
+    (b: { PathPattern: string }) => b.PathPattern
+  );
+  assert.deepEqual(patterns, ['alerts/data/*', 'simple/data/*', 'data/*']);
+  const origins = JSON.stringify(config.Origins);
+  assert.match(origins, /PreviewSiteBucket/);
+  assert.match(origins, /DataBucket/);
+  assert.equal(config.Origins.length, 2);
+});
+
+test('every production hostname, dev and the preview wildcard get A and AAAA records', () => {
   const sets = Object.values(
     webTemplate().template.findResources('AWS::Route53::RecordSet')
   ).map((r) => r.Properties);
@@ -136,17 +187,27 @@ test('every production hostname and the dev hostname get A and AAAA records', ()
       .filter((r) => r.Type === type)
       .map((r) => r.Name.replace(/\.$/, ''))
       .sort();
-  const expected = [...PROD_HOSTNAMES, 'dev.landslidesncgs.org'].sort();
+  const expected = [
+    ...PROD_HOSTNAMES,
+    'dev.landslidesncgs.org',
+    '*.landslidesncgs.org',
+  ].sort();
   assert.deepEqual(names('A'), expected);
   assert.deepEqual(names('AAAA'), expected);
 });
 
 test('exports the buckets and distributions', () => {
   const { web } = webTemplate();
-  assert.ok(web.siteBucket && web.dataBucket && web.devSiteBucket);
+  assert.ok(
+    web.siteBucket &&
+      web.dataBucket &&
+      web.devSiteBucket &&
+      web.previewSiteBucket
+  );
   assert.ok(
     web.productionDistribution.distributionId &&
-      web.devDistribution.distributionId
+      web.devDistribution.distributionId &&
+      web.previewDistribution.distributionId
   );
 });
 
@@ -157,6 +218,8 @@ test('outputs what the runbook and workflows need', () => {
     'ProductionDomainName',
     'DevDistributionId',
     'DevDomainName',
+    'PreviewDistributionId',
+    'PreviewDomainName',
     'DevAuthStoreArn',
   ]) {
     template.hasOutput(name, Match.anyValue());

@@ -23,8 +23,10 @@ function ciTemplate() {
     siteBucket: web.siteBucket,
     dataBucket: web.dataBucket,
     devSiteBucket: web.devSiteBucket,
+    previewSiteBucket: web.previewSiteBucket,
     productionDistribution: web.productionDistribution,
     devDistribution: web.devDistribution,
+    previewDistribution: web.previewDistribution,
   });
   return { ci, template: Template.fromStack(ci) };
 }
@@ -81,6 +83,24 @@ test('dev role trusts the development environment only', () => {
   );
 });
 
+test('preview role trusts the preview environment only', () => {
+  assert.equal(
+    trustSubject(ciTemplate().template, 'landslides-github-preview'),
+    'repo:nemac/landslides-ncgs:environment:preview'
+  );
+});
+
+test('preview role reaches only the preview bucket', () => {
+  const statements = JSON.stringify(
+    policyStatementsFor(ciTemplate().template, 'PreviewRole')
+  );
+  assert.match(statements, /PreviewSiteBucket/);
+  assert.match(statements, /s3:DeleteObject/);
+  assert.doesNotMatch(statements, /DataBucket/);
+  assert.doesNotMatch(statements, /DevSiteBucket/);
+  assert.doesNotMatch(statements, /ExportsOutputFnGetAttSiteBucket/);
+});
+
 test('dev role has no statement on the data bucket', () => {
   const { template } = ciTemplate();
   const devStatements = JSON.stringify(
@@ -122,6 +142,7 @@ test('each role may invalidate only its distribution', () => {
   for (const [role, pattern] of [
     ['ProdRole', /cloudfront::710482330128:distribution\//],
     ['DevRole', /cloudfront::710482330128:distribution\//],
+    ['PreviewRole', /cloudfront::710482330128:distribution\//],
   ] as const) {
     const invalidations = policyStatementsFor(template, role).filter((s) =>
       JSON.stringify(s).includes('cloudfront:CreateInvalidation')
@@ -139,6 +160,7 @@ test('outputs both role ARNs', () => {
   const { template } = ciTemplate();
   template.hasOutput('ProdRoleArn', Match.anyValue());
   template.hasOutput('DevRoleArn', Match.anyValue());
+  template.hasOutput('PreviewRoleArn', Match.anyValue());
 });
 
 test('stack is termination protected', () => {
