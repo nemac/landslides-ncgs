@@ -33,7 +33,10 @@ python3 -m http.server 8000    # from the repo root
 ```
 
 The page reads `alerts/data/` on the same origin; sync it from S3 or run
-`python scripts/refresh.py` first (`OPERATIONS.md`).
+`python scripts/refresh.py` first (`OPERATIONS.md`). That run does not write
+the building footprints: the daily `refresh-reference.yml` workflow owns
+`alerts/data/buildings/`, so sync that folder from S3 or run
+`python scripts/refresh.py --buildings`.
 
 ## Third-party libraries
 

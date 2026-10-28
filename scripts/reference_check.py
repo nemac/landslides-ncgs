@@ -74,20 +74,26 @@ def debris_last_edit(fetch=_get_json) -> str:
     return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).isoformat()
 
 
-def previous_state(fetch=_get_json, url: str | None = None) -> dict:
+def previous_state(fetch=_get_json, url: str | None = None, *, force: bool = False) -> dict:
     """The state recorded by the last successful run, or {} on first run.
 
-    Only a missing file is a first run: the data bucket answers 403 for a
-    missing object through CloudFront, so 403 and 404 both count. Any other
-    failure (5xx, a refused connection, a body that is not JSON) propagates
-    and fails the check, so the job is retried the next day instead of
-    rebuilding both datasets and resetting their markers.
+    Only a 404 is a first run. CloudFront answers 403 for a missing object
+    in the data bucket, and that used to count as a first run too, but the
+    state file has existed since 2026-10-28: a 403 now more likely means
+    the bucket policy or origin access broke, and rebuilding both datasets
+    would hide that and reset their markers. So a 403, like any other
+    failure (5xx, a refused connection, a body that is not JSON), fails the
+    check and the job is retried the next day.
+
+    A forced run rebuilds everything regardless, so it accepts a 403 and
+    starts from an empty state. That is the way back if the file really is
+    gone: dispatch the workflow with force=true and it records a new one.
     """
     url = url or os.environ.get("REFERENCE_STATE_URL") or PUBLIC_STATE_URL
     try:
         return fetch(url)
     except urllib.error.HTTPError as e:
-        if e.code in (403, 404):
+        if e.code == 404 or (e.code == 403 and force):
             log(f"no previous state (HTTP {e.code}); treating as first run")
             return {}
         raise
@@ -155,7 +161,7 @@ def main() -> int:
         "buildings": latest_overture_release(),
         "debris": debris_last_edit(),
     }
-    previous = previous_state()
+    previous = previous_state(force=force)
     log(f"Overture latest release:        {upstream['buildings']}")
     log(f"Overture release last built:    {(previous.get('buildings') or {}).get('value')}")
     log(f"NCGS debris layer last edited:  {upstream['debris']}")

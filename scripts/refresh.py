@@ -83,8 +83,9 @@ def main() -> int:
         "--buildings",
         action="store_true",
         help=(
-            "Only re-extract the Overture building footprints, ignoring the "
-            "manifest age. OVERTURE_RELEASE in the environment pins the release."
+            "Only rebuild the Overture building footprints under "
+            "alerts/data/buildings/, as the daily refresh-reference.yml workflow "
+            "does. OVERTURE_RELEASE in the environment pins the release."
         ),
     )
     parser.add_argument(

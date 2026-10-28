@@ -1488,10 +1488,10 @@ def fetch_overture_buildings(
         "Overture's hosted GeoParquet on AWS)."
     )
 
-    # Lazy import: overturemaps + duckdb are heavy dependencies and we
-    # only need them when actually extracting. Importing at module load
-    # would slow every refresh.py invocation, including the 99% that
-    # hit the cache and skip this work.
+    # Lazy import: overturemaps + duckdb are heavy dependencies that only
+    # a `refresh.py --buildings` run (the daily refresh-reference.yml
+    # workflow) needs. Importing at module load would slow every other
+    # refresh.py invocation, none of which extracts footprints.
     try:
         # The top-level `geodataframe` function is the canonical API per
         # Overture's docs and README examples. Internally it uses DuckDB
@@ -1523,9 +1523,15 @@ def fetch_overture_buildings(
     n_raw = len(table)
     print(f"  Raw extract: {n_raw:,} buildings.")
 
+    # Fail rather than return: the workflow mirrors the output folder to
+    # the bucket after this, and an empty folder would delete every county
+    # file (or fail its sync with "path does not exist").
     if n_raw == 0:
-        print("  WARNING: 0 buildings returned. Check Overture release availability for this bbox.")
-        return table
+        raise RuntimeError(
+            f"Overture extract returned 0 buildings for bbox {WNC_BBOX} "
+            f"(release {release or 'latest'}); no county files written. "
+            "Check that the release is available for this bbox."
+        )
 
     # Subset to minimal columns: id + geometry only. Every extra field
     # adds tens of bytes per feature; across ~2M features that's real
