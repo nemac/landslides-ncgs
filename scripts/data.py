@@ -26,7 +26,6 @@ from config import (
     DEBRIS_FLOW_SERVICE_URL,
     DISPLAY_CRS,
     NDFD_PRECIP_SERVICE_URL,
-    OVERTURE_BUILDINGS_CACHE_TTL_DAYS,
     OVERTURE_BUILDINGS_COORD_PRECISION,
     OVERTURE_BUILDINGS_MANIFEST_NAME,
     OVERTURE_BUILDINGS_MIN_AREA_SQM,
@@ -419,17 +418,21 @@ _HUC12_QUERY_URL = (
 )
 
 
-def _fetch_nc_counties() -> gpd.GeoDataFrame:
+def _fetch_nc_counties(strict: bool = False) -> gpd.GeoDataFrame:
     """Fetch counties from NC and neighboring states (TN, GA, SC, VA).
 
     Queries each state SEPARATELY rather than using a multi-value WHERE
     clause. TIGERweb has been observed to return empty response bodies
     for IN(...) clauses and even simple OR-chains - the single-value
-    STATE='X' form is the only one consistently accepted. The per-state
-    loop also makes failures granular: if VA's query fails, we still get
-    counties from the other 4 states.
+    STATE='X' form is the only one consistently accepted.
 
-    Returns a GDF in EPSG:4326 with columns NAME and geometry.
+    The per-state loop also makes failures granular. By default a failed
+    state is skipped: the debris-flow augmentation would rather tag most
+    polygons than none. With strict=True the first failure propagates,
+    for callers that must have every state or nothing (the buildings
+    rebuild, whose output is mirrored to the bucket with --delete).
+
+    Returns a GDF in EPSG:4326 with columns NAME, GEOID, STATE and geometry.
     """
     print("  Fetching NC + neighboring-state county boundaries from US Census TIGERweb...")
     # State FIPS: 37=NC, 47=TN, 13=GA, 45=SC, 51=VA
@@ -460,6 +463,9 @@ def _fetch_nc_counties() -> gpd.GeoDataFrame:
             print(f"    {abbrev}: {len(feats)} counties")
             all_features.extend(feats)
         except Exception as e:
+            if strict:
+                print(f"    ! {abbrev} county fetch failed: {e}")
+                raise
             print(f"    ! {abbrev} county fetch failed: {e}; continuing")
 
     if not all_features:
@@ -1360,10 +1366,10 @@ def _polygonize_stage_iv_inches(
 # the WNC bbox) because Overture is a global dataset sliced by bbox.
 #
 # The extraction is SLOW (DuckDB query against Overture's hosted Parquet,
-# typically 5-15 min for a WNC-sized bbox), so we cache aggressively. The
-# OVERTURE_BUILDINGS_CACHE_TTL_DAYS check below means refresh.py only
-# triggers a fresh extract about once a month, while the file feeds the
-# frontend on every page load in between.
+# typically 5-15 min for a WNC-sized bbox), so it is not run on a timer.
+# refresh-reference.yml runs it, through `refresh.py --buildings`, only when
+# scripts/reference_check.py sees a new Overture release (or 90 days have
+# passed), and the files feed the frontend on every page load in between.
 
 
 def _overture_output_dir(output_dir: Path) -> Path:
@@ -1378,22 +1384,6 @@ def _overture_manifest_path(output_dir: Path) -> Path:
     most recent extraction. The frontend fetches this once to know which
     counties exist and what their bboxes are."""
     return _overture_output_dir(output_dir) / OVERTURE_BUILDINGS_MANIFEST_NAME
-
-
-def _overture_cache_is_fresh(output_dir: Path) -> bool:
-    """Return True if the buildings manifest exists AND is younger than
-    OVERTURE_BUILDINGS_CACHE_TTL_DAYS. Skip the extraction in that case.
-
-    The manifest is the authoritative freshness signal - if it exists,
-    a full extraction ran to completion (we write the manifest LAST).
-    A partial extraction that failed mid-way leaves some county files
-    but no manifest, so the next refresh will retry the extraction.
-    """
-    p = _overture_manifest_path(output_dir)
-    if not p.exists():
-        return False
-    age_days = (datetime.now().timestamp() - p.stat().st_mtime) / 86400
-    return age_days < OVERTURE_BUILDINGS_CACHE_TTL_DAYS
 
 
 # The overturemaps client streams Parquet parts from Overture's S3 bucket
@@ -1450,9 +1440,8 @@ def overture_query_with_retry(
 
 def fetch_overture_buildings(
     output_dir: Path,
-    force_refresh: bool = False,
     release: str | None = None,
-) -> gpd.GeoDataFrame | None:
+) -> gpd.GeoDataFrame:
     """Extract Overture building footprints for the WNC bbox, chunk by
     county, and write per-county GeoJSON files + a manifest describing
     them.
@@ -1469,35 +1458,25 @@ def fetch_overture_buildings(
     files on demand as the user pans/zooms. See alerts/js/map.js
     setBuildingsVisible for the viewport-triggered loading logic.
 
-    Returns the combined GeoDataFrame on success. Returns None if the
-    cache was fresh (no extraction needed). Callers can check existence
-    of the manifest file on disk instead.
+    Always extracts; the decision to run it is made by
+    scripts/reference_check.py. Returns the combined GeoDataFrame.
 
     Args:
         output_dir: parent directory (typically alerts/data). The
             "buildings" subdirectory is created inside it.
-        force_refresh: if True, ignore the TTL and re-extract anyway.
         release: Overture release id to read (e.g. "2026-10-21.0"). None
             lets the client pick the latest. The id used is written to
             the manifest as `overture_release`.
 
     Raises:
         RuntimeError if the `overturemaps` Python client isn't installed.
-        Any exception the client raises (network failures, DuckDB errors,
-        etc.) propagates up - refresh.py will log it and continue, since
-        a missing buildings layer shouldn't break alert generation.
+        Any exception the client or the county fetch raises propagates:
+        the rebuild must produce the complete set of county files or
+        none, because the workflow mirrors the folder to the bucket.
     """
     output_dir = Path(output_dir)
     buildings_dir = _overture_output_dir(output_dir)
     manifest_path = _overture_manifest_path(output_dir)
-
-    if not force_refresh and _overture_cache_is_fresh(output_dir):
-        age_days = (datetime.now().timestamp() - manifest_path.stat().st_mtime) / 86400
-        print(
-            f"  Buildings cache is fresh ({age_days:.1f} days old, "
-            f"TTL {OVERTURE_BUILDINGS_CACHE_TTL_DAYS}d). Skipping extraction."
-        )
-        return None
 
     print(f"  Extracting Overture buildings for bbox {WNC_BBOX}...")
     print(
@@ -1595,9 +1574,12 @@ def fetch_overture_buildings(
     # Fetch counties (same function used by the debris flow augmentation).
     # Returns a GDF with columns NAME, GEOID, STATE across NC + TN + GA +
     # SC + VA. GEOID is the 5-digit state+county FIPS code, unique across
-    # states. We use GEOID as the county file basename.
+    # states. We use GEOID as the county file basename. Strict: a state
+    # whose counties cannot be fetched would lose every building in it,
+    # and the workflow's --delete mirror would then remove those county
+    # files from the bucket until the next rebuild.
     print("  Fetching county boundaries for building spatial join...")
-    counties = _fetch_nc_counties()
+    counties = _fetch_nc_counties(strict=True)
     if len(counties) == 0:
         raise RuntimeError("County fetch returned 0 records; cannot chunk buildings by county.")
 

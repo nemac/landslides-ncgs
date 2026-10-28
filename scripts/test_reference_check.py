@@ -68,11 +68,43 @@ class UpstreamParsingTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rc.debris_last_edit(lambda url: {"editingInfo": {}})
 
-    def test_missing_previous_state_is_first_run(self):
-        def fetch(url):
-            raise rc.urllib.error.URLError("404")
 
-        self.assertEqual(rc.previous_state(fetch, url="http://x/state.json"), {})
+def _http_error(code: int) -> Exception:
+    return rc.urllib.error.HTTPError("http://x/state.json", code, "err", {}, None)
+
+
+def _raising(exc: Exception):
+    def fetch(url):
+        raise exc
+
+    return fetch
+
+
+class PreviousStateTest(unittest.TestCase):
+    """Only a missing state file is a first run. The data bucket answers 403
+    for a missing object through CloudFront, so 403 and 404 both mean "never
+    built". Anything else is an outage: the check must fail so the job is
+    retried tomorrow instead of rebuilding both datasets."""
+
+    URL = "http://x/state.json"
+
+    def test_missing_state_404_is_first_run(self):
+        self.assertEqual(rc.previous_state(_raising(_http_error(404)), url=self.URL), {})
+
+    def test_missing_state_403_is_first_run(self):
+        self.assertEqual(rc.previous_state(_raising(_http_error(403)), url=self.URL), {})
+
+    def test_server_error_propagates(self):
+        with self.assertRaises(rc.urllib.error.HTTPError):
+            rc.previous_state(_raising(_http_error(503)), url=self.URL)
+
+    def test_connection_failure_propagates(self):
+        with self.assertRaises(rc.urllib.error.URLError):
+            rc.previous_state(_raising(rc.urllib.error.URLError("refused")), url=self.URL)
+
+    def test_unparseable_state_propagates(self):
+        with self.assertRaises(ValueError):
+            rc.previous_state(_raising(ValueError("not json")), url=self.URL)
 
 
 if __name__ == "__main__":

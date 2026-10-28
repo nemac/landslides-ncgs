@@ -75,13 +75,22 @@ def debris_last_edit(fetch=_get_json) -> str:
 
 
 def previous_state(fetch=_get_json, url: str | None = None) -> dict:
-    """The state recorded by the last successful run, or {} on first run."""
+    """The state recorded by the last successful run, or {} on first run.
+
+    Only a missing file is a first run: the data bucket answers 403 for a
+    missing object through CloudFront, so 403 and 404 both count. Any other
+    failure (5xx, a refused connection, a body that is not JSON) propagates
+    and fails the check, so the job is retried the next day instead of
+    rebuilding both datasets and resetting their markers.
+    """
     url = url or os.environ.get("REFERENCE_STATE_URL") or PUBLIC_STATE_URL
     try:
         return fetch(url)
-    except (urllib.error.URLError, ValueError, OSError) as e:
-        log(f"no previous state ({type(e).__name__}: {e}); treating as first run")
-        return {}
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404):
+            log(f"no previous state (HTTP {e.code}); treating as first run")
+            return {}
+        raise
 
 
 def decide(

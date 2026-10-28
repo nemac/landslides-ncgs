@@ -90,8 +90,7 @@ details belong in an issue or PR once someone picks it up.
   convert it to vector tiles (PMTiles via tippecanoe, one file served with
   range requests) instead of per-county GeoJSON. Either way fix the
   `fetch_overture_buildings` log line that still prints "~3m" with
-  tolerance 0, and the `_refresh_overture_buildings` docstring that names a
-  single-file output that no longer exists.
+  tolerance 0.
 
 ## Deferred
 
