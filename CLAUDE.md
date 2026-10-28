@@ -68,7 +68,8 @@ for pending work, `OPERATIONS.md` for running things locally, and
 ## Checks before a PR
 
 - `npm run lint` and `npm run format:check` (ESLint and Prettier over
-  `alerts`, `simple`, `infra/cloudfront` and the CDK TypeScript).
+  `alerts`, `simple`, `infra/cloudfront`, `infra/preview` and the CDK
+  TypeScript).
 - `npm run lint:py` and `npm run format:py:check` (ruff over `scripts`,
   `simple/pipeline` and `infra/lambda`). ruff lives in `.venv`; create it
   with the two commands in `requirements-dev.txt` (`python3 -m venv .venv`,
