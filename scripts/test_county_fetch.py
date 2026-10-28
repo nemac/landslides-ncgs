@@ -81,12 +81,13 @@ class BuildingsRebuildTest(unittest.TestCase):
     output folder to the bucket with --delete, so a partial set would
     delete the missing state's files until the next rebuild."""
 
-    def _fake_overture(self):
-        footprints = gpd.GeoDataFrame(
-            {"id": ["a", "b"]},
-            geometry=[box(-82.6, 35.5, -82.59, 35.51), box(-82.5, 35.6, -82.49, 35.61)],
-            crs="EPSG:4326",
-        )
+    def _fake_overture(self, footprints=None):
+        if footprints is None:
+            footprints = gpd.GeoDataFrame(
+                {"id": ["a", "b"]},
+                geometry=[box(-82.6, 35.5, -82.59, 35.51), box(-82.5, 35.6, -82.49, 35.61)],
+                crs="EPSG:4326",
+            )
         module = types.ModuleType("overturemaps")
         module.geodataframe = lambda kind, bbox, release=None: footprints
         return module
@@ -110,6 +111,17 @@ class BuildingsRebuildTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 data.fetch_overture_buildings(output_dir=Path(out), release="2026-10-21.0")
             self.assertEqual(list(Path(out).rglob("*.geojson")), [])
+
+    def test_rebuild_fails_when_overture_returns_no_buildings(self):
+        empty = gpd.GeoDataFrame({"id": []}, geometry=[], crs="EPSG:4326")
+        with (
+            tempfile.TemporaryDirectory() as out,
+            mock.patch.dict(sys.modules, {"overturemaps": self._fake_overture(empty)}),
+            mock.patch.object(data, "_agol_request_with_retry", _census_empty_for("none")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "0 buildings"):
+                data.fetch_overture_buildings(output_dir=Path(out), release="2026-10-21.0")
+            self.assertEqual([p for p in Path(out).rglob("*") if p.is_file()], [])
 
 
 if __name__ == "__main__":
