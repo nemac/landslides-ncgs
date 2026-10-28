@@ -121,9 +121,9 @@ Writes to `alerts/data/`, for each NDFD window (12, 24, 48 and 72 hours)
 a `forecast_{N}h.geojson` and a `flagged_ndfd_{N}h.geojson`, and for each
 MRMS window (1, 24 and 72 hours) an `observed_{N}h.geojson` and a
 `flagged_mrms_{N}h.geojson`. Every file carries a top-level `meta` object
-with its timestamps and source. The run also refreshes the building
-footprints under `alerts/data/buildings/` when their manifest is older
-than 30 days (5 to 15 minutes the first time; see below).
+with its timestamps and source. It does not touch the building footprints
+under `alerts/data/buildings/`; those belong to the daily reference
+workflow (see below).
 
 A non-zero exit means something failed. When run from the Actions tab
 nothing is uploaded on a non-zero exit, so the bucket keeps the previous
@@ -235,7 +235,7 @@ The `overturemaps`, `duckdb` and `pyarrow` packages come from the `pip:`
 section of `environment.yml` and are imported lazily, so the rest of the
 pipeline runs without them.
 
-Tuning knobs in `scripts/config.py`: `OVERTURE_BUILDINGS_CACHE_TTL_DAYS`,
+Tuning knobs in `scripts/config.py`:
 `OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG`, `OVERTURE_BUILDINGS_COORD_PRECISION`,
 `OVERTURE_BUILDINGS_MIN_AREA_SQM`. In `simple/js/config.js` and
 `alerts/js/config.js`: `OVERTURE_BUILDINGS_MIN_ZOOM` and

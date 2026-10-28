@@ -117,6 +117,18 @@ test('refresh workflows use the production role and the data bucket', () => {
   }
 });
 
+// The building footprints have one owner: the daily reference workflow
+// rebuilds them from a pinned Overture release and records what it built.
+// If the manual alerts run also wrote them, the recorded release would no
+// longer describe what is in the bucket.
+test('only refresh-reference.yml reads or writes the buildings prefix', () => {
+  const all = workflows();
+  const touchesBuildings = /aws s3 (sync|cp)[^\n]*buildings/;
+  assert.match(all['refresh-reference.yml'], touchesBuildings);
+  assert.doesNotMatch(all['refresh-data.yml'], touchesBuildings);
+  assert.doesNotMatch(all['refresh-simple.yml'], touchesBuildings);
+});
+
 test('deploy workflows name the right buckets and a plausible distribution id', () => {
   const all = workflows();
   assert.match(all['deploy-prod.yml'], new RegExp(`bucket: ${SITE_BUCKET}\\b`));
