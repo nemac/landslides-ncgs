@@ -5,7 +5,9 @@ name: CI checks
 # CloudFront Function tests run against the source files with plain Node.
 # The lint job runs ESLint, Prettier and ruff over every source file plus
 # the refresh-simple-trigger Lambda tests; the versions it installs match
-# package.json and requirements-dev.txt.
+# package.json and requirements-dev.txt. The DFENS Simple page has two
+# jobs of its own: its Node tests (jsdom, plus the CDN integrity hashes,
+# which download from unpkg) and a Playwright smoke test in Chromium.
 
 on:
   pull_request:
@@ -37,6 +39,8 @@ jobs:
         working-directory: infra/cdk
       - name: Test the CloudFront Function pieces
         run: node --test "infra/cloudfront/test/*.test.js"
+      - name: Test the preview-site naming script
+        run: node --test "infra/preview/test/*.test.js"
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
 
@@ -88,5 +92,63 @@ jobs:
       - name: Test the refresh-simple-trigger Lambda (stdlib only)
         run: python3 -m unittest
         working-directory: infra/lambda/refresh-simple-trigger
-      - name: Check the dashboards' CDN integrity hashes (downloads from unpkg)
-        run: node --test "simple/test/*.test.js"
+
+  # The DFENS Simple page's Node tests: config, table, page contract, app.js
+  # in jsdom, map.js against a Leaflet stand-in, and the CDN integrity
+  # hashes (that last one downloads from unpkg).
+  simple:
+    name: Simple dashboard tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install the test tooling
+        run: npm ci
+      - name: Run the Simple dashboard tests
+        run: npm run test:simple
+
+  # The real page in Chromium against the fixtures in simple/test/fixtures,
+  # with every outside host blocked. Kept separate so a browser problem
+  # never blocks the other checks, and so the master ruleset can require it
+  # on its own.
+  browser:
+    name: Simple dashboard browser test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install the test tooling
+        run: npm ci
+      - name: Cache the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium's system dependencies
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Run the browser test
+        run: npm run test:e2e
+      - name: Keep the report and traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

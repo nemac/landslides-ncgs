@@ -12,6 +12,7 @@ AWS setup is in `infra/README.md`.
 | DFENS Simple pipeline (`simple/pipeline/`) | `refresh-simple.yml`, dispatched every 10 minutes by EventBridge Scheduler | `s3://landslidesncgs-data/simple/data/` | `/simple/data/` on both hosts |
 | Reference data: building footprints and the debris-flow GeoPackage | `refresh-reference.yml`, dispatched daily at 05:00 UTC by EventBridge Scheduler; rebuilds only on upstream change, after 90 days, or on `force` | `alerts/data/buildings/`, `cache/debris_flows.gpkg` and `alerts/data/reference_state.json` in the data bucket | `/alerts/data/` on both hosts (`cache/` is not served) |
 | Alerts pipeline (`scripts/refresh.py`) | `refresh-data.yml`, by hand only since 2026-10-27 | `s3://landslidesncgs-data/alerts/data/` | `/alerts/data/` on both hosts |
+| Pull request previews | `pr-preview.yml` on every pull request into `development` | one folder per pull request in the preview bucket | `https://<branch>.landslidesncgs.org` (basic auth) |
 | AWS resources (`infra/cdk/`) | by hand from a developer machine | CloudFormation stacks | |
 
 Nothing under `alerts/data/` or `simple/data/` is in git. The dev site reads
@@ -39,6 +40,26 @@ repo root. A plain file open (`file://`) will not resolve them.
 
 Hard-refresh after changing files, or turn on "Disable cache" in the
 browser's DevTools Network tab while developing.
+
+## Previewing a pull request
+
+Open a pull request from a branch of this repository into `development`.
+The `pr-preview.yml` run on it deploys the branch, merged into
+`development`, to `https://<branch>.landslidesncgs.org`; the pull request's
+"View deployment" button links there. Log in with the dev site's
+credential. Every push redeploys it, and closing or merging the pull
+request deletes it.
+
+The hostname is the branch name lowercased, with anything other than
+letters, digits and hyphens turned into a hyphen: `feature/Update_Name`
+previews at `feature-update-name.landslidesncgs.org`. A branch whose name
+leaves nothing usable, or is one of the real hostnames (`www`, `dev`,
+`dashboard`, `inventory`, `mapviewer`), previews at `pr-<number>` instead.
+The workflow run prints the URL. Previews read the live production data,
+like the dev site. They show the main host only; the dashboard host's
+root-path view is not previewed, but DFENS Simple is at `/simple/` on the
+preview. A preview that a missed cleanup leaves behind expires after 60
+days.
 
 ## Getting data onto your computer
 

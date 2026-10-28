@@ -14,6 +14,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import {
   composeDevFunction,
+  composePreviewFunction,
   composeProductionFunction,
 } from './compose-function.js';
 import {
@@ -22,6 +23,9 @@ import {
   DATA_NONCURRENT_VERSION_DAYS,
   DEV_HOSTNAME,
   DEV_SITE_BUCKET,
+  PREVIEW_EXPIRY_DAYS,
+  PREVIEW_HOSTNAME,
+  PREVIEW_SITE_BUCKET,
   PROD_HOSTNAMES,
   SITE_BUCKET,
 } from './config.js';
@@ -40,17 +44,19 @@ export interface WebStackProps extends StackProps {
 // page loads, although the SIREN dashboard itself went offline on 2026-10-22.
 const DATA_PATHS = ['alerts/data/*', 'simple/data/*', 'data/*'];
 
-// Site, data and dev-site buckets with the production and dev distributions.
-// All in one stack because the dev distribution reads the production data
-// bucket, and an origin access control across stacks would cycle through the
+// Site, data, dev-site and preview-site buckets with the production, dev and
+// preview distributions. All in one stack because the dev and preview
+// distributions read the production data bucket, and an origin access control across stacks would cycle through the
 // bucket policy. Hostname records live here too, next to what they point at.
 export class WebStack extends Stack {
   readonly siteBucket: s3.IBucket;
   readonly dataBucket: s3.IBucket;
   readonly devSiteBucket: s3.IBucket;
+  readonly previewSiteBucket: s3.IBucket;
   readonly productionDistribution: cloudfront.IDistribution;
   readonly devDistribution: cloudfront.IDistribution;
-  private devAuthStore!: cloudfront.IKeyValueStore;
+  readonly previewDistribution: cloudfront.IDistribution;
+  private readonly devAuthStore: cloudfront.IKeyValueStore;
 
   constructor(scope: Construct, id: string, props: WebStackProps) {
     super(scope, id, { terminationProtection: true, ...props });
@@ -61,12 +67,21 @@ export class WebStack extends Stack {
       DEV_SITE_BUCKET,
       false
     );
+    this.previewSiteBucket = this.makeBucket(
+      'PreviewSiteBucket',
+      PREVIEW_SITE_BUCKET,
+      false,
+      PREVIEW_EXPIRY_DAYS
+    );
+    this.devAuthStore = this.makeDevAuthStore();
 
     this.productionDistribution = this.makeProductionDistribution(props);
     this.devDistribution = this.makeDevDistribution(props);
+    this.previewDistribution = this.makePreviewDistribution(props);
 
     this.makeRecords(props, [...PROD_HOSTNAMES], this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);
+    this.makeRecords(props, [PREVIEW_HOSTNAME], this.previewDistribution);
     this.makeOutputs();
   }
 
@@ -84,38 +99,59 @@ export class WebStack extends Stack {
     new CfnOutput(this, 'DevDomainName', {
       value: this.devDistribution.distributionDomainName,
     });
+    new CfnOutput(this, 'PreviewDistributionId', {
+      value: this.previewDistribution.distributionId,
+    });
+    new CfnOutput(this, 'PreviewDomainName', {
+      value: this.previewDistribution.distributionDomainName,
+    });
     new CfnOutput(this, 'DevAuthStoreArn', {
       value: this.devAuthStore.keyValueStoreArn,
     });
   }
 
+  // expireDays, when given, deletes every object that old; only the preview
+  // bucket, whose contents are throwaway, sets it.
   private makeBucket(
     id: string,
     bucketName: string,
-    versioned: boolean
+    versioned: boolean,
+    expireDays?: number
   ): s3.IBucket {
-    // A versioned bucket keeps every overwritten object until told
-    // otherwise; status.json alone is rewritten 144 times a day. Expire old
-    // versions after a while. Current objects, including the archive copies
-    // of runs that flagged pathways under simple/archive/, are untouched.
-    const lifecycleRules = versioned
-      ? [
-          {
-            id: 'expire-noncurrent-versions',
-            noncurrentVersionExpiration: Duration.days(
-              DATA_NONCURRENT_VERSION_DAYS
-            ),
-          },
-        ]
-      : undefined;
     return new s3.Bucket(this, id, {
       bucketName,
       versioned,
-      lifecycleRules,
+      lifecycleRules: this.lifecycleRulesFor(versioned, expireDays),
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       removalPolicy: RemovalPolicy.RETAIN,
     });
+  }
+
+  private lifecycleRulesFor(
+    versioned: boolean,
+    expireDays?: number
+  ): s3.LifecycleRule[] | undefined {
+    const rules: s3.LifecycleRule[] = [];
+    // A versioned bucket keeps every overwritten object until told
+    // otherwise; status.json alone is rewritten 144 times a day. Expire old
+    // versions after a while. Current objects, including the archive copies
+    // of runs that flagged pathways under simple/archive/, are untouched.
+    if (versioned) {
+      rules.push({
+        id: 'expire-noncurrent-versions',
+        noncurrentVersionExpiration: Duration.days(
+          DATA_NONCURRENT_VERSION_DAYS
+        ),
+      });
+    }
+    if (expireDays !== undefined) {
+      rules.push({
+        id: 'expire-objects',
+        expiration: Duration.days(expireDays),
+      });
+    }
+    return rules.length > 0 ? rules : undefined;
   }
 
   private makeProductionDistribution(
@@ -143,18 +179,23 @@ export class WebStack extends Stack {
     );
   }
 
-  private makeDevDistribution(props: WebStackProps): cloudfront.IDistribution {
-    const store = new cloudfront.KeyValueStore(this, 'DevAuthStore', {
+  // One credential guards the dev site and every preview site. The comment
+  // still names only dev because changing it would replace the store and
+  // drop the credential set by hand.
+  private makeDevAuthStore(): cloudfront.IKeyValueStore {
+    return new cloudfront.KeyValueStore(this, 'DevAuthStore', {
       keyValueStoreName: 'landslides-dev-basic-auth',
       comment:
         'basic-auth: base64 of user:password for dev.landslidesncgs.org (set by hand)',
     });
-    this.devAuthStore = store;
+  }
+
+  private makeDevDistribution(props: WebStackProps): cloudfront.IDistribution {
     const fn = new cloudfront.Function(this, 'DevFunction', {
       functionName: 'landslides-dev',
       code: cloudfront.FunctionCode.fromInline(composeDevFunction()),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
-      keyValueStore: store,
+      keyValueStore: this.devAuthStore,
     });
     return this.retained(
       new cloudfront.Distribution(this, 'DevDistribution', {
@@ -164,6 +205,34 @@ export class WebStack extends Stack {
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         defaultBehavior: this.makeBehavior(
           this.originFor(this.devSiteBucket),
+          fn,
+          false
+        ),
+        additionalBehaviors: this.makeDataBehaviors(fn, false),
+      })
+    );
+  }
+
+  // Every open pull request into development, at <slug>.landslidesncgs.org.
+  // The function maps the host onto the <slug>/ folder of the preview bucket.
+  private makePreviewDistribution(
+    props: WebStackProps
+  ): cloudfront.IDistribution {
+    const fn = new cloudfront.Function(this, 'PreviewFunction', {
+      functionName: 'landslides-preview',
+      code: cloudfront.FunctionCode.fromInline(composePreviewFunction()),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      keyValueStore: this.devAuthStore,
+    });
+    return this.retained(
+      new cloudfront.Distribution(this, 'PreviewDistribution', {
+        comment:
+          'Pull request previews at <branch>.landslidesncgs.org, basic auth, reads production data',
+        domainNames: [PREVIEW_HOSTNAME],
+        certificate: props.certificate,
+        minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+        defaultBehavior: this.makeBehavior(
+          this.originFor(this.previewSiteBucket),
           fn,
           false
         ),
@@ -236,7 +305,8 @@ export class WebStack extends Stack {
       const zone = hostname.endsWith(COM_DOMAIN)
         ? props.comZone
         : props.orgZone;
-      const id = hostname.replace(/\./g, '-');
+      // "*.landslidesncgs.org" becomes "wildcard-landslidesncgs-org".
+      const id = hostname.replace('*', 'wildcard').replace(/\./g, '-');
       new route53.ARecord(this, `A-${id}`, {
         zone,
         recordName: hostname,

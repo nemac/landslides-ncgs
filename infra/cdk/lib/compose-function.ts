@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 export const MAX_FUNCTION_BYTES = 10240;
 
-export type FunctionMode = 'production' | 'dev';
+export type FunctionMode = 'production' | 'dev' | 'preview';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PIECE_DIR = path.resolve(here, '..', '..', 'cloudfront');
@@ -25,6 +25,17 @@ async function handler(event) {
     var r = await basicAuth(event, kvs);
     if (r) { return r; }
     return rewrite(event);
+}`;
+
+// rewrite() answers a redirect or 410 itself; only a request that passes
+// through it is pointed at the preview's folder.
+const PREVIEW_HANDLER = `var kvs = cf.kvs();
+async function handler(event) {
+    var r = await basicAuth(event, kvs);
+    if (r) { return r; }
+    var out = rewrite(event);
+    if (out.statusCode) { return out; }
+    return previewPrefix(out);
 }`;
 
 function readPiece(pieceDir: string, file: string): string {
@@ -57,9 +68,24 @@ function devParts(pieceDir: string): string[] {
   ];
 }
 
+function previewParts(pieceDir: string): string[] {
+  return [
+    "import cf from 'cloudfront';",
+    readPiece(pieceDir, 'landslides-basic-auth.js'),
+    readPiece(pieceDir, 'landslides-rewrite.js'),
+    readPiece(pieceDir, 'landslides-preview-prefix.js'),
+    PREVIEW_HANDLER,
+  ];
+}
+
+const PARTS_BY_MODE: Record<FunctionMode, (pieceDir: string) => string[]> = {
+  production: productionParts,
+  dev: devParts,
+  preview: previewParts,
+};
+
 export function composeFrom(pieceDir: string, mode: FunctionMode): string {
-  const parts =
-    mode === 'production' ? productionParts(pieceDir) : devParts(pieceDir);
+  const parts = PARTS_BY_MODE[mode](pieceDir);
   const code = parts.join('\n\n') + '\n';
   assertWithinLimit(code, mode);
   return code;
@@ -71,4 +97,8 @@ export function composeProductionFunction(): string {
 
 export function composeDevFunction(): string {
   return composeFrom(DEFAULT_PIECE_DIR, 'dev');
+}
+
+export function composePreviewFunction(): string {
+  return composeFrom(DEFAULT_PIECE_DIR, 'preview');
 }

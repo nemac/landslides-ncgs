@@ -21,9 +21,19 @@ export const PROD_HOSTNAMES: readonly string[] = [
 ];
 export const DEV_HOSTNAME = 'dev.landslidesncgs.org';
 
+// Pull request previews claim every other name under the .org domain;
+// CloudFront and Route 53 both prefer the exact names above to a wildcard.
+export const PREVIEW_HOSTNAME = `*.${ORG_DOMAIN}`;
+
 export const SITE_BUCKET = 'landslidesncgs-site';
 export const DATA_BUCKET = 'landslidesncgs-data';
 export const DEV_SITE_BUCKET = 'landslidesncgs-dev-site';
+export const PREVIEW_SITE_BUCKET = 'landslidesncgs-preview-site';
+
+// pr-preview.yml deletes a preview's folder when its pull request closes.
+// Anything a missed cleanup leaves behind expires after this many days; the
+// next push to a still-open pull request uploads it again.
+export const PREVIEW_EXPIRY_DAYS = 60;
 
 export const GITHUB_REPO = 'nemac/landslides-ncgs';
 
@@ -31,6 +41,7 @@ export const GITHUB_REPO = 'nemac/landslides-ncgs';
 // as literals; test/workflows.test.ts checks those literals against these.
 export const PROD_ROLE_NAME = 'landslides-github-prod';
 export const DEV_ROLE_NAME = 'landslides-github-dev';
+export const PREVIEW_ROLE_NAME = 'landslides-github-preview';
 
 // The one data-bucket prefix a workflow may delete from: refresh-reference.yml
 // mirrors the building footprints there with `aws s3 sync --delete`.

@@ -114,6 +114,28 @@ The dev site at <https://dev.landslidesncgs.org/simple/> (from the
 `development` branch, basic auth) reads the production data bucket, so it
 shows live data.
 
+## Tests
+
+The page's JavaScript is plain `<script>` files, so the tests evaluate
+them in a sandbox or in jsdom rather than importing them. Everything runs
+from the repo root with `npm ci` done once.
+
+| Command | What it covers |
+|---------|----------------|
+| `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table and CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
+| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host is blocked. Needs `npx playwright install chromium` once |
+| `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py` |
+
+The fixtures in `simple/test/fixtures/` are three data folders (`live`,
+`stale`, `empty`) whose timestamps sit around 2026-10-27T18:40Z, the
+fixed clock both JavaScript suites use. `live` has four pathways, one of
+them category 10, so the threshold filter has something to drop.
+
+In CI these are the "Simple dashboard tests" and "Simple dashboard
+browser test" jobs in `ci.yml`, kept apart so a browser problem never
+blocks the Node checks. `map.js` exposes its private helpers as
+`DFS_MAP._test` for the map tests only.
+
 ## Run it locally
 
 `simple/pipeline/run_local.py` does what the workflow does in production,
