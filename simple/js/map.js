@@ -287,27 +287,30 @@ window.DFS_MAP = (function () {
     // "YYYY-MM-DD HH:MM:SS" in UTC for ArcGIS SQL
     return d.toISOString().slice(0, 19).replace('T', ' ');
   }
-  function setForecastPeriod(meta) {
-    if (!meta || !meta.window_end || typeof L.esri === 'undefined') return;
-    const end = new Date(meta.window_end);
-    const key =
-      meta.window_start + '|' + meta.window_end + '|' + (meta.issued || '');
-    if (key === _forecastKey && layers.forecast) return; // unchanged
-    _forecastKey = key;
-
-    // The layer is cumulative from the cycle start; the 6-h period that
-    // ends at window_end holds the whole window's total. Its fromdate is
-    // stored 1 s past the boundary, so match +/- 1 minute.
+  // The layer is cumulative from the cycle start; the 6-h period that
+  // ends at window_end holds the whole window's total. Its fromdate is
+  // stored 1 s past the boundary, so match +/- 1 minute.
+  function _forecastWhere(windowEnd) {
+    const end = new Date(windowEnd);
     const periodStart = new Date(end.getTime() - 6 * 3600 * 1000);
     const lo = new Date(periodStart.getTime() - 60000);
     const hi = new Date(periodStart.getTime() + 60000);
-    const where =
+    return (
       "fromdate >= timestamp '" +
       _fmtTs(lo) +
       "' AND " +
       "fromdate <= timestamp '" +
       _fmtTs(hi) +
-      "'";
+      "'"
+    );
+  }
+  function setForecastPeriod(meta) {
+    if (!meta || !meta.window_end || typeof L.esri === 'undefined') return;
+    const key =
+      meta.window_start + '|' + meta.window_end + '|' + (meta.issued || '');
+    if (key === _forecastKey && layers.forecast) return; // unchanged
+    _forecastKey = key;
+    const where = _forecastWhere(meta.window_end);
 
     const wasOn = !layers.forecast || map.hasLayer(layers.forecast);
     if (layers.forecast) map.removeLayer(layers.forecast);
@@ -1066,5 +1069,13 @@ window.DFS_MAP = (function () {
     setParcelsVisible,
     setBuildingsVisible,
     _internalMap: () => map,
+    // Private helpers, exposed for simple/test/map.test.js only.
+    _test: {
+      forecastWhere: _forecastWhere,
+      zoomForPlaceType: _zoomForPlaceType,
+      parseOwnerName: _parseOwnerName,
+      buildParcelPopup: _buildParcelPopup,
+      escape: _escape,
+    },
   };
 })();

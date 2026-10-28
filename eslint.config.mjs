@@ -70,6 +70,20 @@ export default [
     rules,
   },
   {
+    // Playwright specs: Node files whose page.evaluate callbacks run in
+    // the browser, so both sets of globals apply.
+    files: ['simple/e2e/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
+    },
+    rules,
+  },
+  {
     // CloudFront Function sources: the JS 2.0 runtime, linted as scripts.
     // Each piece's top-level function (basicAuth, hostedRedirects, rewrite)
     // is called by the handler that infra/cdk/lib/compose-function.ts

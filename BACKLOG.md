@@ -19,9 +19,13 @@ details belong in an issue or PR once someone picks it up.
   and synth plus the CloudFront Function tests on every pull request. As of
   2026-10-27 its `lint` job also runs `npm run lint`, `npm run format:check`,
   `ruff check` and `ruff format --check` over every source file, and the
-  `infra/lambda/refresh-simple-trigger` unit tests. Still to add: tests for
-  `scripts/analysis.py` (the intersection logic) and the frontend's
-  threshold filtering.
+  `infra/lambda/refresh-simple-trigger` unit tests. As of 2026-10-28 the
+  DFENS Simple page has its own jobs: Node tests in jsdom (including the
+  threshold filter) and a Playwright smoke test in Chromium; see
+  `simple/README.md`. The master ruleset still requires only "CDK synth
+  and function tests"; add "Simple dashboard tests" and "Simple dashboard
+  browser test" to its required checks in the repository settings. Still
+  to add: tests for `scripts/analysis.py` (the intersection logic).
 - **Decommission the NEMAC account resources.** After the cutover in
   `infra/README.md` reaches step 12 (48 hours after the GoDaddy name-server
   change), run its decommission list and record the date here.

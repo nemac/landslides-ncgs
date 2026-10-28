@@ -81,4 +81,6 @@ JavaScript and CSS, the CloudFront Functions and the CDK TypeScript
 `npm run format:py:check` for Python (`ruff` from `requirements-dev.txt`,
 installed into `.venv`; `npm run format:py` rewrites). CloudFront function
 tests: `node --test "infra/cloudfront/test/*.test.js"`. CDK tests and
-typecheck: `npm test` and `npm run typecheck` in `infra/cdk/`.
+typecheck: `npm test` and `npm run typecheck` in `infra/cdk/`. DFENS
+Simple page tests: `npm run test:simple` (Node, jsdom) and
+`npm run test:e2e` (Playwright, Chromium); see `simple/README.md`.
