@@ -1,0 +1,50 @@
+{
+ "type": "FeatureCollection",
+ "meta": {
+  "source": "NWS NDFD precipitation forecast (Accumulation by Time)",
+  "issued": "2026-10-27T18:11:16+00:00",
+  "window_start": "2026-10-27T18:00:00+00:00",
+  "window_end": "2026-10-28T18:00:00+00:00",
+  "window_hours": 24,
+  "min_category_shipped": 11,
+  "n_flagged": 3,
+  "generated_at": "2026-10-27T18:20:44+00:00",
+  "ndfd_key": "2026-10-27T18:00:00+00:00|2026-10-27T18:11:16+00:00"
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -82.7,
+       35.5
+      ],
+      [
+       -82.4,
+       35.5
+      ],
+      [
+       -82.4,
+       35.8
+      ],
+      [
+       -82.7,
+       35.8
+      ],
+      [
+       -82.7,
+       35.5
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "category": 11,
+    "label": "5.00-6.00 inches"
+   }
+  }
+ ]
+}

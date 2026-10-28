@@ -5,6 +5,15 @@ details belong in an issue or PR once someone picks it up.
 
 ## Committed to
 
+- **Deploy the three stacks once PR #33 (development into master) merges.**
+  Added 2026-10-27. The reference-check schedule, the scoped delete grant and
+  the bucket lifecycle rule exist only in code until then. From `infra/cdk/`
+  with a fresh `aws sso login --profile jbliss-landslidesncgs`:
+  `npx cdk deploy Trigger Ci Web --profile jbliss-landslidesncgs`. Then run
+  `refresh-reference.yml` by hand from the Actions tab (no `force` needed;
+  with no recorded state it rebuilds both datasets, 20 to 30 minutes) and
+  confirm `alerts/data/reference_state.json` and `cache/debris_flows.gpkg`
+  appear in the data bucket. Done 2026-10-28.
 - **Update documentation.** Done 2026-10-27: `README.md`, `OPERATIONS.md`,
   `scripts/README.md`, `alerts/README.md` and `simple/README.md` describe
   how the site is actually built, refreshed and deployed. Keep them that
@@ -19,9 +28,13 @@ details belong in an issue or PR once someone picks it up.
   and synth plus the CloudFront Function tests on every pull request. As of
   2026-10-27 its `lint` job also runs `npm run lint`, `npm run format:check`,
   `ruff check` and `ruff format --check` over every source file, and the
-  `infra/lambda/refresh-simple-trigger` unit tests. Still to add: tests for
-  `scripts/analysis.py` (the intersection logic) and the frontend's
-  threshold filtering.
+  `infra/lambda/refresh-simple-trigger` unit tests. As of 2026-10-28 the
+  DFENS Simple page has its own jobs: Node tests in jsdom (including the
+  threshold filter) and a Playwright smoke test in Chromium; see
+  `simple/README.md`. The master ruleset still requires only "CDK synth
+  and function tests"; add "Simple dashboard tests" and "Simple dashboard
+  browser test" to its required checks in the repository settings. Still
+  to add: tests for `scripts/analysis.py` (the intersection logic).
 - **Decommission the NEMAC account resources.** After the cutover in
   `infra/README.md` reaches step 12 (48 hours after the GoDaddy name-server
   change), run its decommission list and record the date here.

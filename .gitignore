@@ -15,8 +15,10 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-# Node tooling (eslint, prettier)
+# Node tooling (eslint, prettier, jsdom, playwright)
 node_modules/
+playwright-report/
+test-results/
 
 # Ruff cache
 .ruff_cache/
