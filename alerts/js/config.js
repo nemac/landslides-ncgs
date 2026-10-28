@@ -20,16 +20,16 @@ window.DEFNS_CONFIG = (function () {
   // 20 bins from NWS, from "trace" through ">= 20 inches".
   // Index = NDFD category number. label = display string.
   const PRECIP_LABELS = {
-    0:  '.01\u2013.10\u2033',
-    1:  '.10\u2013.25\u2033',
-    2:  '.25\u2013.50\u2033',
-    3:  '.50\u2013.75\u2033',
-    4:  '.75\u20131.00\u2033',
-    5:  '1.00\u20131.50\u2033',
-    6:  '1.50\u20132.00\u2033',
-    7:  '2.00\u20132.50\u2033',
-    8:  '2.50\u20133.00\u2033',
-    9:  '3.00\u20134.00\u2033',
+    0: '.01\u2013.10\u2033',
+    1: '.10\u2013.25\u2033',
+    2: '.25\u2013.50\u2033',
+    3: '.50\u2013.75\u2033',
+    4: '.75\u20131.00\u2033',
+    5: '1.00\u20131.50\u2033',
+    6: '1.50\u20132.00\u2033',
+    7: '2.00\u20132.50\u2033',
+    8: '2.50\u20133.00\u2033',
+    9: '3.00\u20134.00\u2033',
     10: '4.00\u20135.00\u2033',
     11: '5.00\u20136.00\u2033',
     12: '6.00\u20138.00\u2033',
@@ -39,7 +39,7 @@ window.DEFNS_CONFIG = (function () {
     16: '14.00\u201316.00\u2033',
     17: '16.00\u201318.00\u2033',
     18: '18.00\u201320.00\u2033',
-    19: '>20.00\u2033'
+    19: '>20.00\u2033',
   };
 
   // Lower bound (inches) of each category, used for "at-or-above" threshold
@@ -47,10 +47,26 @@ window.DEFNS_CONFIG = (function () {
   // wordier "5.00-6.00 inches" range form. Mirrors MRMS_CATEGORY_CUTOFFS_INCHES
   // in scripts/config.py: cat N's lower bound is the upper bound of cat N-1.
   const PRECIP_LOWER_BOUNDS_INCHES = {
-    0:  0.01, 1:  0.10, 2:  0.25, 3:  0.50, 4:  0.75,
-    5:  1.00, 6:  1.50, 7:  2.00, 8:  2.50, 9:  3.00,
-    10: 4.00, 11: 5.00, 12: 6.00, 13: 8.00, 14: 10.00,
-    15: 12.00, 16: 14.00, 17: 16.00, 18: 18.00, 19: 20.00
+    0: 0.01,
+    1: 0.1,
+    2: 0.25,
+    3: 0.5,
+    4: 0.75,
+    5: 1.0,
+    6: 1.5,
+    7: 2.0,
+    8: 2.5,
+    9: 3.0,
+    10: 4.0,
+    11: 5.0,
+    12: 6.0,
+    13: 8.0,
+    14: 10.0,
+    15: 12.0,
+    16: 14.0,
+    17: 16.0,
+    18: 18.0,
+    19: 20.0,
   };
 
   // Format a category as a "at-or-above" threshold string like "5.00\u2033"
@@ -66,10 +82,11 @@ window.DEFNS_CONFIG = (function () {
   // field in the source-meta block a clickable link to the upstream
   // data service. Keys match state.mode values.
   const SOURCE_LINKS = {
-    ndfd:       'https://services9.arcgis.com/RHVPKKiFTONKtxq3/' +
-                'arcgis/rest/services/NDFD_Precipitation_v1/FeatureServer/1',
-    mrms:       'https://mtarchive.geol.iastate.edu/',
-    historical: 'https://water.noaa.gov/about/precipitation-data-access'
+    ndfd:
+      'https://services9.arcgis.com/RHVPKKiFTONKtxq3/' +
+      'arcgis/rest/services/NDFD_Precipitation_v1/FeatureServer/1',
+    mrms: 'https://mtarchive.geol.iastate.edu/',
+    historical: 'https://water.noaa.gov/about/precipitation-data-access',
   };
 
   // NDFD's official color ramp. Same scheme used in NWS NDFD products and
@@ -77,16 +94,16 @@ window.DEFNS_CONFIG = (function () {
   // Light blues for trace amounts, ramping through greens, yellows, oranges,
   // reds, magentas for the heaviest amounts.
   const PRECIP_COLORS = {
-    0:  '#7E22CE',   // very light, trace-only
-    1:  '#9333EA',
-    2:  '#A855F7',
-    3:  '#C084FC',
-    4:  '#D8B4FE',
-    5:  '#86EFAC',
-    6:  '#4ADE80',
-    7:  '#22C55E',
-    8:  '#16A34A',
-    9:  '#FACC15',
+    0: '#7E22CE', // very light, trace-only
+    1: '#9333EA',
+    2: '#A855F7',
+    3: '#C084FC',
+    4: '#D8B4FE',
+    5: '#86EFAC',
+    6: '#4ADE80',
+    7: '#22C55E',
+    8: '#16A34A',
+    9: '#FACC15',
     10: '#EAB308',
     11: '#F59E0B',
     12: '#F97316',
@@ -96,16 +113,16 @@ window.DEFNS_CONFIG = (function () {
     16: '#991B1B',
     17: '#7F1D1D',
     18: '#A21CAF',
-    19: '#86198F'
+    19: '#86198F',
   };
 
   // ---- Detection thresholds & defaults ------------------------------------
   // Default forecast window and threshold for NDFD mode.
   // Default threshold for MRMS mode (separate because the 1-hour observed
   // semantics differ from N-hour forecast accumulation).
-  const NDFD_DEFAULT_THRESHOLD_CATEGORY = 11;   // >= 5.00" / 12hr
+  const NDFD_DEFAULT_THRESHOLD_CATEGORY = 11; // >= 5.00" / 12hr
   const NDFD_DEFAULT_WINDOW_HOURS = 12;
-  const MRMS_DEFAULT_THRESHOLD_CATEGORY = 5;    // >= 1.00" / 1hr
+  const MRMS_DEFAULT_THRESHOLD_CATEGORY = 5; // >= 1.00" / 1hr
 
   // ---- Data sources -------------------------------------------------------
   // NCGS debris flow polygons - live AGOL FeatureServer, queried via
@@ -174,8 +191,7 @@ window.DEFNS_CONFIG = (function () {
   // extraction logic and scripts/config.py's OVERTURE_BUILDINGS_*
   // constants for tuning (TTL, simplification, min area, etc).
   const OVERTURE_BUILDINGS_MANIFEST_URL = 'data/buildings/manifest.json';
-  const OVERTURE_BUILDINGS_ATTRIBUTION  =
-    '\u00a9 Overture Maps Foundation';
+  const OVERTURE_BUILDINGS_ATTRIBUTION = '\u00a9 Overture Maps Foundation';
   // Minimum map zoom at which building footprints are fetched. Below
   // this, the layer toggle shows a "(zoom in to load)" hint (same as
   // parcels does). 12 = neighborhood-scale view where individual
@@ -194,14 +210,13 @@ window.DEFNS_CONFIG = (function () {
   // both autocomplete suggestions and full-address resolution against
   // this endpoint internally - we just point it at the same place.
   const ESRI_GEOCODER_URL =
-    'https://geocode.arcgis.com/arcgis/rest/services/' +
-    'World/GeocodeServer';
+    'https://geocode.arcgis.com/arcgis/rest/services/' + 'World/GeocodeServer';
 
   // ---- Auto-refresh -------------------------------------------------------
   // GitHub Actions writes new JSON every 15 minutes. The frontend polls
   // for it at a slightly longer interval so we don't hammer the bucket and
   // so the user gets fresh data without too much network churn.
-  const AUTO_REFRESH_MS = 15 * 60 * 1000;   // 15 min
+  const AUTO_REFRESH_MS = 15 * 60 * 1000; // 15 min
 
   // ---- Pane z-indexes (lesson from Streamlit version) ---------------------
   // Leaflet's default tilePane is 200. Anything we want above basemaps must
@@ -223,26 +238,32 @@ window.DEFNS_CONFIG = (function () {
   // were above, they'd visually compete with the precipitation polygons
   // and debris flow alerts that the dashboard is built around.
   const PANE_ZINDEX = {
-    buildings:       380,    // Overture building footprints (context)
-    parcels:         390,    // NC OneMap parcels (context)
-    forecast:        400,    // NDFD forecast polygons
-    observed:        410,    // MRMS observed polygons
-    radar:           420,    // NEXRAD radar overlay
-    alerts:          430,    // flagged debris flow zones
-    ncgs_reference:  440     // NCGS debris flow reference (above alerts when on)
+    buildings: 380, // Overture building footprints (context)
+    parcels: 390, // NC OneMap parcels (context)
+    forecast: 400, // NDFD forecast polygons
+    observed: 410, // MRMS observed polygons
+    radar: 420, // NEXRAD radar overlay
+    alerts: 430, // flagged debris flow zones
+    ncgs_reference: 440, // NCGS debris flow reference (above alerts when on)
   };
 
   return {
-    MAP_CENTER, MAP_ZOOM, WNC_BBOX,
-    PRECIP_LABELS, PRECIP_COLORS,
-    PRECIP_LOWER_BOUNDS_INCHES, formatThresholdInches,
+    MAP_CENTER,
+    MAP_ZOOM,
+    WNC_BBOX,
+    PRECIP_LABELS,
+    PRECIP_COLORS,
+    PRECIP_LOWER_BOUNDS_INCHES,
+    formatThresholdInches,
     SOURCE_LINKS,
     NDFD_DEFAULT_THRESHOLD_CATEGORY,
     NDFD_DEFAULT_WINDOW_HOURS,
     MRMS_DEFAULT_THRESHOLD_CATEGORY,
     NCGS_FEATURESERVER_URL,
-    NEXRAD_TILES_URL, NEXRAD_ATTRIBUTION,
-    NCONEMAP_PARCELS_URL, NCONEMAP_PARCELS_ATTRIBUTION,
+    NEXRAD_TILES_URL,
+    NEXRAD_ATTRIBUTION,
+    NCONEMAP_PARCELS_URL,
+    NCONEMAP_PARCELS_ATTRIBUTION,
     NCONEMAP_PARCELS_MIN_ZOOM,
     OVERTURE_BUILDINGS_MANIFEST_URL,
     OVERTURE_BUILDINGS_ATTRIBUTION,
@@ -250,6 +271,6 @@ window.DEFNS_CONFIG = (function () {
     OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES,
     ESRI_GEOCODER_URL,
     AUTO_REFRESH_MS,
-    PANE_ZINDEX
+    PANE_ZINDEX,
   };
 })();

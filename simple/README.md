@@ -22,20 +22,22 @@ The page has no mode, window or threshold controls. These values are set in
 in sync.
 
 The page keeps the map (basemap selector and address search), the flagged
-pathways table (click a row to zoom, CSV download), and four layer toggles:
+pathways table (click a row to zoom, CSV download), and seven layer toggles:
 
-- Flagged Debris Flow Pathways
-- Potential Channelized Debris Flow Pathways (NCGS AGOL, live)
+- NDFD forecast precipitation (the 24-hour window, live from the service)
+- MRMS observed precipitation, past 24 hours (Iowa Mesonet tiles, reference only)
+- NEXRAD radar, current (reference only)
+- Flagged debris flow pathways (from this pipeline)
+- Potential channelized debris flow pathways (NCGS AGOL, live)
 - NC Parcels (NC OneMap, live, zoom 14+, clickable)
-- Building footprints (shared with the main dashboard, read from
-  `../alerts/data/` on the same origin)
+- Building footprints (rebuilt by `refresh-reference.yml` when Overture
+  publishes a release, read from `../alerts/data/` on the same origin)
 
 ## Data pipeline: its own, every 10 minutes
 
-The main dashboard's pipeline (`scripts/refresh.py`, `refresh-data.yml`)
-runs nightly. It produces 7 flagged files plus MRMS and buildings, and
-uploads them to the data bucket. It is too heavy to keep up with NDFD, which updates
-about hourly. The simple page therefore has its own lean pipeline that
+The full alerts pipeline (`scripts/refresh.py`) is too heavy to keep up
+with NDFD, which updates about hourly, and has not run on a schedule since
+2026-10-27. The simple page therefore has its own lean pipeline that
 produces only the files this page needs and uploads them straight to S3.
 Nothing under `simple/data/` is committed to git.
 
@@ -46,8 +48,9 @@ Nothing under `simple/data/` is committed to git.
       otherwise                                -> build
   simple/pipeline/refresh_simple.py    geopandas, only on "build"
       fetch all categories for the 24 h period, clip to WNC -> forecast_24h.geojson
-      any >= 5" polygons? load debris flows (cache/debris_flows.gpkg,
-      actions/cache monthly), bbox prefilter, find_alerts() on candidates
+      any >= 5" polygons? download cache/debris_flows.gpkg from the data
+      bucket (kept current by refresh-reference.yml), bbox prefilter,
+      find_alerts() on candidates
   -> s3://landslidesncgs-data/simple/data/
         forecast_24h.geojson             (map layer, Cache-Control max-age=60)
         flagged_ndfd_24h_min11.geojson   (max-age=60)
@@ -57,8 +60,9 @@ Nothing under `simple/data/` is committed to git.
 The pipeline imports `scripts/data.py`, `scripts/analysis.py` and
 `scripts/config.py` directly (the debris-flow fetch with county and
 watershed tagging, and the intersection), so results match the full
-dashboard. The debris-flow cache (`cache/debris_flows.gpkg`) and its
-monthly `actions/cache` key are shared with `refresh-data.yml`.
+dashboard. The debris-flow GeoPackage (`cache/debris_flows.gpkg`) is
+rebuilt by `refresh-reference.yml` when the NCGS layer changes and shared
+through the data bucket.
 
 ### Expected freshness
 
@@ -67,7 +71,7 @@ monthly `actions/cache` key are shared with `refresh-data.yml`.
 | NWS updates NDFD; Esri reloads the layer | about hourly |
 | Next scheduled check (EventBridge Scheduler, every 10 min) | 0–10 min |
 | Run: skip | ~30 s |
-| Run: build | ~1–2 min; ~3–5 min with heavy rain (~20 min on the monthly cold cache) |
+| Run: build | ~1–2 min; ~3–5 min with heavy rain (~20 min if the GeoPackage is missing from the bucket) |
 | CloudFront / browser cache | ≤ 1 min; the page re-polls every 5 min |
 
 The page displays a warning banner if `status.checked_at` is more than 45
@@ -118,9 +122,8 @@ into `simple/data/`, and serves the repo root so the page is at
 <http://localhost:8000/simple/> and building footprints load from
 `alerts/data/`.
 
-```bat
-cd %USERPROFILE%\Documents\GitHub\landslides-ncgs
-conda activate EWS              REM any env with geopandas + requests
+```bash
+conda activate defns-refresh    # from environment.yml; any env with geopandas + requests works
 python simple/pipeline/run_local.py
 ```
 

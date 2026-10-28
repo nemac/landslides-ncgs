@@ -19,7 +19,6 @@ export const PROD_HOSTNAMES: readonly string[] = [
   'mapviewer.landslidesncgs.org',
   'mapviewer.landslidesncgs.com',
 ];
-export const APEX_HOSTNAMES: readonly string[] = ['landslidesncgs.org', 'landslidesncgs.com'];
 export const DEV_HOSTNAME = 'dev.landslidesncgs.org';
 
 export const SITE_BUCKET = 'landslidesncgs-site';
@@ -28,8 +27,22 @@ export const DEV_SITE_BUCKET = 'landslidesncgs-dev-site';
 
 export const GITHUB_REPO = 'nemac/landslides-ncgs';
 
-// The GitHub token in the dispatch secret expires on TOKEN_EXPIRES; a one-time
-// schedule fires at REMINDER_AT to open a renewal issue. Update both when the
-// token is renewed.
-export const TOKEN_EXPIRES = '2027-10-21';
+// The roles GitHub Actions assume (Ci stack). The workflows carry their ARNs
+// as literals; test/workflows.test.ts checks those literals against these.
+export const PROD_ROLE_NAME = 'landslides-github-prod';
+export const DEV_ROLE_NAME = 'landslides-github-dev';
+
+// The one data-bucket prefix a workflow may delete from: refresh-reference.yml
+// mirrors the building footprints there with `aws s3 sync --delete`.
+export const BUILDINGS_PREFIX = 'alerts/data/buildings/';
+
+// Old versions in the versioned data bucket are kept this long. Runs that
+// flagged pathways are copied to simple/archive/ as current objects, which
+// this does not touch.
+export const DATA_NONCURRENT_VERSION_DAYS = 30;
+
+// A one-time schedule fires at REMINDER_AT, a month before the GitHub token
+// in the dispatch secret expires, to open a renewal issue. The expiry date
+// itself is the `expires` input default in token-expiry-reminder.yml. Update
+// both when the token is renewed.
 export const REMINDER_AT = '2027-09-21T13:00:00Z';

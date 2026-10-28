@@ -23,10 +23,17 @@ npx cdk deploy Web --profile jbliss-landslidesncgs   # one stack
 
 Deploys run from a developer machine with the `jbliss-landslidesncgs` SSO
 profile (`aws sso login --profile jbliss-landslidesncgs` first). CI only
-synthesizes. The `cutover` context key (`wildcard`, `subdomains`, `done`)
-exists for the migration below; after it, every deploy uses
-`--context cutover=done`, and `cdk.json` should be edited to make that the
-default once step 10 is complete.
+synthesizes. The migration below is complete (2026-10-26). The `cutover`
+context key that staged it (`wildcard`, `subdomains`, `done`) was removed on
+2026-10-27; the production distribution now always claims the eight
+hostnames in `lib/config.ts`, and the `--context cutover=...` flags in the
+runbook commands below are historical.
+
+The workflows carry the role ARNs, bucket names and distribution ids as
+literals copied from the stack outputs; `test/workflows.test.ts` checks the
+ARNs and bucket names against `lib/config.ts` on every CI run, so a renamed
+role or bucket fails CI instead of failing a deploy. The distribution ids
+are only checked for shape.
 
 Secrets never live in this repo. Two values are set by hand, once, with the
 commands in step 4 below: the GitHub token in Secrets Manager and the dev
@@ -173,7 +180,7 @@ distributions by the names only they can answer:
 
 ```bash
 # host-independent pages and the data behaviors, straight at the new distribution
-for p in / /alerts/ /simple/ /alerts/data/forecast.geojson /simple/data/status.json /alerts/data/buildings/manifest.json; do
+for p in / /alerts/ /simple/ /alerts/data/forecast_24h.geojson /simple/data/status.json /alerts/data/buildings/manifest.json; do
   printf '%-45s' "$p"; curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' "https://PROD_DOMAIN$p"
 done
 
@@ -372,8 +379,8 @@ Resolvers that asked during the gap cache the empty answer for up to the
 SOA TTL (900 s).
 
 The last deploy records the eight exact aliases, drops the wildcards and
-adds the apex records to the new zones. Then edit `cdk.json` so
-`"cutover": "done"` is the default context.
+adds the apex records to the new zones. (The stage mechanism was removed
+after the migration; the `done` state is now the only one the code knows.)
 
 ### 11. Repoint the apex records, then the name servers at GoDaddy (hand)
 

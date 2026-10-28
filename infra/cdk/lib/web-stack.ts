@@ -1,4 +1,10 @@
-import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import {
+  CfnOutput,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+} from 'aws-cdk-lib';
 import type * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -6,12 +12,21 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
-import { composeDevFunction, composeProductionFunction } from './compose-function.js';
-import { COM_DOMAIN, DATA_BUCKET, DEV_HOSTNAME, DEV_SITE_BUCKET, SITE_BUCKET } from './config.js';
-import { type CutoverStage, productionDomainNames, recordedHostnames } from './cutover.js';
+import {
+  composeDevFunction,
+  composeProductionFunction,
+} from './compose-function.js';
+import {
+  COM_DOMAIN,
+  DATA_BUCKET,
+  DATA_NONCURRENT_VERSION_DAYS,
+  DEV_HOSTNAME,
+  DEV_SITE_BUCKET,
+  PROD_HOSTNAMES,
+  SITE_BUCKET,
+} from './config.js';
 
 export interface WebStackProps extends StackProps {
-  stage: CutoverStage;
   orgZone: route53.IHostedZone;
   comZone: route53.IHostedZone;
   certificate: acm.ICertificate;
@@ -41,55 +56,98 @@ export class WebStack extends Stack {
     super(scope, id, { terminationProtection: true, ...props });
     this.siteBucket = this.makeBucket('SiteBucket', SITE_BUCKET, false);
     this.dataBucket = this.makeBucket('DataBucket', DATA_BUCKET, true);
-    this.devSiteBucket = this.makeBucket('DevSiteBucket', DEV_SITE_BUCKET, false);
+    this.devSiteBucket = this.makeBucket(
+      'DevSiteBucket',
+      DEV_SITE_BUCKET,
+      false
+    );
 
     this.productionDistribution = this.makeProductionDistribution(props);
     this.devDistribution = this.makeDevDistribution(props);
 
-    this.makeRecords(props, recordedHostnames(props.stage), this.productionDistribution);
+    this.makeRecords(props, [...PROD_HOSTNAMES], this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);
     this.makeOutputs();
   }
 
   // Values the cutover runbook (infra/README.md) and the workflows copy.
   private makeOutputs(): void {
-    new CfnOutput(this, 'ProductionDistributionId', { value: this.productionDistribution.distributionId });
-    new CfnOutput(this, 'ProductionDomainName', { value: this.productionDistribution.distributionDomainName });
-    new CfnOutput(this, 'DevDistributionId', { value: this.devDistribution.distributionId });
-    new CfnOutput(this, 'DevDomainName', { value: this.devDistribution.distributionDomainName });
-    new CfnOutput(this, 'DevAuthStoreArn', { value: this.devAuthStore.keyValueStoreArn });
+    new CfnOutput(this, 'ProductionDistributionId', {
+      value: this.productionDistribution.distributionId,
+    });
+    new CfnOutput(this, 'ProductionDomainName', {
+      value: this.productionDistribution.distributionDomainName,
+    });
+    new CfnOutput(this, 'DevDistributionId', {
+      value: this.devDistribution.distributionId,
+    });
+    new CfnOutput(this, 'DevDomainName', {
+      value: this.devDistribution.distributionDomainName,
+    });
+    new CfnOutput(this, 'DevAuthStoreArn', {
+      value: this.devAuthStore.keyValueStoreArn,
+    });
   }
 
-  private makeBucket(id: string, bucketName: string, versioned: boolean): s3.IBucket {
+  private makeBucket(
+    id: string,
+    bucketName: string,
+    versioned: boolean
+  ): s3.IBucket {
+    // A versioned bucket keeps every overwritten object until told
+    // otherwise; status.json alone is rewritten 144 times a day. Expire old
+    // versions after a while. Current objects, including the archive copies
+    // of runs that flagged pathways under simple/archive/, are untouched.
+    const lifecycleRules = versioned
+      ? [
+          {
+            id: 'expire-noncurrent-versions',
+            noncurrentVersionExpiration: Duration.days(
+              DATA_NONCURRENT_VERSION_DAYS
+            ),
+          },
+        ]
+      : undefined;
     return new s3.Bucket(this, id, {
       bucketName,
       versioned,
+      lifecycleRules,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
       removalPolicy: RemovalPolicy.RETAIN,
     });
   }
 
-  private makeProductionDistribution(props: WebStackProps): cloudfront.IDistribution {
+  private makeProductionDistribution(
+    props: WebStackProps
+  ): cloudfront.IDistribution {
     const fn = new cloudfront.Function(this, 'ProductionFunction', {
       functionName: 'landslides-production',
       code: cloudfront.FunctionCode.fromInline(composeProductionFunction()),
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
-    return this.retained(new cloudfront.Distribution(this, 'ProductionDistribution', {
-      comment: 'landslidesncgs.org production site, dashboard, DFENS Simple, inventory and mapviewer hosts',
-      domainNames: productionDomainNames(props.stage),
-      certificate: props.certificate,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      defaultBehavior: this.makeBehavior(this.originFor(this.siteBucket), fn, true),
-      additionalBehaviors: this.makeDataBehaviors(fn, true),
-    }));
+    return this.retained(
+      new cloudfront.Distribution(this, 'ProductionDistribution', {
+        comment:
+          'landslidesncgs.org production site, dashboard, DFENS Simple, inventory and mapviewer hosts',
+        domainNames: [...PROD_HOSTNAMES],
+        certificate: props.certificate,
+        minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+        defaultBehavior: this.makeBehavior(
+          this.originFor(this.siteBucket),
+          fn,
+          true
+        ),
+        additionalBehaviors: this.makeDataBehaviors(fn, true),
+      })
+    );
   }
 
   private makeDevDistribution(props: WebStackProps): cloudfront.IDistribution {
     const store = new cloudfront.KeyValueStore(this, 'DevAuthStore', {
       keyValueStoreName: 'landslides-dev-basic-auth',
-      comment: 'basic-auth: base64 of user:password for dev.landslidesncgs.org (set by hand)',
+      comment:
+        'basic-auth: base64 of user:password for dev.landslidesncgs.org (set by hand)',
     });
     this.devAuthStore = store;
     const fn = new cloudfront.Function(this, 'DevFunction', {
@@ -98,18 +156,26 @@ export class WebStack extends Stack {
       runtime: cloudfront.FunctionRuntime.JS_2_0,
       keyValueStore: store,
     });
-    return this.retained(new cloudfront.Distribution(this, 'DevDistribution', {
-      comment: 'dev.landslidesncgs.org, basic auth, reads production data',
-      domainNames: [DEV_HOSTNAME],
-      certificate: props.certificate,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-      defaultBehavior: this.makeBehavior(this.originFor(this.devSiteBucket), fn, false),
-      additionalBehaviors: this.makeDataBehaviors(fn, false),
-    }));
+    return this.retained(
+      new cloudfront.Distribution(this, 'DevDistribution', {
+        comment: 'dev.landslidesncgs.org, basic auth, reads production data',
+        domainNames: [DEV_HOSTNAME],
+        certificate: props.certificate,
+        minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+        defaultBehavior: this.makeBehavior(
+          this.originFor(this.devSiteBucket),
+          fn,
+          false
+        ),
+        additionalBehaviors: this.makeDataBehaviors(fn, false),
+      })
+    );
   }
 
   // A distribution that CloudFormation drops is a live hostname gone; keep it.
-  private retained(distribution: cloudfront.Distribution): cloudfront.Distribution {
+  private retained(
+    distribution: cloudfront.Distribution
+  ): cloudfront.Distribution {
     distribution.applyRemovalPolicy(RemovalPolicy.RETAIN);
     return distribution;
   }
@@ -120,33 +186,67 @@ export class WebStack extends Stack {
     return origins.S3BucketOrigin.withOriginAccessControl(bucket);
   }
 
-  private makeBehavior(origin: cloudfront.IOrigin, fn: cloudfront.IFunction, securityHeaders: boolean): cloudfront.BehaviorOptions {
+  private makeBehavior(
+    origin: cloudfront.IOrigin,
+    fn: cloudfront.IFunction,
+    securityHeaders: boolean
+  ): cloudfront.BehaviorOptions {
     return {
       origin,
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       compress: true,
-      responseHeadersPolicy: securityHeaders ? cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS : undefined,
-      functionAssociations: [{ function: fn, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+      responseHeadersPolicy: securityHeaders
+        ? cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS
+        : undefined,
+      functionAssociations: [
+        {
+          function: fn,
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        },
+      ],
     };
   }
 
-  private makeDataBehaviors(fn: cloudfront.IFunction, securityHeaders: boolean): Record<string, cloudfront.BehaviorOptions> {
+  private makeDataBehaviors(
+    fn: cloudfront.IFunction,
+    securityHeaders: boolean
+  ): Record<string, cloudfront.BehaviorOptions> {
     const behaviors: Record<string, cloudfront.BehaviorOptions> = {};
     const dataOrigin = this.originFor(this.dataBucket);
     for (const pathPattern of DATA_PATHS) {
-      behaviors[pathPattern] = this.makeBehavior(dataOrigin, fn, securityHeaders);
+      behaviors[pathPattern] = this.makeBehavior(
+        dataOrigin,
+        fn,
+        securityHeaders
+      );
     }
     return behaviors;
   }
 
-  private makeRecords(props: WebStackProps, hostnames: string[], distribution: cloudfront.IDistribution): void {
-    const target = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution));
+  private makeRecords(
+    props: WebStackProps,
+    hostnames: string[],
+    distribution: cloudfront.IDistribution
+  ): void {
+    const target = route53.RecordTarget.fromAlias(
+      new targets.CloudFrontTarget(distribution)
+    );
     for (const hostname of hostnames) {
-      const zone = hostname.endsWith(COM_DOMAIN) ? props.comZone : props.orgZone;
+      const zone = hostname.endsWith(COM_DOMAIN)
+        ? props.comZone
+        : props.orgZone;
       const id = hostname.replace(/\./g, '-');
-      new route53.ARecord(this, `A-${id}`, { zone, recordName: hostname, target });
-      new route53.AaaaRecord(this, `AAAA-${id}`, { zone, recordName: hostname, target });
+      new route53.ARecord(this, `A-${id}`, {
+        zone,
+        recordName: hostname,
+        target,
+      });
+      new route53.AaaaRecord(this, `AAAA-${id}`, {
+        zone,
+        recordName: hostname,
+        target,
+      });
     }
   }
 }

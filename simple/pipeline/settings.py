@@ -7,16 +7,16 @@ Keep in sync with js/config.js (WINDOW_HOURS, THRESHOLD_CATEGORY).
 from datetime import datetime, timedelta
 
 WINDOW_HOURS = 24
-THRESHOLD_CATEGORY = 11          # NDFD cat 11 = 5.00-6.00 in; ">= 5 inches"
+THRESHOLD_CATEGORY = 11  # NDFD cat 11 = 5.00-6.00 in; ">= 5 inches"
 
 NDFD_LAYER_URL = (
     "https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/"
     "NDFD_Precipitation_v1/FeatureServer/1"
 )
-WNC_BBOX = (-84.5, 34.8, -81.0, 36.7)   # west, south, east, north
+WNC_BBOX = (-84.5, 34.8, -81.0, 36.7)  # west, south, east, north
 
 FLAGGED_FILENAME = "flagged_ndfd_24h_min11.geojson"
-FORECAST_FILENAME = "forecast_24h.geojson"     # all categories, for the map layer
+FORECAST_FILENAME = "forecast_24h.geojson"  # all categories, for the map layer
 
 # Bump when the set or format of output files changes. A published
 # status.json with a different version forces a rebuild even if NDFD
@@ -26,10 +26,12 @@ PIPELINE_VERSION = 2
 # Where the page (and the change check) read the last published status.
 PUBLIC_STATUS_URL = "https://landslidesncgs.org/simple/data/status.json"
 
+
 def check_interval_minutes() -> float:
     """How often checks run, written into status.json so the page can show
-    "next check in N min". Set by refresh.yml / run_local.py."""
+    "next check in N min". Set by refresh-simple.yml / run_local.py."""
     import os
+
     try:
         return float(os.environ.get("CHECK_INTERVAL_MINUTES", "10"))
     except ValueError:
@@ -50,6 +52,8 @@ def period_where(cycle_start: datetime, window_hours: int, min_category: int) ->
     period_start = cycle_start + timedelta(hours=window_hours - 6)
     lo = period_start - timedelta(minutes=1)
     hi = period_start + timedelta(minutes=1)
-    return (f"fromdate >= timestamp '{lo:%Y-%m-%d %H:%M:%S}' "
-            f"AND fromdate <= timestamp '{hi:%Y-%m-%d %H:%M:%S}' "
-            f"AND category >= {min_category}")
+    return (
+        f"fromdate >= timestamp '{lo:%Y-%m-%d %H:%M:%S}' "
+        f"AND fromdate <= timestamp '{hi:%Y-%m-%d %H:%M:%S}' "
+        f"AND category >= {min_category}"
+    )

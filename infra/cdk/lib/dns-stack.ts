@@ -30,7 +30,11 @@ export class DnsStack extends Stack {
   private makeCertificate(): acm.ICertificate {
     return new acm.Certificate(this, 'Certificate', {
       domainName: ORG_DOMAIN,
-      subjectAlternativeNames: [`*.${ORG_DOMAIN}`, COM_DOMAIN, `*.${COM_DOMAIN}`],
+      subjectAlternativeNames: [
+        `*.${ORG_DOMAIN}`,
+        COM_DOMAIN,
+        `*.${COM_DOMAIN}`,
+      ],
       validation: acm.CertificateValidation.fromDnsMultiZone({
         [ORG_DOMAIN]: this.orgZone,
         [`*.${ORG_DOMAIN}`]: this.orgZone,

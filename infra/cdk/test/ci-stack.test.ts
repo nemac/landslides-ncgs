@@ -12,7 +12,12 @@ const env = { account: ACCOUNT, region: REGION };
 function ciTemplate() {
   const app = new App();
   const dns = new DnsStack(app, 'Dns', { env });
-  const web = new WebStack(app, 'Web', { env, stage: 'done', orgZone: dns.orgZone, comZone: dns.comZone, certificate: dns.certificate });
+  const web = new WebStack(app, 'Web', {
+    env,
+    orgZone: dns.orgZone,
+    comZone: dns.comZone,
+    certificate: dns.certificate,
+  });
   const ci = new CiStack(app, 'Ci', {
     env,
     siteBucket: web.siteBucket,
@@ -25,14 +30,24 @@ function ciTemplate() {
 }
 
 function trustSubject(template: Template, roleName: string): string {
-  const roles = template.findResources('AWS::IAM::Role', { Properties: { RoleName: roleName } });
+  const roles = template.findResources('AWS::IAM::Role', {
+    Properties: { RoleName: roleName },
+  });
   const [role] = Object.values(roles);
   const statement = role.Properties.AssumeRolePolicyDocument.Statement[0];
-  assert.equal(statement.Condition.StringEquals['token.actions.githubusercontent.com:aud'], 'sts.amazonaws.com');
-  return statement.Condition.StringEquals['token.actions.githubusercontent.com:sub'];
+  assert.equal(
+    statement.Condition.StringEquals['token.actions.githubusercontent.com:aud'],
+    'sts.amazonaws.com'
+  );
+  return statement.Condition.StringEquals[
+    'token.actions.githubusercontent.com:sub'
+  ];
 }
 
-function policyStatementsFor(template: Template, roleName: string): Array<Record<string, unknown>> {
+function policyStatementsFor(
+  template: Template,
+  roleName: string
+): Array<Record<string, unknown>> {
   const policies = template.findResources('AWS::IAM::Policy');
   const statements: Array<Record<string, unknown>> = [];
   for (const policy of Object.values(policies)) {
@@ -53,39 +68,69 @@ test('one GitHub OIDC provider', () => {
 });
 
 test('prod role trusts the production environment only', () => {
-  assert.equal(trustSubject(ciTemplate().template, 'landslides-github-prod'), 'repo:nemac/landslides-ncgs:environment:production');
+  assert.equal(
+    trustSubject(ciTemplate().template, 'landslides-github-prod'),
+    'repo:nemac/landslides-ncgs:environment:production'
+  );
 });
 
 test('dev role trusts the development environment only', () => {
-  assert.equal(trustSubject(ciTemplate().template, 'landslides-github-dev'), 'repo:nemac/landslides-ncgs:environment:development');
+  assert.equal(
+    trustSubject(ciTemplate().template, 'landslides-github-dev'),
+    'repo:nemac/landslides-ncgs:environment:development'
+  );
 });
 
 test('dev role has no statement on the data bucket', () => {
   const { template } = ciTemplate();
-  const devStatements = JSON.stringify(policyStatementsFor(template, 'DevRole'));
+  const devStatements = JSON.stringify(
+    policyStatementsFor(template, 'DevRole')
+  );
   assert.doesNotMatch(devStatements, /DataBucket/);
   assert.match(devStatements, /DevSiteBucket/);
-  const prodStatements = JSON.stringify(policyStatementsFor(template, 'ProdRole'));
+  const prodStatements = JSON.stringify(
+    policyStatementsFor(template, 'ProdRole')
+  );
   assert.match(prodStatements, /DataBucket/);
   assert.match(prodStatements, /SiteBucket/);
 });
 
-test('prod role cannot delete from the data bucket', () => {
+test('prod role may delete from the data bucket only under the buildings prefix', () => {
   const { template } = ciTemplate();
-  const dataStatements = policyStatementsFor(template, 'ProdRole').filter((s) => JSON.stringify(s).includes('DataBucket'));
-  assert.ok(dataStatements.length >= 1, 'prod role has a data bucket statement');
-  for (const statement of dataStatements) {
-    assert.doesNotMatch(JSON.stringify(statement), /s3:Delete/);
-  }
-  const siteStatements = policyStatementsFor(template, 'ProdRole').filter((s) => JSON.stringify(s).includes('SiteBucket'));
+  const dataStatements = policyStatementsFor(template, 'ProdRole').filter((s) =>
+    JSON.stringify(s).includes('DataBucket')
+  );
+  assert.ok(
+    dataStatements.length >= 1,
+    'prod role has a data bucket statement'
+  );
+  const deletes = dataStatements.filter((s) =>
+    JSON.stringify(s).includes('s3:Delete')
+  );
+  assert.equal(deletes.length, 1, 'exactly one delete statement');
+  const text = JSON.stringify(deletes[0]);
+  assert.match(text, /alerts\/data\/buildings\/\*/);
+  assert.doesNotMatch(text, /DeleteBucket|DeleteObjectVersion/);
+  const siteStatements = policyStatementsFor(template, 'ProdRole').filter((s) =>
+    JSON.stringify(s).includes('SiteBucket')
+  );
   assert.match(JSON.stringify(siteStatements), /s3:DeleteObject/);
 });
 
 test('each role may invalidate only its distribution', () => {
   const { template } = ciTemplate();
-  for (const [role, pattern] of [['ProdRole', /cloudfront::710482330128:distribution\//], ['DevRole', /cloudfront::710482330128:distribution\//]] as const) {
-    const invalidations = policyStatementsFor(template, role).filter((s) => JSON.stringify(s).includes('cloudfront:CreateInvalidation'));
-    assert.equal(invalidations.length, 1, `${role} has one invalidation statement`);
+  for (const [role, pattern] of [
+    ['ProdRole', /cloudfront::710482330128:distribution\//],
+    ['DevRole', /cloudfront::710482330128:distribution\//],
+  ] as const) {
+    const invalidations = policyStatementsFor(template, role).filter((s) =>
+      JSON.stringify(s).includes('cloudfront:CreateInvalidation')
+    );
+    assert.equal(
+      invalidations.length,
+      1,
+      `${role} has one invalidation statement`
+    );
     assert.match(JSON.stringify(invalidations[0]), pattern);
   }
 });

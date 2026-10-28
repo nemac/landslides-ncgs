@@ -1,85 +1,90 @@
-# DEFNS Alerts data pipeline
+# Alerts pipeline and reference-data check
 
-Python scripts that produce the live data files served by the
-`/alerts/` dashboard.
+Python that produces the data files under `alerts/data/`. It was written
+for the SIREN alerts dashboard, which has been offline since 2026-10-22.
+Since 2026-10-27 it no longer runs on a schedule; what still runs daily is
+the reference-data check, which rebuilds the two datasets DFENS Simple
+depends on (building footprints and the debris-flow GeoPackage) only when
+their upstreams change. DFENS Simple also imports this folder's modules for
+the debris-flow intersection. Current as of 2026-10-27.
 
 ## Files
 
 ```
 scripts/
-  refresh.py          Driver: fetches NDFD + MRMS, writes JSON to alerts/data/
-  data.py             Data fetchers (copied from wnc_alert project)
-  config.py           Constants (URLs, bbox, product fallback order)
-  README.md           This file
+  refresh.py      Driver. Live mode writes the forecast, observed and
+                  flagged files for every window; --hindcast writes the
+                  historical event files; --buildings and --debris-cache
+                  rebuild one reference dataset each.
+  reference_check.py  Daily decision (stdlib): compares Overture's latest
+                  release and the NCGS layer's edit date with what was last
+                  built, applies the 90-day floor and FORCE, logs both.
+  data.py         Fetchers: NDFD forecast, MRMS observed, Stage IV hindcast,
+                  NCGS debris-flow pathways (cached in cache/debris_flows.gpkg),
+                  county and watershed tagging, Overture building footprints.
+  analysis.py     find_alerts(): intersects precipitation polygons with
+                  debris-flow pathways. Shared with simple/pipeline/.
+  config.py       Constants: service URLs, bounding box, windows, categories,
+                  output size knobs. Shared with simple/pipeline/.
+  events.py       Historical events for --hindcast.
 
-../environment.yml    Pinned Python environment (same file CI uses)
+../environment.yml   Pinned environment, used by CI and locally (defns-refresh).
 ```
 
-## Phase 3a: manual refresh (current)
+## What it writes
 
-You run this on your own machine when you want to update the live data
-files for the dashboard. The frontend reads
-`alerts/data/forecast.geojson` and `alerts/data/observed.geojson` on page
-load.
+Live mode, to `alerts/data/`:
 
-### Setup (one time)
+- `forecast_{N}h.geojson` and `flagged_ndfd_{N}h.geojson` for N in 12, 24, 48, 72
+- `observed_{N}h.geojson` and `flagged_mrms_{N}h.geojson` for N in 1, 24, 72
+- `buildings/manifest.json` and one `{GEOID}.geojson` per county, refreshed
+  when the manifest is older than 30 days
 
-Create the pinned environment from `environment.yml` at the repo root.
-It is the same file the GitHub Actions refresh uses, so local runs and CI
-runs see identical library versions:
+Every GeoJSON carries a top-level `meta` object with timestamps and source.
+`--hindcast` writes `historical/{event_id}_precip.geojson`,
+`historical/{event_id}_flagged.geojson` and `historical/events.json`.
+
+## How it runs in production
+
+**Daily: `.github/workflows/refresh-reference.yml`**, dispatched at 05:00
+UTC by the EventBridge schedule in `infra/cdk/lib/trigger-stack.ts`.
+`reference_check.py` runs first on plain Python and decides, per dataset,
+whether to rebuild: Overture published a new release, or the NCGS layer's
+data-last-edit date moved, or the last build is 90 days old, or `force` was
+set. Only then does the job assume the OIDC role, create the pinned
+environment, run `refresh.py --debris-cache` and/or `--buildings`, upload
+the GeoPackage to `s3://landslidesncgs-data/cache/` and the footprints to
+`alerts/data/buildings/` (mirrored with `--delete`), and record the new
+markers in `alerts/data/reference_state.json`. A failed rebuild is retried
+the next day because the state is written only after success.
+
+**Manual: `.github/workflows/refresh-data.yml`** runs the full alerts
+pipeline from the Actions tab: fetch the buildings manifest (so the
+extraction is skipped), download the GeoPackage from the bucket, create the
+environment, run `python scripts/refresh.py`, and upload `alerts/data/`.
+A non-zero exit fails the job before the upload, so a broken run never
+replaces good files. Exit code 2 (some windows failed but others were
+written) is treated the same way; splitting it so partial results publish
+is a deferred item in `BACKLOG.md`.
+
+Nothing is committed to git. `--hindcast` never runs in a workflow;
+historical files are uploaded by hand (`OPERATIONS.md`).
+
+## Running it locally
 
 ```bash
-conda env create -f environment.yml
+conda env create -f environment.yml   # once
 conda activate defns-refresh
+python scripts/refresh.py             # live files; first run also extracts buildings (5 to 15 min)
+python scripts/refresh.py --hindcast  # historical events
 ```
 
-(`micromamba create -f environment.yml` works the same way.)
+The debris-flow pathways are fetched from the NCGS ArcGIS service on the
+first run and cached in `cache/debris_flows.gpkg`; the local copy is
+reused for 120 days, while production rebuilds it on upstream change.
+Never commit that file.
 
-### Run it
+## Lint
 
-From the repository root (`landslidesncgs.com/`):
-
-```bash
-conda activate defns-refresh
-python scripts/refresh.py
-```
-
-Expected output:
-
-```
-[defns-refresh] Output directory: .../landslidesncgs.com/alerts/data
-[defns-refresh] Started at:       2026-05-22T14:30:00+00:00
-
-[defns-refresh] === NDFD forecast ===
-  Fetched 247 NDFD polygons across all categories.
-  Clipped to WNC bbox: 14 polygons remain.
-  Wrote forecast.geojson: 42.3 KB
-
-[defns-refresh] === MRMS observed ===
-  Fetched 8 MRMS polygons from MultiSensor Pass1.
-  Valid time:  2026-05-22T14:00:00+00:00
-  Max inches:  0.342
-  Minutes ago: 32.4
-  Wrote observed.geojson: 6.1 KB
-
-[defns-refresh] DONE - both files written.
-```
-
-After running, refresh the dashboard in your browser and you'll see live
-data instead of the mock fallback.
-
-### What if it fails?
-
-- **NDFD fetch fails but MRMS succeeds (or vice versa):** the script
-  writes the file that worked and reports a partial success. The
-  frontend gracefully falls back to mock data for the missing source.
-- **Both fail:** no files are written. Frontend uses mock data for both.
-- **`gdal_GRIB.dll is not available`:** MRMS specific, install the GDAL
-  GRIB plugin: `conda install -c conda-forge libgdal-grib`.
-
-## Phase 3b: automated cron (next)
-
-Once the team confirms the GitHub→AWS S3 deploy story, this same
-`refresh.py` becomes the body of a GitHub Actions workflow that runs
-every 15 minutes and commits any data changes back to the repo. No code
-changes to `refresh.py` will be needed.
+`ruff check scripts` and `ruff format scripts`, with ruff from
+`requirements-dev.txt` (`python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`).

@@ -12,9 +12,9 @@
 (function () {
   'use strict';
 
-  const CFG  = window.DEFNS_CONFIG;
-  const MAP  = window.DEFNS_MAP;
-  const AL   = window.DEFNS_ALERTS;
+  const CFG = window.DEFNS_CONFIG;
+  const MAP = window.DEFNS_MAP;
+  const AL = window.DEFNS_ALERTS;
 
   // Live data store. Every key starts null and is filled by _fetchInto()
   // when the matching GeoJSON file written by scripts/refresh.py loads.
@@ -22,19 +22,19 @@
   // renders stale or placeholder data as if it were current. refresh()
   // shows the data-unavailable banner whenever an active key is null.
   const DATA = {
-    NDFD_FORECAST:      null,
-    MRMS_OBSERVED:      null,
-    FLAGGED_NDFD:       null,
-    FLAGGED_MRMS:       null,
-    HISTORICAL_PRECIP:  null,
+    NDFD_FORECAST: null,
+    MRMS_OBSERVED: null,
+    FLAGGED_NDFD: null,
+    FLAGGED_MRMS: null,
+    HISTORICAL_PRECIP: null,
     HISTORICAL_FLAGGED: null,
   };
 
   // Which DATA keys each detection mode depends on. Used to decide when
   // the active view is missing data and must show the unavailable banner.
   const DATA_KEYS_BY_MODE = {
-    ndfd:       ['NDFD_FORECAST', 'FLAGGED_NDFD'],
-    mrms:       ['MRMS_OBSERVED', 'FLAGGED_MRMS'],
+    ndfd: ['NDFD_FORECAST', 'FLAGGED_NDFD'],
+    mrms: ['MRMS_OBSERVED', 'FLAGGED_MRMS'],
     historical: ['HISTORICAL_PRECIP', 'HISTORICAL_FLAGGED'],
   };
 
@@ -43,74 +43,74 @@
 
   const els = {
     // Mode + controls
-    modeNdfd:        $('mode-ndfd'),
-    modeMrms:        $('mode-mrms'),
-    modeHistorical:  $('mode-historical'),
+    modeNdfd: $('mode-ndfd'),
+    modeMrms: $('mode-mrms'),
+    modeHistorical: $('mode-historical'),
     historicalSubControls: $('historical-sub-controls'),
-    eventSelect:     $('event-select'),
-    eventDescription:$('event-description'),
-    hindcastBanner:  $('hindcast-banner'),
+    eventSelect: $('event-select'),
+    eventDescription: $('event-description'),
+    hindcastBanner: $('hindcast-banner'),
     hindcastBannerDetail: $('hindcast-banner-detail'),
     dataUnavailableBanner: $('data-unavailable-banner'),
     dataUnavailableDetail: $('data-unavailable-detail'),
     thresholdSlider: $('threshold-slider'),
-    thresholdLabel:  $('threshold-readout-label'),
+    thresholdLabel: $('threshold-readout-label'),
     thresholdSourceLabel: $('threshold-source-label'),
-    windowSelect:    $('window-select'),
-    windowGroup:     $('window-control-group'),
-    windowLabel:     $('window-label'),
+    windowSelect: $('window-select'),
+    windowGroup: $('window-control-group'),
+    windowLabel: $('window-label'),
 
     // Source metadata block (under threshold help text)
-    metaSource:      $('meta-source'),
-    metaTime:        $('meta-time'),
-    metaTimeLabel:   $('meta-time-label'),
-    metaExtra:       $('meta-extra'),
-    metaExtraLabel:  $('meta-extra-label'),
+    metaSource: $('meta-source'),
+    metaTime: $('meta-time'),
+    metaTimeLabel: $('meta-time-label'),
+    metaExtra: $('meta-extra'),
+    metaExtraLabel: $('meta-extra-label'),
 
     // Layer toggles (#2 + #7 reordered)
-    layerNdfd:       $('layer-ndfd'),
-    layerMrms:       $('layer-mrms'),
-    layerRadar:      $('layer-radar'),
-    layerAlerts:     $('layer-alerts'),
-    layerReference:  $('layer-reference'),
-    layerParcels:    $('layer-parcels'),
-    layerBuildings:  $('layer-buildings'),
+    layerNdfd: $('layer-ndfd'),
+    layerMrms: $('layer-mrms'),
+    layerRadar: $('layer-radar'),
+    layerAlerts: $('layer-alerts'),
+    layerReference: $('layer-reference'),
+    layerParcels: $('layer-parcels'),
+    layerBuildings: $('layer-buildings'),
     parcelsZoomHint: $('parcels-zoom-hint'),
 
     // Refresh
-    manualRefresh:    $('manual-refresh'),
-    autoRefreshToggle:$('auto-refresh-toggle'),
-    lastUpdated:      $('last-updated'),
+    manualRefresh: $('manual-refresh'),
+    autoRefreshToggle: $('auto-refresh-toggle'),
+    lastUpdated: $('last-updated'),
 
     // Header / subtitle / metrics
-    subtitle:           $('mode-subtitle'),
-    metricIssuedTime:   $('metric-issued-time'),
-    metricIssuedDate:   $('metric-issued-date'),
-    metricWindow:       $('metric-window'),
-    metricWindowSub:    $('metric-window-sub'),
-    metricThreshold:    $('metric-threshold'),
+    subtitle: $('mode-subtitle'),
+    metricIssuedTime: $('metric-issued-time'),
+    metricIssuedDate: $('metric-issued-date'),
+    metricWindow: $('metric-window'),
+    metricWindowSub: $('metric-window-sub'),
+    metricThreshold: $('metric-threshold'),
     metricThresholdSub: $('metric-threshold-sub'),
-    metricFlagged:      $('metric-flagged'),
-    metricFlaggedSub:   $('metric-flagged-sub'),
-    metricFlaggedCard:  $('metric-flagged-card'),
+    metricFlagged: $('metric-flagged'),
+    metricFlaggedSub: $('metric-flagged-sub'),
+    metricFlaggedCard: $('metric-flagged-card'),
 
     // Alerts table + export
-    alertsTbody:    $('alerts-tbody'),
-    alertsSummary:  $('alerts-summary'),
-    exportCsvBtn:   $('export-csv'),
+    alertsTbody: $('alerts-tbody'),
+    alertsSummary: $('alerts-summary'),
+    exportCsvBtn: $('export-csv'),
 
     // Legend
-    legendList:     $('legend-list'),
+    legendList: $('legend-list'),
 
     // Loading indicator (Phase B)
-    loadingIndicator: $('loading-indicator')
+    loadingIndicator: $('loading-indicator'),
   };
 
   // ---- State --------------------------------------------------------------
   const state = {
-    mode:      'ndfd',                                  // 'ndfd' | 'mrms' | 'historical'
-    threshold: CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY,     // 0..19
-    window:    CFG.NDFD_DEFAULT_WINDOW_HOURS,           // hours, semantics depends on mode
+    mode: 'ndfd', // 'ndfd' | 'mrms' | 'historical'
+    threshold: CFG.NDFD_DEFAULT_THRESHOLD_CATEGORY, // 0..19
+    window: CFG.NDFD_DEFAULT_WINDOW_HOURS, // hours, semantics depends on mode
     autoRefreshTimer: null,
     // Track which window's data is currently loaded into the DATA keys.
     // Lets us skip re-fetching when the user toggles modes and the
@@ -136,12 +136,12 @@
     ndfd: {
       options: [12, 24, 48, 72],
       default: 12,
-      label:   'Forecast window',
+      label: 'Forecast window',
     },
     mrms: {
       options: [1, 24, 72],
       default: 1,
-      label:   'Observation window',
+      label: 'Observation window',
     },
   };
 
@@ -150,7 +150,7 @@
   // =====================================================================
   function init() {
     MAP.init();
-    _buildLegend();          // populate 20-category legend
+    _buildLegend(); // populate 20-category legend
     _wireEvents();
 
     // Populate the window dropdown for the initial mode BEFORE
@@ -170,10 +170,7 @@
     // mode-switching is instant (no fetch lag the first time the user
     // toggles to MRMS). Switching to a non-default window still requires
     // an on-demand fetch via _loadLiveData().
-    Promise.all([
-      _loadLiveDataInitial(),
-      _loadEventsManifest()
-    ]).then(refresh);
+    Promise.all([_loadLiveDataInitial(), _loadEventsManifest()]).then(refresh);
 
     _startAutoRefresh();
   }
@@ -219,8 +216,8 @@
       const cat = Number(li.dataset.cat);
       const arrow = li.querySelector('.legend-arrow');
       li.classList.toggle('at-or-above', cat >= state.threshold);
-      li.classList.toggle('current',     cat === state.threshold);
-      if (arrow) arrow.textContent = (cat === state.threshold) ? '\u25B6' : '';
+      li.classList.toggle('current', cat === state.threshold);
+      if (arrow) arrow.textContent = cat === state.threshold ? '\u25B6' : '';
     });
   }
 
@@ -303,7 +300,7 @@
     els.manualRefresh.addEventListener('click', _autoRefreshTick);
     els.autoRefreshToggle.addEventListener('change', function () {
       if (this.checked) _startAutoRefresh();
-      else              _stopAutoRefresh();
+      else _stopAutoRefresh();
     });
 
     // CSV export (#11)
@@ -316,7 +313,10 @@
     if (disclosure) {
       disclosure.addEventListener('toggle', function () {
         const map = MAP._internalMap && MAP._internalMap();
-        if (map) requestAnimationFrame(function () { map.invalidateSize(); });
+        if (map)
+          requestAnimationFrame(function () {
+            map.invalidateSize();
+          });
       });
     }
   }
@@ -344,28 +344,37 @@
   function _loadLiveDataInitial() {
     _setLoading(true);
     return Promise.allSettled([
-      _fetchInto('data/forecast_12h.geojson',     'NDFD_FORECAST'),
-      _fetchInto('data/observed_1h.geojson',      'MRMS_OBSERVED'),
+      _fetchInto('data/forecast_12h.geojson', 'NDFD_FORECAST'),
+      _fetchInto('data/observed_1h.geojson', 'MRMS_OBSERVED'),
       _fetchInto('data/flagged_ndfd_12h.geojson', 'FLAGGED_NDFD'),
-      _fetchInto('data/flagged_mrms_1h.geojson',  'FLAGGED_MRMS')
-    ]).then(function (results) {
-      const labels = ['NDFD 12h', 'MRMS 1h', 'NDFD 12h flagged', 'MRMS 1h flagged'];
-      const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
-      console.log(`[DEFNS] Initial live data: ${okCount}/4 files loaded.`);
-      results.forEach(function (r, i) {
-        if (r.status !== 'fulfilled' || !r.value) {
-          console.warn(`[DEFNS] ${labels[i]} failed; data unavailable.`);
-        }
+      _fetchInto('data/flagged_mrms_1h.geojson', 'FLAGGED_MRMS'),
+    ])
+      .then(function (results) {
+        const labels = [
+          'NDFD 12h',
+          'MRMS 1h',
+          'NDFD 12h flagged',
+          'MRMS 1h flagged',
+        ];
+        const okCount = results.filter(
+          (r) => r.status === 'fulfilled' && r.value
+        ).length;
+        console.log(`[DEFNS] Initial live data: ${okCount}/4 files loaded.`);
+        results.forEach(function (r, i) {
+          if (r.status !== 'fulfilled' || !r.value) {
+            console.warn(`[DEFNS] ${labels[i]} failed; data unavailable.`);
+          }
+        });
+        // Mark these default windows as loaded so we don't re-fetch them
+        // when the user lands on the default mode/window combination.
+        state.loadedWindows.ndfd = 12;
+        state.loadedWindows.mrms = 1;
+        _setLoading(false);
+      })
+      .catch(function (err) {
+        _setLoading(false);
+        console.error('[DEFNS] _loadLiveDataInitial crashed:', err);
       });
-      // Mark these default windows as loaded so we don't re-fetch them
-      // when the user lands on the default mode/window combination.
-      state.loadedWindows.ndfd = 12;
-      state.loadedWindows.mrms = 1;
-      _setLoading(false);
-    }).catch(function (err) {
-      _setLoading(false);
-      console.error('[DEFNS] _loadLiveDataInitial crashed:', err);
-    });
   }
 
   function _loadLiveData() {
@@ -385,20 +394,25 @@
     let promises;
     if (state.mode === 'ndfd') {
       promises = [
-        _fetchInto(`data/forecast_${target}h.geojson`,     'NDFD_FORECAST'),
+        _fetchInto(`data/forecast_${target}h.geojson`, 'NDFD_FORECAST'),
         _fetchInto(`data/flagged_ndfd_${target}h.geojson`, 'FLAGGED_NDFD'),
       ];
-    } else {  // mrms
+    } else {
+      // mrms
       promises = [
-        _fetchInto(`data/observed_${target}h.geojson`,     'MRMS_OBSERVED'),
+        _fetchInto(`data/observed_${target}h.geojson`, 'MRMS_OBSERVED'),
         _fetchInto(`data/flagged_mrms_${target}h.geojson`, 'FLAGGED_MRMS'),
       ];
     }
 
     return Promise.allSettled(promises).then(function (results) {
       _setLoading(false);
-      const okCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
-      console.log(`[DEFNS] ${state.mode.toUpperCase()} ${target}h: ${okCount}/2 files loaded.`);
+      const okCount = results.filter(
+        (r) => r.status === 'fulfilled' && r.value
+      ).length;
+      console.log(
+        `[DEFNS] ${state.mode.toUpperCase()} ${target}h: ${okCount}/2 files loaded.`
+      );
       // Mark loaded even if some files failed - we don't want infinite
       // retry loops on missing files. Failed keys are null, and refresh()
       // shows the data-unavailable banner for them. The next auto-refresh
@@ -409,22 +423,25 @@
   }
 
   function _fetchInto(url, dataKey) {
-    return fetch(url, { cache: 'no-cache' }).then(function (resp) {
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
-      return resp.json();
-    }).then(function (geojson) {
-      if (!geojson || !geojson.type || geojson.type !== 'FeatureCollection') {
-        throw new Error(`${url}: not a FeatureCollection`);
-      }
-      DATA[dataKey] = geojson;
-      delete state.unavailable[dataKey];
-      return true;
-    }).catch(function (err) {
-      console.warn(`[DEFNS] ${url} fetch failed: ${err.message}`);
-      DATA[dataKey] = null;
-      state.unavailable[dataKey] = url;
-      return false;
-    });
+    return fetch(url, { cache: 'no-cache' })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+        return resp.json();
+      })
+      .then(function (geojson) {
+        if (!geojson || !geojson.type || geojson.type !== 'FeatureCollection') {
+          throw new Error(`${url}: not a FeatureCollection`);
+        }
+        DATA[dataKey] = geojson;
+        delete state.unavailable[dataKey];
+        return true;
+      })
+      .catch(function (err) {
+        console.warn(`[DEFNS] ${url} fetch failed: ${err.message}`);
+        DATA[dataKey] = null;
+        state.unavailable[dataKey] = url;
+        return false;
+      });
   }
 
   // =====================================================================
@@ -434,8 +451,12 @@
   // URL recorded at fetch time when there is one, otherwise the DATA key.
   function _missingFilesForActiveMode() {
     return DATA_KEYS_BY_MODE[state.mode]
-      .filter(function (key) { return DATA[key] == null; })
-      .map(function (key) { return state.unavailable[key] || key; });
+      .filter(function (key) {
+        return DATA[key] == null;
+      })
+      .map(function (key) {
+        return state.unavailable[key] || key;
+      });
   }
 
   function _isActiveDataUnavailable() {
@@ -450,7 +471,9 @@
     els.dataUnavailableBanner.hidden = missing.length === 0;
     if (missing.length > 0 && els.dataUnavailableDetail) {
       els.dataUnavailableDetail.textContent =
-        'Could not load: ' + missing.join(', ') + '. The map and table ' +
+        'Could not load: ' +
+        missing.join(', ') +
+        '. The map and table ' +
         'stay empty until the next refresh succeeds. This is not an ' +
         'indication that there is no debris flow risk.';
     }
@@ -459,8 +482,8 @@
   // Replace the alerts table's "nothing meets the threshold" message with
   // an unavailable message, so an empty table never reads as "no risk".
   function _showUnavailableInAlertsTable() {
-    const emptyCell = els.alertsTbody &&
-                      els.alertsTbody.querySelector('td.empty-row');
+    const emptyCell =
+      els.alertsTbody && els.alertsTbody.querySelector('td.empty-row');
     if (emptyCell) {
       emptyCell.textContent =
         'Alert data is unavailable. Nothing can be shown for this mode ' +
@@ -491,7 +514,7 @@
 
   function _syncControlsFromState() {
     els.thresholdSlider.value = String(state.threshold);
-    els.windowSelect.value    = String(state.window);
+    els.windowSelect.value = String(state.window);
     _updateThresholdLabel();
     _updateModeUI();
   }
@@ -542,7 +565,7 @@
 
   function _updateModeUI() {
     const isHistorical = state.mode === 'historical';
-    const isMrms       = state.mode === 'mrms';
+    const isMrms = state.mode === 'mrms';
 
     // Show/hide the historical event sub-controls
     if (els.historicalSubControls) {
@@ -660,15 +683,18 @@
       els.eventDescription.textContent = event.description || '';
     }
     if (els.hindcastBannerDetail && event) {
-      els.hindcastBannerDetail.textContent =
-        `${event.name} (${event.date_label})`;
+      els.hindcastBannerDetail.textContent = `${event.name} (${event.date_label})`;
     }
   }
 
   function _getSelectedEvent() {
     if (!els.eventSelect || !state.events) return null;
     const id = els.eventSelect.value;
-    return state.events.find(function (e) { return e.id === id; }) || null;
+    return (
+      state.events.find(function (e) {
+        return e.id === id;
+      }) || null
+    );
   }
 
   function _onEventChange() {
@@ -684,13 +710,16 @@
 
     _setLoading(true);
     return Promise.allSettled([
-      _fetchInto('data/' + ev.precip_file,  'HISTORICAL_PRECIP'),
-      _fetchInto('data/' + ev.flagged_file, 'HISTORICAL_FLAGGED')
+      _fetchInto('data/' + ev.precip_file, 'HISTORICAL_PRECIP'),
+      _fetchInto('data/' + ev.flagged_file, 'HISTORICAL_FLAGGED'),
     ]).then(function (results) {
       _setLoading(false);
-      const okCount = results.filter(r =>
-        r.status === 'fulfilled' && r.value).length;
-      console.log(`[DEFNS] Historical event "${ev.id}": ${okCount}/2 files loaded.`);
+      const okCount = results.filter(
+        (r) => r.status === 'fulfilled' && r.value
+      ).length;
+      console.log(
+        `[DEFNS] Historical event "${ev.id}": ${okCount}/2 files loaded.`
+      );
     });
   }
 
@@ -721,9 +750,9 @@
     // In live modes (NDFD/MRMS), show both live layers per user toggles.
     // In historical mode, hide live layers and show the historical layer.
     if (isHistorical) {
-      MAP.setForecast(null);                          // clear NDFD
-      MAP.setObserved(DATA.HISTORICAL_PRECIP);        // reuse observed pane
-      MAP.setObservedVisible(true);                   // always show in hindcast
+      MAP.setForecast(null); // clear NDFD
+      MAP.setObserved(DATA.HISTORICAL_PRECIP); // reuse observed pane
+      MAP.setObservedVisible(true); // always show in hindcast
     } else {
       MAP.setForecast(DATA.NDFD_FORECAST);
       MAP.setForecastVisible(els.layerNdfd.checked);
@@ -734,13 +763,13 @@
     // ---- Pick the active precip + flagged dataset for the current mode --
     let activePrecip, activeFlagged;
     if (isHistorical) {
-      activePrecip  = DATA.HISTORICAL_PRECIP;
+      activePrecip = DATA.HISTORICAL_PRECIP;
       activeFlagged = DATA.HISTORICAL_FLAGGED;
     } else if (state.mode === 'mrms') {
-      activePrecip  = DATA.MRMS_OBSERVED;
+      activePrecip = DATA.MRMS_OBSERVED;
       activeFlagged = DATA.FLAGGED_MRMS;
     } else {
-      activePrecip  = DATA.NDFD_FORECAST;
+      activePrecip = DATA.NDFD_FORECAST;
       activeFlagged = DATA.FLAGGED_NDFD;
     }
 
@@ -749,12 +778,13 @@
     // header metric shows "--" rather than a reassuring zero.
     let alertsFC;
     let flaggedCount = null;
-    let totalDebris  = 0;
+    let totalDebris = 0;
 
     if (activeFlagged && activeFlagged.features) {
-      totalDebris  = (activeFlagged.meta && activeFlagged.meta.n_debris)
-                     || activeFlagged.features.length;
-      alertsFC     = _filterFlaggedByThreshold(activeFlagged, state.threshold);
+      totalDebris =
+        (activeFlagged.meta && activeFlagged.meta.n_debris) ||
+        activeFlagged.features.length;
+      alertsFC = _filterFlaggedByThreshold(activeFlagged, state.threshold);
       flaggedCount = alertsFC.features.length;
     } else {
       alertsFC = { type: 'FeatureCollection', features: [] };
@@ -764,7 +794,7 @@
 
     // ---- Stash for CSV export + click-to-zoom ---------------------------
     state.lastAlerts = alertsFC;
-    state.lastCtx    = _buildSourceCtx(activePrecip);
+    state.lastCtx = _buildSourceCtx(activePrecip);
 
     // ---- Map: render alert polygons --------------------------------------
     MAP.setAlerts(alertsFC);
@@ -773,8 +803,8 @@
     // ---- Header metrics --------------------------------------------------
     _updateHeader(activePrecip, {
       flagged: flaggedCount,
-      total:   totalDebris,
-      maxCategory: _maxCategoryIn(alertsFC)
+      total: totalDebris,
+      maxCategory: _maxCategoryIn(alertsFC),
     });
 
     // ---- Source metadata block ------------------------------------------
@@ -788,21 +818,25 @@
       const p = f.properties;
       if (p.max_category != null && p.precip_category == null) {
         p.precip_category = p.max_category;
-        p.precip_label    = CFG.PRECIP_LABELS[p.max_category] || null;
+        p.precip_label = CFG.PRECIP_LABELS[p.max_category] || null;
       }
     });
 
     AL.render(alertsFC, els.alertsTbody, els.alertsSummary, state.lastCtx);
     if (_isActiveDataUnavailable()) _showUnavailableInAlertsTable();
-    _wireRowClicks();        // (re-wire after every render - new <tr> each time)
+    _wireRowClicks(); // (re-wire after every render - new <tr> each time)
 
     if (els.exportCsvBtn) {
-      els.exportCsvBtn.disabled = !(alertsFC.features && alertsFC.features.length);
+      els.exportCsvBtn.disabled = !(
+        alertsFC.features && alertsFC.features.length
+      );
     }
 
     els.lastUpdated.textContent =
-      'Last updated: ' + new Date().toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit'
+      'Last updated: ' +
+      new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
       });
   }
 
@@ -817,9 +851,11 @@
     if (!fc || !fc.features || !fc.features.length) return null;
     let max = -1;
     for (const f of fc.features) {
-      const c = Number(f.properties.precip_category != null
-                       ? f.properties.precip_category
-                       : f.properties.max_category);
+      const c = Number(
+        f.properties.precip_category != null
+          ? f.properties.precip_category
+          : f.properties.max_category
+      );
       if (c > max) max = c;
     }
     return max >= 0 ? max : null;
@@ -840,7 +876,9 @@
       tr.tabIndex = 0;
       tr.setAttribute('role', 'button');
       tr.setAttribute('aria-label', `Zoom map to polygon ${oid}`);
-      tr.addEventListener('click', function () { _zoomToObjectId(oid); });
+      tr.addEventListener('click', function () {
+        _zoomToObjectId(oid);
+      });
       tr.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -859,8 +897,11 @@
     const lmap = MAP._internalMap && MAP._internalMap();
     if (!lmap) return;
     try {
-      const bbox = turf.bbox(match);   // [minX, minY, maxX, maxY]
-      const bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+      const bbox = turf.bbox(match); // [minX, minY, maxX, maxY]
+      const bounds = [
+        [bbox[1], bbox[0]],
+        [bbox[3], bbox[2]],
+      ];
       lmap.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
     } catch (e) {
       console.warn('[DEFNS] Could not zoom to polygon:', e);
@@ -879,14 +920,16 @@
       isoTime = m.end_date || '';
       // Historical events are pre-summed accumulations. Use the actual
       // accumulation period from the file meta.
-      windowLabel = (m.accumulation_days != null)
-        ? `${m.accumulation_days}-day accumulation`
-        : 'accumulation';
+      windowLabel =
+        m.accumulation_days != null
+          ? `${m.accumulation_days}-day accumulation`
+          : 'accumulation';
     } else if (state.mode === 'mrms') {
       sourceLabel = 'MRMS';
       isoTime = m.observed_at;
       display = isoTime
-        ? new Date(isoTime).toUTCString().slice(17, 22) + ' UTC ' +
+        ? new Date(isoTime).toUTCString().slice(17, 22) +
+          ' UTC ' +
           new Date(isoTime).toUTCString().slice(5, 11)
         : '--';
       // MRMS supports multiple observation windows (1, 24, 72 hours after
@@ -899,7 +942,8 @@
       sourceLabel = 'NDFD';
       isoTime = m.issued;
       display = isoTime
-        ? new Date(isoTime).toUTCString().slice(17, 22) + ' UTC ' +
+        ? new Date(isoTime).toUTCString().slice(17, 22) +
+          ' UTC ' +
           new Date(isoTime).toUTCString().slice(5, 11)
         : '--';
       // NDFD has a configurable forecast window. Prefer the value from
@@ -910,13 +954,13 @@
 
     // Threshold label: "\u2265 5.00\u2033" - same value for every row,
     // included in context once so render() can paint the column.
-    const thresholdLabel = '\u2265 ' +
-      (CFG.formatThresholdInches(state.threshold) || '--');
+    const thresholdLabel =
+      '\u2265 ' + (CFG.formatThresholdInches(state.threshold) || '--');
 
     return {
       sourceLabel,
-      timestamp:     display,
-      timestampISO:  isoTime || '',
+      timestamp: display,
+      timestampISO: isoTime || '',
       windowLabel,
       thresholdLabel,
     };
@@ -943,9 +987,9 @@
   // regardless of DST state.
   const _ET_FORMATTER = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
-    hour:     'numeric',
-    minute:   '2-digit',
-    hour12:   true,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
   });
   function _formatTimeUtcAndEt(date) {
     const utcPart = date.toUTCString().slice(17, 22) + ' UTC';
@@ -962,25 +1006,21 @@
       // The "Issued"/"Window" metric cards repurpose to show event identity
       els.metricIssuedTime.textContent = m.end_date || '--';
       els.metricIssuedDate.textContent = m.event_name || 'Historical';
-      els.metricWindow.textContent     =
-        (m.accumulation_days || '?') + ' days';
-      els.metricWindowSub.textContent  = 'accumulation';
+      els.metricWindow.textContent = (m.accumulation_days || '?') + ' days';
+      els.metricWindowSub.textContent = 'accumulation';
     } else if (state.mode === 'mrms') {
       const obs = m.observed_at ? new Date(m.observed_at) : new Date();
       els.metricIssuedTime.textContent = _formatTimeUtcAndEt(obs);
-      els.metricIssuedDate.textContent =
-        obs.toUTCString().slice(5, 16);
-      els.metricWindow.textContent     =
-        (m.window_hours || state.window) + ' hr';
-      els.metricWindowSub.textContent  =
+      els.metricIssuedDate.textContent = obs.toUTCString().slice(5, 16);
+      els.metricWindow.textContent = (m.window_hours || state.window) + ' hr';
+      els.metricWindowSub.textContent =
         'ending ' + obs.toUTCString().slice(17, 22) + ' UTC';
     } else {
       const issued = m.issued ? new Date(m.issued) : new Date();
-      const ends   = m.window_end ? new Date(m.window_end) : new Date();
+      const ends = m.window_end ? new Date(m.window_end) : new Date();
       els.metricIssuedTime.textContent = _formatTimeUtcAndEt(issued);
-      els.metricIssuedDate.textContent =
-        issued.toUTCString().slice(5, 16);
-      els.metricWindow.textContent    = (m.window_hours || state.window) + ' hr';
+      els.metricIssuedDate.textContent = issued.toUTCString().slice(5, 16);
+      els.metricWindow.textContent = (m.window_hours || state.window) + ' hr';
       els.metricWindowSub.textContent =
         'through ' + ends.toUTCString().slice(17, 22) + ' UTC';
     }
@@ -992,10 +1032,10 @@
     // summary.flagged is null when the flagged file did not load. Show
     // "--" in that case: a zero here would wrongly imply "no risk".
     if (summary.flagged == null) {
-      els.metricFlagged.textContent    = '--';
+      els.metricFlagged.textContent = '--';
       els.metricFlaggedSub.textContent = 'data unavailable';
     } else {
-      els.metricFlagged.textContent    = String(summary.flagged);
+      els.metricFlagged.textContent = String(summary.flagged);
       els.metricFlaggedSub.textContent =
         'of ' + summary.total + ' debris flow pathways';
     }
@@ -1017,13 +1057,14 @@
       els.metaSource.removeChild(els.metaSource.firstChild);
     }
     const sourceText = m.source || '--';
-    const sourceUrl  = (CFG.SOURCE_LINKS && CFG.SOURCE_LINKS[state.mode]) || null;
+    const sourceUrl =
+      (CFG.SOURCE_LINKS && CFG.SOURCE_LINKS[state.mode]) || null;
 
     if (sourceUrl && sourceText !== '--') {
       const link = document.createElement('a');
-      link.href   = sourceUrl;
+      link.href = sourceUrl;
       link.target = '_blank';
-      link.rel    = 'noopener noreferrer';
+      link.rel = 'noopener noreferrer';
       link.textContent = sourceText;
       // Trailing external-link icon (north-east arrow). aria-hidden so
       // screen readers don't announce it; the link's target="_blank" is
@@ -1031,7 +1072,7 @@
       const icon = document.createElement('span');
       icon.className = 'external-link-icon';
       icon.setAttribute('aria-hidden', 'true');
-      icon.textContent = '\u2197';   // northeast arrow
+      icon.textContent = '\u2197'; // northeast arrow
       link.appendChild(document.createTextNode(' '));
       link.appendChild(icon);
       els.metaSource.appendChild(link);
@@ -1046,9 +1087,8 @@
       els.metaExtraLabel.hidden = false;
       els.metaExtra.hidden = false;
       els.metaExtraLabel.textContent = 'Max observed';
-      els.metaExtra.textContent = (m.max_inches != null)
-        ? m.max_inches.toFixed(2) + '\u2033'
-        : '--';
+      els.metaExtra.textContent =
+        m.max_inches != null ? m.max_inches.toFixed(2) + '\u2033' : '--';
     } else if (state.mode === 'mrms') {
       els.metaTimeLabel.textContent = 'Observed';
       const obs = m.observed_at ? new Date(m.observed_at) : null;
@@ -1060,10 +1100,12 @@
       els.metaExtra.hidden = false;
       els.metaExtraLabel.textContent = 'Max observed';
       if (m.max_inches != null) {
-        const min_ago = m.minutes_ago != null
-          ? ` (${Math.round(m.minutes_ago)} min ago)`
-          : '';
-        els.metaExtra.textContent = m.max_inches.toFixed(2) + '\u2033' + min_ago;
+        const min_ago =
+          m.minutes_ago != null
+            ? ` (${Math.round(m.minutes_ago)} min ago)`
+            : '';
+        els.metaExtra.textContent =
+          m.max_inches.toFixed(2) + '\u2033' + min_ago;
       } else {
         els.metaExtra.textContent = '--';
       }
@@ -1089,18 +1131,21 @@
   // CSV EXPORT (#11)
   // =====================================================================
   function _exportCsv() {
-    if (!state.lastAlerts || !state.lastAlerts.features
-        || !state.lastAlerts.features.length) {
+    if (
+      !state.lastAlerts ||
+      !state.lastAlerts.features ||
+      !state.lastAlerts.features.length
+    ) {
       return;
     }
 
     const csv = AL.toCSV(state.lastAlerts, state.lastCtx);
-    const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `defns-alerts-${ts}Z.csv`;
 
     // Use a Blob + ObjectURL so we don't have to base64-encode large CSVs
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
 
     const a = document.createElement('a');
     a.href = url;
@@ -1108,7 +1153,9 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   // =====================================================================
@@ -1129,12 +1176,20 @@
     const mrmsWin = state.loadedWindows.mrms;
 
     if (ndfdWin != null) {
-      promises.push(_fetchInto(`data/forecast_${ndfdWin}h.geojson`,     'NDFD_FORECAST'));
-      promises.push(_fetchInto(`data/flagged_ndfd_${ndfdWin}h.geojson`, 'FLAGGED_NDFD'));
+      promises.push(
+        _fetchInto(`data/forecast_${ndfdWin}h.geojson`, 'NDFD_FORECAST')
+      );
+      promises.push(
+        _fetchInto(`data/flagged_ndfd_${ndfdWin}h.geojson`, 'FLAGGED_NDFD')
+      );
     }
     if (mrmsWin != null) {
-      promises.push(_fetchInto(`data/observed_${mrmsWin}h.geojson`,     'MRMS_OBSERVED'));
-      promises.push(_fetchInto(`data/flagged_mrms_${mrmsWin}h.geojson`, 'FLAGGED_MRMS'));
+      promises.push(
+        _fetchInto(`data/observed_${mrmsWin}h.geojson`, 'MRMS_OBSERVED')
+      );
+      promises.push(
+        _fetchInto(`data/flagged_mrms_${mrmsWin}h.geojson`, 'FLAGGED_MRMS')
+      );
     }
 
     if (promises.length === 0) {

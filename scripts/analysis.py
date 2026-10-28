@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import geopandas as gpd
 
-from config import INTERSECTION_CRS, DISPLAY_CRS
+from config import DISPLAY_CRS, INTERSECTION_CRS
 
 
 def find_alerts(
@@ -68,19 +68,22 @@ def find_alerts(
     deduped["area_acres"] = deduped.geometry.area * 0.000247105
 
     # Drop sjoin's bookkeeping columns and project back to WGS84 for display.
-    deduped = deduped.drop(
-        columns=[c for c in deduped.columns if c.startswith("index_right")]
-    )
+    deduped = deduped.drop(columns=[c for c in deduped.columns if c.startswith("index_right")])
     deduped = deduped.to_crs(DISPLAY_CRS)
 
-    return deduped[[
-        "OBJECTID", "category", "label", "area_acres",
-        # Optional admin columns: include if present on the debris flow GDF.
-        # _augment_with_admin_boundaries adds these in data.py; preserving
-        # them here lets the frontend display county + watershed per row.
-        *[c for c in ("county", "watershed") if c in deduped.columns],
-        "geometry"
-    ]]
+    return deduped[
+        [
+            "OBJECTID",
+            "category",
+            "label",
+            "area_acres",
+            # Optional admin columns: include if present on the debris flow GDF.
+            # _augment_with_admin_boundaries adds these in data.py; preserving
+            # them here lets the frontend display county + watershed per row.
+            *[c for c in ("county", "watershed") if c in deduped.columns],
+            "geometry",
+        ]
+    ]
 
 
 def summarize_alerts(alerts_gdf: gpd.GeoDataFrame) -> dict:

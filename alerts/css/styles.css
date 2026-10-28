@@ -7,30 +7,31 @@
    Design tokens (mirror of style.py SITE_* + ACCENT_* + SECONDARY_*)
    ------------------------------------------------------------------------- */
 :root {
-  --site-bg:           #122518;   /* deep page background */
-  --site-surface:      #1C3521;   /* cards, header, sidebar surface */
-  --site-border:       #2E5438;   /* hairline borders */
-  --site-text:         #FFFFFF;   /* primary text */
-  --site-text-muted:   #D4E8D8;   /* labels, helper text */
-  --site-focus:        #FFD166;   /* gold focus ring (WCAG 2.4.7) */
+  --site-bg: #122518; /* deep page background */
+  --site-surface: #1c3521; /* cards, header, sidebar surface */
+  --site-border: #2e5438; /* hairline borders */
+  --site-text: #ffffff; /* primary text */
+  --site-text-muted: #d4e8d8; /* labels, helper text */
+  --site-focus: #ffd166; /* gold focus ring (WCAG 2.4.7) */
 
-  --accent-1:          #C04C00;   /* warm orange - active alerts, primary CTAs */
-  --accent-dark:       #A44100;   /* hover/pressed for accent-1 */
+  --accent-1: #c04c00; /* warm orange - active alerts, primary CTAs */
+  --accent-dark: #a44100; /* hover/pressed for accent-1 */
 
-  --secondary-1:       #3E8452;   /* green - "ok" / OK metric */
-  --secondary-2:       #529866;   /* lighter green - hover */
-  --secondary-dark:    #3C744C;   /* darker green */
+  --secondary-1: #3e8452; /* green - "ok" / OK metric */
+  --secondary-2: #529866; /* lighter green - hover */
+  --secondary-dark: #3c744c; /* darker green */
 
   /* Type scale */
-  --font-sans: 'Source Sans 3', -apple-system, BlinkMacSystemFont,
-               'Segoe UI', Roboto, sans-serif;
-  --fs-xs:   0.78rem;
-  --fs-sm:   0.875rem;
+  --font-sans:
+    'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  --fs-xs: 0.78rem;
+  --fs-sm: 0.875rem;
   --fs-base: 1rem;
-  --fs-lg:   1.15rem;
-  --fs-xl:   1.45rem;
-  --fs-h1:   1.85rem;
-  --fs-h2:   1.3rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.45rem;
+  --fs-h1: 1.85rem;
+  --fs-h2: 1.3rem;
 
   /* Spacing scale */
   --sp-1: 0.25rem;
@@ -45,15 +46,21 @@
 
   /* Layout */
   --sidebar-w: 320px;
-  --header-h:  220px;   /* matches Streamlit fixed-header height */
+  --header-h: 220px; /* matches Streamlit fixed-header height */
 }
 
 /* -------------------------------------------------------------------------
    Reset + base
    ------------------------------------------------------------------------- */
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-html { font-size: 16px; }
+html {
+  font-size: 16px;
+}
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -65,8 +72,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-a { color: var(--secondary-2); text-decoration: underline; }
-a:hover, a:focus { color: var(--accent-1); }
+a {
+  color: var(--secondary-2);
+  text-decoration: underline;
+}
+a:hover,
+a:focus {
+  color: var(--accent-1);
+}
 
 /* -------------------------------------------------------------------------
    Accessibility helpers
@@ -99,7 +112,9 @@ a:hover, a:focus { color: var(--accent-1); }
   z-index: 10000;
   transition: top 0.15s;
 }
-.skip-link:focus { top: var(--sp-2); }
+.skip-link:focus {
+  top: var(--sp-2);
+}
 
 /* Visible focus ring on EVERY interactive element. Gold against dark green
    gives ~9:1 contrast (well above WCAG 2.4.7 / 1.4.11 minimum). */
@@ -111,7 +126,9 @@ a:hover, a:focus { color: var(--accent-1); }
 
 /* For users who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
@@ -125,8 +142,8 @@ a:hover, a:focus { color: var(--accent-1); }
   border-top: 3px solid var(--accent-1);
   border-bottom: 1px solid var(--site-border);
   padding: var(--sp-3) var(--sp-5);
-  flex-shrink: 0;            /* keeps natural height; doesn't squeeze under body */
-  position: relative;        /* anchor for absolute-positioned loading indicator */
+  flex-shrink: 0; /* keeps natural height; doesn't squeeze under body */
+  position: relative; /* anchor for absolute-positioned loading indicator */
 }
 
 .header-row {
@@ -173,15 +190,18 @@ a:hover, a:focus { color: var(--accent-1); }
   transition: box-shadow 0.15s ease-in-out;
 }
 .logo-right .logo-link {
-  border-radius: 4px;   /* softer corners for rectangular logo */
+  border-radius: 4px; /* softer corners for rectangular logo */
 }
 .logo-link:hover,
 .logo-link:focus-visible {
   box-shadow: 0 0 0 3px var(--accent-1);
-  outline: none;   /* replace default focus outline with our themed one */
+  outline: none; /* replace default focus outline with our themed one */
 }
 
-.header-text { flex: 1; min-width: 0; }
+.header-text {
+  flex: 1;
+  min-width: 0;
+}
 
 .parent-link {
   display: inline-block;
@@ -190,7 +210,9 @@ a:hover, a:focus { color: var(--accent-1); }
   color: var(--secondary-2);
   text-decoration: none;
 }
-.parent-link:hover { text-decoration: underline; }
+.parent-link:hover {
+  text-decoration: underline;
+}
 
 .app-header h1 {
   font-size: var(--fs-h1);
@@ -232,7 +254,9 @@ a:hover, a:focus { color: var(--accent-1); }
   font-weight: 600;
 }
 
-.metric dd { margin: 0; }
+.metric dd {
+  margin: 0;
+}
 
 .metric .value {
   display: block;
@@ -257,10 +281,12 @@ a:hover, a:focus { color: var(--accent-1); }
 }
 .metric.has-alerts .label,
 .metric.has-alerts .value,
-.metric.has-alerts .sub { color: var(--site-text); }
+.metric.has-alerts .sub {
+  color: var(--site-text);
+}
 .metric.has-alerts .label::before {
   /* Non-color flag: a triangle that's NOT color-dependent */
-  content: "\25B2  ";  /* black up-pointing triangle */
+  content: '\25B2  '; /* black up-pointing triangle */
 }
 
 /* -------------------------------------------------------------------------
@@ -270,7 +296,9 @@ a:hover, a:focus { color: var(--accent-1); }
    from it - that broke whenever the actual header content was taller than
    the assumed value.
    ------------------------------------------------------------------------- */
-html { height: 100%; }
+html {
+  height: 100%;
+}
 body {
   height: 100vh;
   display: flex;
@@ -282,7 +310,7 @@ body {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   flex: 1;
-  min-height: 0;            /* allow grid children to shrink */
+  min-height: 0; /* allow grid children to shrink */
   overflow: hidden;
 }
 
@@ -294,7 +322,7 @@ body {
   border-right: 1px solid var(--site-border);
   padding: var(--sp-4) var(--sp-4) var(--sp-6);
   overflow-y: auto;
-  height: 100%;          /* parent .app-body is height-constrained */
+  height: 100%; /* parent .app-body is height-constrained */
 }
 
 .sidebar-heading-row {
@@ -357,11 +385,14 @@ body {
   padding: var(--sp-3) var(--sp-4);
   font-size: var(--fs-xs);
   color: var(--site-text);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
-  transition: opacity 0.15s, transform 0.15s, visibility 0s linear 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s,
+    visibility 0s linear 0.15s;
 }
 .sidebar-heading-row:hover .tooltip,
 .sidebar-heading-row:focus-within .tooltip {
@@ -405,7 +436,7 @@ body {
 }
 .sidebar-footer-links a:hover,
 .sidebar-footer-links a:focus {
-  color: var(--accent-dark);   /* deeper orange on hover */
+  color: var(--accent-dark); /* deeper orange on hover */
 }
 
 /* Agency address block below the sidebar footer links. Semantically an
@@ -589,14 +620,16 @@ kbd {
    but our own display rule overrides that - so explicit [hidden] override
    is needed (same gotcha as .loading-indicator). */
 .sub-control {
-  margin-left: calc(18px + var(--sp-2));   /* matches radio input width + gap */
+  margin-left: calc(18px + var(--sp-2)); /* matches radio input width + gap */
   margin-top: var(--sp-2);
   margin-bottom: var(--sp-3);
   padding-left: var(--sp-3);
   border-left: 2px solid var(--site-border);
   display: block;
 }
-.sub-control[hidden] { display: none; }
+.sub-control[hidden] {
+  display: none;
+}
 .sub-control select {
   width: 100%;
   padding: 6px 8px;
@@ -617,7 +650,7 @@ kbd {
 /* Hindcast banner - shown above the map when in historical mode.
    Amber/warning palette so it's distinct from normal data. */
 .hindcast-banner {
-  background: #5c3a00;          /* dark amber */
+  background: #5c3a00; /* dark amber */
   color: #ffd47a;
   border: 1px solid #8a5a00;
   border-radius: var(--radius-md);
@@ -630,7 +663,9 @@ kbd {
   line-height: 1.4;
   flex-shrink: 0;
 }
-.hindcast-banner[hidden] { display: none; }
+.hindcast-banner[hidden] {
+  display: none;
+}
 .hindcast-banner-icon {
   font-size: 1.4rem;
   line-height: 1;
@@ -649,7 +684,7 @@ kbd {
    error, not the amber "historical" notice. Same layout as the hindcast
    banner so the two stack cleanly if both ever show. */
 .data-unavailable-banner {
-  background: #5a1a1a;          /* dark red */
+  background: #5a1a1a; /* dark red */
   color: #ffb3b3;
   border: 1px solid #8a2a2a;
   border-radius: var(--radius-md);
@@ -662,7 +697,9 @@ kbd {
   line-height: 1.4;
   flex-shrink: 0;
 }
-.data-unavailable-banner[hidden] { display: none; }
+.data-unavailable-banner[hidden] {
+  display: none;
+}
 .data-unavailable-banner-icon {
   font-size: 1.4rem;
   line-height: 1;
@@ -677,7 +714,7 @@ kbd {
 }
 
 /* Slider */
-input[type="range"] {
+input[type='range'] {
   width: 100%;
   accent-color: var(--accent-1);
 }
@@ -687,7 +724,9 @@ input[type="range"] {
   color: var(--site-text-muted);
   margin-top: var(--sp-2);
 }
-.threshold-readout strong { color: var(--site-text); }
+.threshold-readout strong {
+  color: var(--site-text);
+}
 
 /* Select */
 select {
@@ -716,8 +755,12 @@ select {
   min-height: 36px;
   transition: background 0.15s;
 }
-.btn-primary:hover  { background: var(--accent-dark); }
-.btn-primary:active { background: var(--accent-dark); }
+.btn-primary:hover {
+  background: var(--accent-dark);
+}
+.btn-primary:active {
+  background: var(--accent-dark);
+}
 
 /* Legend disclosure - shows all 20 NDFD categories (same scale used by
    MRMS by design). The current threshold gets an arrow marker on the
@@ -787,12 +830,12 @@ select {
   flex-direction: column;
   gap: var(--sp-4);
   height: 100%;
-  overflow-y: auto;       /* scroll inside content if anything overflows */
+  overflow-y: auto; /* scroll inside content if anything overflows */
   min-width: 0;
 }
 
 .map-section {
-  flex: 1 1 auto;          /* map takes available space */
+  flex: 1 1 auto; /* map takes available space */
   min-height: 380px;
   display: flex;
 }
@@ -818,16 +861,16 @@ select {
   background: var(--site-surface);
   color: var(--site-text);
   border: 1px solid var(--site-border);
-  border-radius: 999px;    /* fully-rounded pill */
+  border-radius: 999px; /* fully-rounded pill */
   padding: 6px 14px 6px 10px;
   font-size: var(--fs-xs);
   font-weight: 500;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.20);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
-  pointer-events: none;    /* purely informational; let clicks pass through */
+  pointer-events: none; /* purely informational; let clicks pass through */
 }
 /* Class-selector display:flex above otherwise wins over the [hidden]
    attribute's default display:none. Force [hidden] to take precedence. */
@@ -844,7 +887,9 @@ select {
   flex-shrink: 0;
 }
 @keyframes defns-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 /* Reduced-motion preference - replace spin with a gentle pulse. */
 @media (prefers-reduced-motion: reduce) {
@@ -853,7 +898,9 @@ select {
     border-color: var(--accent-1);
   }
   @keyframes defns-pulse {
-    50% { opacity: 0.3; }
+    50% {
+      opacity: 0.3;
+    }
   }
 }
 
@@ -864,7 +911,7 @@ select {
   transition: background 0.1s;
 }
 #alerts-tbody tr.row-clickable:hover {
-  background: rgba(192, 76, 0, 0.10);
+  background: rgba(192, 76, 0, 0.1);
 }
 #alerts-tbody tr.row-clickable:focus-visible {
   outline: 2px solid var(--accent-1);
@@ -887,7 +934,7 @@ select {
 
 /* The <summary> is the always-visible "header bar" of the disclosure */
 .alerts-section > summary {
-  list-style: none;          /* hide default triangle - we render our own */
+  list-style: none; /* hide default triangle - we render our own */
   cursor: pointer;
   padding: var(--sp-3) var(--sp-4);
   display: flex;
@@ -898,14 +945,14 @@ select {
   transition: background 0.15s;
 }
 .alerts-section > summary::-webkit-details-marker {
-  display: none;             /* Safari - hide default disclosure triangle */
+  display: none; /* Safari - hide default disclosure triangle */
 }
 .alerts-section > summary:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 .alerts-section > summary:focus-visible {
   outline: 3px solid var(--site-focus);
-  outline-offset: -3px;      /* keep inside the rounded border */
+  outline-offset: -3px; /* keep inside the rounded border */
 }
 
 /* Custom chevron that rotates on open. Uses CSS only - no JS. */
@@ -921,7 +968,7 @@ select {
   margin-right: var(--sp-1);
 }
 .alerts-section[open] > summary .alerts-disclosure-icon {
-  transform: rotate(45deg);   /* rotates to point down when open */
+  transform: rotate(45deg); /* rotates to point down when open */
 }
 
 .alerts-section h2 {
@@ -969,13 +1016,17 @@ select {
   align-items: center;
   gap: var(--sp-1);
   min-height: 32px;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
-.btn-secondary:hover  {
+.btn-secondary:hover {
   background: var(--site-surface);
   border-color: var(--secondary-1);
 }
-.btn-secondary:active { background: var(--site-surface); }
+.btn-secondary:active {
+  background: var(--site-surface);
+}
 .btn-secondary[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1033,12 +1084,13 @@ select {
    the page scroll naturally. The fixed layout assumes desktop-ish space.
    ------------------------------------------------------------------------- */
 @media (max-width: 900px) {
-  html, body {
+  html,
+  body {
     overflow: auto;
     height: auto;
   }
   body {
-    display: block;        /* override flex column */
+    display: block; /* override flex column */
   }
   .app-body {
     grid-template-columns: 1fr;
@@ -1056,23 +1108,43 @@ select {
     height: auto;
     overflow: visible;
   }
-  .map-section { min-height: 360px; }
-  #map        { min-height: 360px; height: 360px; }
+  .map-section {
+    min-height: 360px;
+  }
+  #map {
+    min-height: 360px;
+    height: 360px;
+  }
   .metrics {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 540px) {
-  .header-row { flex-direction: column; }
+  .header-row {
+    flex-direction: column;
+  }
   /* Mobile: shrink both logos so they don't dominate a narrow screen.
      Seal drops to 64px (from 96px desktop). DEQ logo drops to 160x60
      (from 216x80), preserving its native ~2.7:1 aspect ratio. */
-  .logo-left img  { width: 64px;  height: 64px; }
-  .logo-right img { width: 160px; height: 60px; }
-  .app-header h1 { font-size: var(--fs-lg); }
-  .metrics { grid-template-columns: 1fr; }
-  #map { height: 320px; min-height: 320px; }
+  .logo-left img {
+    width: 64px;
+    height: 64px;
+  }
+  .logo-right img {
+    width: 160px;
+    height: 60px;
+  }
+  .app-header h1 {
+    font-size: var(--fs-lg);
+  }
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  #map {
+    height: 320px;
+    min-height: 320px;
+  }
 }
 
 /* =========================================================================
@@ -1093,21 +1165,21 @@ select {
    voice: readable, dense without being cramped, no decoration. */
 .parcel-popup {
   font-family: var(--font-sans);
-  font-size:   var(--fs-sm);
-  color:       #1c3a1f;
-  min-width:   180px;
-  max-width:   240px;
+  font-size: var(--fs-sm);
+  color: #1c3a1f;
+  min-width: 180px;
+  max-width: 240px;
 }
 .parcel-popup-addr {
   font-weight: 600;
-  font-size:   var(--fs-base);
+  font-size: var(--fs-base);
   margin-bottom: 0.15rem;
   line-height: 1.25;
 }
 .parcel-popup-addr em {
   font-weight: 400;
-  font-style:  italic;
-  color:       #5a6663;
+  font-style: italic;
+  color: #5a6663;
 }
 .parcel-popup-city {
   color: #5a6663;
@@ -1129,7 +1201,7 @@ select {
 }
 .parcel-popup-source {
   font-size: var(--fs-xs);
-  color:     #5a6663;
+  color: #5a6663;
   border-top: 1px solid #d4e8d8;
   padding-top: 0.3rem;
 }
@@ -1158,17 +1230,17 @@ select {
   border-radius: var(--radius-md);
 }
 .geocoder-control-input {
-  background:  var(--site-surface);
-  color:       var(--site-text);
+  background: var(--site-surface);
+  color: var(--site-text);
   font-family: var(--font-sans);
-  font-size:   var(--fs-base);
+  font-size: var(--fs-base);
   /* The input now owns its own card look (shadow, full border). We
      stripped the container's chrome so the two boxes can't disagree. */
-  width:         100%;
-  box-sizing:    border-box;
-  border:        1px solid var(--site-border);
-  box-shadow:    0 2px 8px rgba(0, 0, 0, 0.18);
-  padding-left:  0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--site-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding-left: 0.6rem;
   padding-right: 0.6rem;
   border-radius: var(--radius-md);
 }
@@ -1178,7 +1250,7 @@ select {
 }
 .geocoder-control-input:focus {
   outline: 2px solid var(--site-focus);
-  outline-offset: -2px;   /* sits inside the control's own border */
+  outline-offset: -2px; /* sits inside the control's own border */
 }
 
 /* Suppress the autocomplete loading indicator that the plugin flashes
@@ -1191,7 +1263,7 @@ select {
 .geocoder-control.geocoder-control-loading::after,
 .geocoder-control .geocoder-control-input.geocoder-control-loading {
   background-image: none !important;
-  animation:        none !important;
+  animation: none !important;
 }
 .geocoder-control-loading-image,
 .geocoder-control-spinner,
@@ -1203,32 +1275,34 @@ select {
    positions it absolutely; we just style it. */
 .geocoder-control-suggestions,
 .geocoder-control .geocoder-control-suggestions {
-  background:  var(--site-surface);
-  border:      1px solid var(--site-border);
-  border-top:  none;
+  background: var(--site-surface);
+  border: 1px solid var(--site-border);
+  border-top: none;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  box-shadow:  0 6px 12px rgba(0, 0, 0, 0.24);
-  margin-top:  -1px;       /* tuck under the input's bottom border */
-  max-height:  300px;
-  overflow-y:  auto;
-  z-index:     1100;       /* above Leaflet's default control z-indexes */
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.24);
+  margin-top: -1px; /* tuck under the input's bottom border */
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1100; /* above Leaflet's default control z-indexes */
 }
 .geocoder-control-suggestion,
 .geocoder-control li.geocoder-control-suggestion {
-  background: var(--site-surface);   /* explicit on each <li> - plugin's
+  background: var(
+    --site-surface
+  ); /* explicit on each <li> - plugin's
                                         default puts white background here,
                                         overriding the parent <ul>'s color */
-  color:   var(--site-text);
+  color: var(--site-text);
   padding: 0.45rem 0.6rem;
-  cursor:  pointer;
+  cursor: pointer;
 }
 .geocoder-control-suggestion:hover,
 .geocoder-control-selected,
-.geocoder-control-suggestion[aria-selected="true"],
+.geocoder-control-suggestion[aria-selected='true'],
 .geocoder-control li.geocoder-control-suggestion.geocoder-control-selected,
 .geocoder-control li.geocoder-control-suggestion:hover {
   background: var(--secondary-dark);
-  color:      var(--site-text);
+  color: var(--site-text);
 }
 
 /* Layout: place controls in the top-left corner horizontally (zoom +/-
@@ -1236,12 +1310,12 @@ select {
    the default vertical stack. Flex on the parent does this without
    fighting any per-control margins or clear rules. */
 .leaflet-top.leaflet-left {
-  display:        flex;
+  display: flex;
   flex-direction: row;
-  align-items:    flex-start;
+  align-items: flex-start;
 }
 .leaflet-top.leaflet-left .leaflet-control {
-  margin-right: 10px;     /* gap between zoom and search */
+  margin-right: 10px; /* gap between zoom and search */
 }
 .leaflet-top.leaflet-left .leaflet-control:last-child {
   margin-right: 0;

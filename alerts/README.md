@@ -1,73 +1,50 @@
-# DEFNS Alerts dashboard
+# SIREN alerts dashboard (offline)
 
-Source files for the **Debris Flow Early Notification System** dashboard.
+The exploratory **Slope Instability and Rainfall Early Notification**
+dashboard. Taken offline on 2026-10-22 in favour of DFENS Simple
+(`simple/`): every `/alerts/` page now redirects to
+<https://landslidesncgs.org/simple/>, and
+<https://dashboard.landslidesncgs.org/> serves DFENS Simple (see
+`infra/cloudfront/`). Current as of 2026-10-27.
 
-**Offline since 2026-10-22.** The exploratory dashboard was taken down in favor of DFENS Simple (`simple/`): `/alerts/` pages
-redirect to <https://landslidesncgs.org/simple/>, and
-<https://dashboard.landslidesncgs.org/> now serves DFENS Simple (see
-`infra/cloudfront/`). The code is kept here, and the daily pipeline still
-writes `alerts/data/` to S3; the simple page loads its building footprints
-from there.
-
-## Phases
-
-This dashboard is being built in three phases.
-
-- **Phase 1 (this commit):** Static HTML/CSS shell. Layout, design system,
-  ADA compliance baseline. No live data; controls don&rsquo;t do anything yet.
-  Goal: validate look-and-feel against the home page before wiring up JS.
-- **Phase 2 (next):** JavaScript controllers. Leaflet map, turf.js
-  client-side intersection, alerts table, all interactions. Still using
-  mocked JSON so reviewers can click through.
-- **Phase 3:** Python data pipeline (`scripts/refresh.py`), run daily on
-  GitHub Actions and dispatched from EventBridge. It writes `alerts/data/`
-  straight to the S3 data bucket; nothing is committed to git.
-
-## Files
+## What is still here and why
 
 ```
 alerts/
-  index.html              Dashboard page (Phase 1: layout only)
-  accessibility.html      WCAG 2.1 AA accessibility statement
-  css/
-    styles.css            Dark theme matching landslidesncgs.com palette
-  js/                     (added in Phase 2)
-  data/                   not in git: written to S3 by refresh-data.yml (see OPERATIONS.md)
+  index.html      The dashboard page (not reachable in production)
+  css/styles.css  Dark theme
+  js/             config.js, map.js, alerts.js, app.js
+  data/           not in git; buildings/ written to S3 by refresh-reference.yml, the rest by a manual refresh-data.yml run
 ```
 
-## Accessibility commitments
-
-The dashboard targets **WCAG 2.1 Level AA**. See `accessibility.html` for
-the full statement. Highlights:
-
-- Semantic HTML throughout (no `<div>` soup).
-- All controls keyboard-operable with visible focus.
-- Map is a visual aid; the alerts table is the canonical data source for
-  screen-reader users.
-- Color is never the only encoding for meaning.
-
-When making changes, test with:
-
-- The `axe` browser extension or `axe-core` CLI
-- Lighthouse&rsquo;s Accessibility audit
-- Keyboard-only navigation (Tab, Shift+Tab, Enter, Space, Arrow keys)
-- A screen reader if available (VoiceOver on Mac, NVDA on Windows)
+- `alerts/data/buildings/` is live: the daily reference check rebuilds it
+  when Overture publishes a release, and DFENS Simple reads it. The rest of
+  `alerts/data/` is refreshed only by a manual `refresh-data.yml` run.
+- The page and its JavaScript are kept in case the full view comes back.
+  `simple/js/map.js` began as a copy of `alerts/js/map.js`; the two have
+  since diverged, and consolidating them into one shared module is a
+  backlog item. The code is still linted and still synced to the buckets.
 
 ## Local preview
 
-Open `alerts/index.html` directly in a browser, or run a quick local
-server from the repo root:
-
 ```bash
-python -m http.server 8000
-# then visit http://localhost:8000/alerts/
+python3 -m http.server 8000    # from the repo root
+# http://localhost:8000/alerts/
 ```
 
-## Phase 2 and 3 dependencies (FYI, not yet loaded)
+The page reads `alerts/data/` on the same origin; sync it from S3 or run
+`python scripts/refresh.py` first (`OPERATIONS.md`).
 
-These will be added in later phases:
+## Third-party libraries
 
-- [Leaflet](https://leafletjs.com/) &mdash; interactive map
-- [esri-leaflet](https://esri.github.io/esri-leaflet/) &mdash; NCGS
-  AGOL FeatureServer integration
-- [Turf.js](https://turfjs.org/) &mdash; client-side geo intersection
+Loaded from unpkg with integrity hashes: Leaflet 1.9.4, esri-leaflet 3.0.12,
+esri-leaflet-geocoder 3.1.5 and Turf 7.4.0. `simple/test/sri.test.js` checks
+the hashes against the files served.
+
+## Accessibility
+
+The dashboard was built to WCAG 2.1 AA: semantic HTML, keyboard-operable
+controls with visible focus, the table as the canonical data source for
+screen readers, and colour never the only encoding. Test changes with the
+axe browser extension or Lighthouse, keyboard-only navigation, and a screen
+reader where possible.

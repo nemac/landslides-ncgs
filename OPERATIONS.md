@@ -1,431 +1,221 @@
-# DEFNS Dashboard - Operations Guide
+# Operations guide
 
-Quick reference for running the dashboard locally, refreshing data, and
-troubleshooting common issues.
+How the site and its data pipelines run, and how to run them on your own
+computer. Current as of 2026-10-27. Architecture is in `README.md`; the
+AWS setup is in `infra/README.md`.
 
-## Table of contents
+## What runs where
 
-1. [Daily workflow: starting fresh](#daily-workflow-starting-fresh)
-2. [Refreshing data](#refreshing-data)
-3. [After making code changes](#after-making-code-changes)
-4. [Stopping everything](#stopping-everything)
-5. [DFENS Simple](#dfens-simple-simple)
-6. [Common issues](#common-issues)
-7. [Reference: file locations](#reference-file-locations)
+| Piece | Runs | Writes | Served at |
+|---|---|---|---|
+| Main site and both dashboards (static files) | `deploy-prod.yml` on push to `master`; `deploy-dev.yml` on push to `development` | site bucket, dev-site bucket | `https://landslidesncgs.org`, `https://dev.landslidesncgs.org` (basic auth) |
+| DFENS Simple pipeline (`simple/pipeline/`) | `refresh-simple.yml`, dispatched every 10 minutes by EventBridge Scheduler | `s3://landslidesncgs-data/simple/data/` | `/simple/data/` on both hosts |
+| Reference data: building footprints and the debris-flow GeoPackage | `refresh-reference.yml`, dispatched daily at 05:00 UTC by EventBridge Scheduler; rebuilds only on upstream change, after 90 days, or on `force` | `alerts/data/buildings/`, `cache/debris_flows.gpkg` and `alerts/data/reference_state.json` in the data bucket | `/alerts/data/` on both hosts (`cache/` is not served) |
+| Alerts pipeline (`scripts/refresh.py`) | `refresh-data.yml`, by hand only since 2026-10-27 | `s3://landslidesncgs-data/alerts/data/` | `/alerts/data/` on both hosts |
+| AWS resources (`infra/cdk/`) | by hand from a developer machine | CloudFormation stacks | |
 
----
+Nothing under `alerts/data/` or `simple/data/` is in git. The dev site reads
+the production data bucket, so it always shows live data.
 
-## Daily workflow: starting fresh
+The SIREN alerts dashboard under `alerts/` has been offline since
+2026-10-22; its pages redirect to `/simple/`. Its pipeline no longer runs
+on a schedule. The two things DFENS Simple still needs from it, the
+building footprints and the debris-flow GeoPackage, are kept current by
+the daily reference check instead, and the two pipelines share
+`scripts/data.py`, `scripts/analysis.py` and `scripts/config.py`.
 
-To open the dashboard from a fully-closed state, you need **two Anaconda Prompt
-windows running at the same time**:
+## Local preview of the site
 
-### Window 1 — Web server (leave running)
+From the repo root:
 
+```bash
+python3 -m http.server 8000
 ```
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-python -m http.server 8000
+
+Then open `http://localhost:8000/` for the main site or
+`http://localhost:8000/simple/` for the dashboard. Page links are
+root-absolute (`/about/`, `/assets/...`), so the server must run from the
+repo root. A plain file open (`file://`) will not resolve them.
+
+Hard-refresh after changing files, or turn on "Disable cache" in the
+browser's DevTools Network tab while developing.
+
+## Getting data onto your computer
+
+A fresh checkout has empty `alerts/data/` and `simple/data/` folders. The
+dashboard shows its stale-data banner until `simple/data/` exists.
+
+With AWS access (profile `jbliss-landslidesncgs`):
+
+```bash
+aws s3 sync s3://landslidesncgs-data/simple/data simple/data --profile jbliss-landslidesncgs
+aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile jbliss-landslidesncgs   # ~870 MB, mostly building footprints
 ```
 
-You'll see `Serving HTTP on :: port 8000`. **Leave this window open**.
-Don't type anything else in it. The server stays alive as long as the
-window stays open.
+Without AWS access, run the pipelines below; they write the same files.
 
-### Window 2 — Everything else
+## Python environment
 
-```
+One pinned environment serves both pipelines. It is the same file CI uses,
+so a local run and a CI run see identical library versions.
+
+```bash
+conda env create -f environment.yml     # once; or: micromamba create -f environment.yml
 conda activate defns-refresh
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
 ```
 
-(First time only: `conda env create -f environment.yml` from the repo root.)
+`ModuleNotFoundError: No module named 'geopandas'` means the environment is
+not active.
 
-Use this window to refresh data, run scripts, or anything else. Window 1
-just keeps serving files.
+## DFENS Simple locally
 
-### Browser
+`simple/pipeline/run_local.py` does on your computer what
+`refresh-simple.yml` does in production: every ten minutes it checks NDFD,
+rebuilds `simple/data/` when the forecast changed, and serves the repo root
+so the page is at `http://localhost:8000/simple/`.
 
-Open: `http://localhost:8000/alerts/`
-
-**First-time-per-session tip**: press `F12` to open DevTools, click the
-**Network** tab, check **"Disable cache"**. Keep DevTools open while
-developing. This saves you from cache headaches when files change.
-
----
-
-## Refreshing data
-
-### Where the data lives
-
-`alerts/data/` is **not in git**. Production data lives only in the S3
-bucket `landslidesncgs-data` (AWS account 710482330128), written by the
-`refresh-data.yml` workflow every day at 04:00 UTC and served by CloudFront
-at `https://landslidesncgs.org/alerts/data/`. A fresh checkout has an empty
-`alerts/data/` folder. Two ways to fill it:
-
-- **With AWS access** (one command, about 870 MB, mostly building footprints):
-  ```
-  aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile jbliss-landslidesncgs
-  ```
-- **Without AWS access**: run the pipeline below. `python scripts/refresh.py`
-  regenerates the live files and, the first time, the building footprints
-  (5 to 15 minutes). Historical events come from `--hindcast`.
-
-### Live precipitation (NDFD + MRMS) — most common
-
-In **Window 2**:
-
-```
-python scripts/refresh.py
-```
-
-Takes 30 seconds to 2 minutes. Writes four files:
-
-- `alerts/data/forecast.geojson`
-- `alerts/data/observed.geojson`
-- `alerts/data/flagged_ndfd.geojson`
-- `alerts/data/flagged_mrms.geojson`
-
-After it finishes, **hard-refresh the browser** (`Ctrl+F5`) to see the new
-data on the dashboard.
-
-### Historical event data — only when events change
-
-In **Window 2**:
-
-```
-python scripts/refresh.py --hindcast
-```
-
-Re-generates files for every event in `scripts/events.py`. Only run this
-when:
-
-- You added or edited an event in `events.py`
-- You changed an optimization knob in `config.py` (like
-  `FLAGGED_MIN_CATEGORY`)
-- You want to retry a fetch that failed before
-
-To re-process just one event without touching the others:
-
-```
-python scripts/refresh.py --hindcast may_2026_storm
-```
-
-After it finishes, **hard-refresh the browser** to see the new historical
-data.
-
-The nightly workflow never runs `--hindcast`, so historical files reach
-production only when someone uploads them by hand after regenerating:
-
-```
-aws s3 sync alerts/data/historical s3://landslidesncgs-data/alerts/data/historical --content-type application/json --cache-control "public, max-age=300" --profile jbliss-landslidesncgs
-```
-
-The nightly upload never deletes remote files, so the historical folder in
-the bucket is safe between uploads.
-
-### How often to refresh?
-
-| Data | Refresh cadence |
-|---|---|
-| Live precipitation | Whenever you want current weather locally. Production refreshes daily at 04:00 UTC from AWS. |
-| Historical events | Only when adding events or changing config. Files don't expire. |
-| Debris flow polygons | Auto-cached for 30 days. The script handles this transparently. |
-
-## DFENS Simple (`/simple/`)
-
-The simplified dashboard at <https://landslidesncgs.org/simple/> lives in
-`simple/`. Its data (`simple/data/`) is **not in git**: the
-`refresh-simple.yml` workflow checks NDFD every 10 minutes and writes
-three small files straight to S3. See `simple/README.md` for details.
-
-To test it locally, from the repo root with the `EWS` conda env activated:
-
-```
+```bash
+conda activate defns-refresh
 python simple/pipeline/run_local.py
 ```
 
-Then open `http://localhost:8000/simple/`. This serves the whole repo, so
-building footprints load from `alerts/data/` as in production.
+Options: `--once` (one refresh, then just serve), `--force` (rebuild even
+if NDFD has not changed), `--warm` (load the debris-flow cache first),
+`--interval 5`, `--port 8080`, `--host 0.0.0.0`, `--no-serve`. On the page,
+`?data=<folder>` and `?buildings=<folder>` override the data locations.
 
----
+The first build that finds rain at or above the threshold loads the
+debris-flow layer into `cache/debris_flows.gpkg` (about 560 MB, kept for 30
+days). That one-time load takes 15 to 20 minutes; later builds take one to
+two minutes. Details of the pipeline are in `simple/README.md`.
 
-## After making code changes
+## Alerts pipeline locally
 
-The two scenarios behave differently. Pick the right one or things break
-silently.
+```bash
+conda activate defns-refresh
+python scripts/refresh.py
+```
 
-### Frontend changes (HTML, CSS, JS in `alerts/`)
+Writes to `alerts/data/`, for each NDFD window (12, 24, 48 and 72 hours)
+a `forecast_{N}h.geojson` and a `flagged_ndfd_{N}h.geojson`, and for each
+MRMS window (1, 24 and 72 hours) an `observed_{N}h.geojson` and a
+`flagged_mrms_{N}h.geojson`. Every file carries a top-level `meta` object
+with its timestamps and source. The run also refreshes the building
+footprints under `alerts/data/buildings/` when their manifest is older
+than 30 days (5 to 15 minutes the first time; see below).
 
-1. **Stop the web server first** (Window 1: `Ctrl+C` or `Ctrl+Break`, or
-   just close the window). Windows holds file locks open while
-   `python -m http.server` is running, which prevents file overwrites
-   from working correctly.
-2. Drop the new files into place (`alerts/index.html`,
-   `alerts/css/styles.css`, `alerts/js/*.js`, etc.)
-3. **Restart the web server** (Window 1):
-   ```
-   cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-   python -m http.server 8000
-   ```
-4. **Hard-refresh the browser** (`Ctrl+F5`)
+A non-zero exit means something failed. When run from the Actions tab
+nothing is uploaded on a non-zero exit, so the bucket keeps the previous
+files. See `scripts/README.md` for the exit codes.
 
-If the dashboard still shows old behavior after a hard refresh, see
-[Common issues](#common-issues) below.
+To rebuild only the reference datasets, as the daily workflow does:
 
-### Backend changes (Python files in `scripts/`)
+```bash
+python scripts/refresh.py --debris-cache                        # re-fetch the NCGS layer into cache/
+OVERTURE_RELEASE=2026-10-21.0 python scripts/refresh.py --buildings   # re-extract footprints from that release
+python scripts/reference_check.py --out out                     # see what the daily check would decide
+```
 
-1. Drop the new files into place (`scripts/refresh.py`, `scripts/data.py`,
-   etc.)
-2. Re-run the relevant refresh command in Window 2:
-   ```
-   python scripts/refresh.py            # live data
-   python scripts/refresh.py --hindcast # historical events
-   ```
-3. **Hard-refresh the browser** (`Ctrl+F5`)
+### Historical events
 
-No need to stop the web server for Python file changes. The server only
-serves files in `alerts/`; nothing in `scripts/` runs through it.
+`python scripts/refresh.py --hindcast` regenerates the historical event
+files under `alerts/data/historical/` for every event in
+`scripts/events.py`; `--hindcast <event_id>` does one. No workflow does
+this, and the manual workflow's upload never deletes, so historical files
+reach the bucket only by hand:
 
-### Config file changes (`scripts/config.py`)
+```bash
+aws s3 sync alerts/data/historical s3://landslidesncgs-data/alerts/data/historical \
+  --content-type application/json --cache-control "public, max-age=300" --profile jbliss-landslidesncgs
+```
 
-Same as backend changes. Edit `config.py`, re-run the appropriate refresh
-command, hard-refresh browser.
+These files were read only by the offline alerts dashboard.
 
-Examples of config changes:
+## Deploying
 
-- `FLAGGED_MIN_CATEGORY = 0` -> `11` for production (smaller files)
-- `FLAGGED_SIMPLIFY_METERS = 10` -> `25` (smaller files, less detail)
-
----
-
-## Stopping everything
-
-### Pause but keep state
-
-Just close the browser tab. Window 1 and Window 2 stay open; nothing is
-lost. To resume, just open `http://localhost:8000/alerts/` again.
-
-### Stop the web server
-
-In Window 1: `Ctrl+C` or `Ctrl+Break`, or close the window.
-
-If `Ctrl+C` doesn't work (common on Windows Anaconda Prompt):
-
-- Try `Ctrl+Break` instead
-- Or just close the window (the X button)
-- Or open Task Manager and end the `python` process
-
-### Stop everything for the day
-
-Close both windows. Close the browser tab. Done. Nothing persists
-between sessions on the local machine; the code lives in git.
-
-To restart from scratch tomorrow, go back to
-[Daily workflow](#daily-workflow-starting-fresh).
-
----
+- **Site files:** merge to `development` to see a change on the dev site,
+  then merge `development` into `master` for production. Both deploys sync
+  the tree to the bucket and invalidate CloudFront; they take about a
+  minute. `master` only accepts pull requests whose CI check passed.
+- **CloudFront functions and every other AWS change:** from `infra/cdk/`,
+  `npx cdk diff Web --profile jbliss-landslidesncgs` to review, then
+  `npx cdk deploy Web --profile jbliss-landslidesncgs` (log in first with
+  `aws sso login --profile jbliss-landslidesncgs`). See `infra/README.md`.
+- **Pipelines:** nothing to deploy. The workflows run from the `master`
+  branch on their schedules. Run one by hand from the Actions tab
+  (`refresh-simple.yml` has a `force` input to rebuild even when NDFD has
+  not changed).
 
 ## Common issues
 
-### "Site can't be reached" at localhost:8000
+- **The dashboard shows "Forecast data could not be loaded".** Locally,
+  `simple/data/` is empty: sync it from S3 or run `run_local.py`. In
+  production, check the latest `refresh-simple.yml` run in the Actions tab.
+- **The stale-data banner is up in production.** `status.json` is more
+  than 45 minutes old, so the pipeline has stopped checking. Look at the
+  `refresh-simple.yml` runs first; if none have started, the EventBridge
+  trigger or its GitHub token is the problem (`infra/lambda/refresh-simple-trigger/README.md`).
+- **Git refuses to push a huge file.** `cache/debris_flows.gpkg` must never
+  be committed; `cache/` and `*.gpkg` are in `.gitignore`. If it shows up as
+  staged, `git rm --cached -r cache`.
+- **A page's JavaScript error.** Open the browser console; the first red
+  line is usually the cause.
 
-The web server isn't running. Open Window 1 and start it:
-
-```
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-python -m http.server 8000
-```
-
-### Dashboard looks old after I replaced files
-
-This bites everyone. Multiple possible causes:
-
-1. **Windows didn't actually overwrite the file** (because the server had
-   a file lock). Fix: stop server, replace files, restart server,
-   hard-refresh. See [After making code changes](#after-making-code-changes).
-2. **Browser cached the old version.** Fix: hard-refresh (`Ctrl+F5`), or
-   open DevTools (`F12`) -> Network tab -> check "Disable cache".
-3. **The file in your editor isn't the one on disk.** Fix: open the file
-   in a text editor and search for distinctive text from the new version.
-
-If you're not sure, look at DevTools -> Network -> click the file ->
-Response tab. That's the actual content the browser is reading.
-
-### `python: can't open file 'scripts/refresh.py'`
-
-Wrong directory. Make sure you're in the repo root:
-
-```
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-```
-
-### `ModuleNotFoundError: No module named 'geopandas'`
-
-Wrong conda environment. Activate defns-refresh:
-
-```
-conda activate defns-refresh
-```
-
-The prompt should show `(defns-refresh)` at the start of the line. If the
-environment does not exist yet, create it from the repo root with
-`conda env create -f environment.yml`.
-
-### Loading spinner never goes away
-
-Most likely a JavaScript error broke initialization. Open DevTools ->
-Console (`F12`). Look for red errors. The first red line is usually the
-cause.
-
-If the console shows `[DEFNS] Live data: 4/4 files loaded.` and the
-spinner is still visible, that's a CSS specificity bug (the `[hidden]`
-attribute isn't winning over `display: flex`). Should be fixed in
-current code, but if it returns, search `styles.css` for
-`.loading-indicator[hidden]` to verify the override exists.
-
-### `python scripts/refresh.py --hindcast` fails for one event but not others
-
-Normal. Each event is independent. If one event's source data is missing
-(404 from NWPS), that event fails but the others continue. Check the
-console output for which event failed and why.
-
-For Hurricane Helene specifically, NWPS has data gaps from Sept 27-29,
-2024 - the storm took out NCEI's Asheville operations. This is
-documented in `events.py`.
-
-### GitHub Desktop says a file is too big to push
-
-`cache/debris_flows.gpkg` is ~560 MB and must never be committed. Verify
-the `.gitignore` file at the repo root includes:
-
-```
-cache/
-*.gpkg
-```
-
-If the file shows up in the Changes tab, run from terminal:
-
-```
-git rm --cached -r cache
-```
-
-This un-tracks it without deleting from disk.
-
----
-
-## Reference: file locations
+## Reference
 
 | What | Where |
 |---|---|
-| Repo root | `C:\Users\ijohnson\Documents\GitHub\landslides-ncgs\` |
-| Dashboard HTML/CSS/JS | `alerts/` |
-| Live data files | `alerts/data/forecast.geojson` etc. (not in git; see [Where the data lives](#where-the-data-lives)) |
-| Historical event files | `alerts/data/historical/` (not in git; uploaded by hand) |
-| Python scripts | `scripts/` |
-| Debris flow cache | `cache/debris_flows.gpkg` (NEVER commit) |
-| Conda environment | defns-refresh, created from `environment.yml` |
-| Local URL | `http://localhost:8000/alerts/` |
-| Production URL | none since 2026-10-22: `/alerts/` redirects to `/simple/`, and `https://dashboard.landslidesncgs.org/` now serves DFENS Simple |
-| Dev URL | `https://dev.landslidesncgs.org/alerts/` (basic auth; credentials are held by the site maintainers) |
-
-### Quick commands cheat sheet
-
-```
-# Start the day
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-python -m http.server 8000            (Window 1, leave running)
-
-conda activate defns-refresh          (Window 2)
-cd C:\Users\ijohnson\Documents\GitHub\landslides-ncgs
-
-# Get fresh live data
-python scripts/refresh.py
-
-# Regenerate historical events (rare)
-python scripts/refresh.py --hindcast
-
-# Browser
-http://localhost:8000/alerts/         (then Ctrl+F5 to hard-refresh)
-```
-
----
+| Main site pages | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` |
+| DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
+| Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
+| Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
+| Python environment | `defns-refresh`, from `environment.yml` |
+| Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |
+| Dev | `https://dev.landslidesncgs.org` (basic auth; credentials are held by the site maintainers) |
 
 ## Building footprints (Overture Maps)
 
-The dashboard's "Building footprints" reference layer is sourced from Overture Maps Foundation via their official Python client, chunked by county for viewport-aware loading. The pipeline:
+The "Building footprints" layer on the dashboard comes from Overture Maps
+Foundation through their Python client, chunked by county so the page can
+load only what is in view.
 
-1. `scripts/refresh.py` runs the buildings phase as part of every refresh
-2. A cache check inside `defns_data.fetch_overture_buildings` skips the slow work if the manifest file is < 30 days old (controlled by `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` in `scripts/config.py`)
-3. When stale or missing, the function queries Overture's hosted GeoParquet via DuckDB for the WNC bbox, applies size filtering (min 20 sq meters) and simplification (25m tolerance), then spatial-joins with counties and writes one GeoJSON per county plus a manifest
-4. The frontend loads the manifest once, then loads individual county GeoJSONs on demand as the user pans/zooms above min-zoom 12
+1. `refresh-reference.yml` runs `scripts/reference_check.py` daily. It
+   reads the latest Overture release id from Overture's STAC catalog and
+   compares it with the release recorded in `reference_state.json` from
+   the last build. The footprints are rebuilt when the release changed,
+   when the last build is 90 days old, or when the workflow's `force`
+   input is set.
+2. A rebuild runs `python scripts/refresh.py --buildings` with
+   `OVERTURE_RELEASE` pinned to that release. `fetch_overture_buildings` in
+   `scripts/data.py` queries Overture's hosted GeoParquet through DuckDB
+   for the WNC bounding box, retrying transient network errors, drops
+   footprints under 20 square metres, spatially joins with counties, and
+   writes one GeoJSON per county plus the manifest, which records the
+   release id. Geometry simplification is off
+   (`OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG = 0`); the files are large, which is
+   a known backlog item.
+3. The workflow syncs the folder to the bucket with `--delete`, so the
+   bucket mirrors the extraction.
+4. The page loads the manifest once and fetches county files on demand
+   above zoom 12, keeping up to 20 counties in memory.
 
-### Output structure
+The debris-flow GeoPackage is handled the same way by the same workflow,
+keyed on the NCGS layer's data-last-edit date, and stored in the bucket
+under `cache/` where CloudFront does not serve it. The Simple pipeline
+downloads it when heavy rain is forecast.
 
-```
-alerts/data/buildings/
-    manifest.json        - lists all counties + their bboxes + feature counts
-    37021.geojson        - Buncombe (NC)
-    37199.geojson        - Yancey (NC)
-    47155.geojson        - Sevier (TN)
-    ...                  - one file per county with buildings in the WNC bbox
-```
+Output under `alerts/data/buildings/`: `manifest.json` (generated time,
+bbox, county list with counts and sizes) and one `{GEOID}.geojson` per
+county, each feature carrying only the Overture id and the polygon.
 
-### First-run timing
-The first extraction takes **5-15 minutes** (it's a large DuckDB query against Overture's S3-hosted GeoParquet). After that, the cache check skips this phase for the next 30 days.
+An extraction takes 5 to 15 minutes. To force one in production, run
+`refresh-reference.yml` from the Actions tab with `force` checked.
+The `overturemaps`, `duckdb` and `pyarrow` packages come from the `pip:`
+section of `environment.yml` and are imported lazily, so the rest of the
+pipeline runs without them.
 
-### When to force a fresh extract
-Delete `alerts/data/buildings/manifest.json` (or the entire `alerts/data/buildings/` directory) and run `python scripts/refresh.py`. Since the freshness check keys off the manifest, deleting the manifest triggers a full re-extract and re-chunking. The extraction also cleans out old per-county files before writing new ones, so stale county files never accumulate.
-
-### Output schema
-
-**Per-county feature files** (`{GEOID}.geojson`):
-- **id** — Overture GERS UUID (stable across releases; join key for future spatial-join work with flagged debris flows)
-- **geometry** — Polygon footprint, WGS84
-
-Notes:
-- `class` and `height` fields from Overture are intentionally dropped to keep per-feature bytes minimal. If either is needed in the future, add to the `keep_cols` list in `fetch_overture_buildings`.
-
-**Manifest file** (`manifest.json`):
-- **generated_at** — ISO timestamp of the extraction
-- **source** — "Overture Maps Foundation"
-- **bbox** — the WNC bbox used
-- **county_count** — number of counties with buildings
-- **total_features** — sum of building counts across all counties
-- **total_size_mb** — sum of all per-county file sizes
-- **counties[]** — array of `{geoid, name, state, bbox, count, file, size_mb}` entries
-
-### Frontend loading behavior
-
-The buildings layer is off by default. When the user toggles it on:
-
-1. The manifest is fetched (~5 KB, near-instant)
-2. Viewport listeners are wired (`moveend` + `zoomend`)
-3. Below zoom 12, a "(zoom in to load)" hint appears next to the toggle and no counties are fetched
-4. Above zoom 12, counties intersecting the viewport are fetched on demand and rendered via a shared Leaflet `LayerGroup`
-5. A memory cache holds up to `OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES` (default 20) previously-loaded counties. When the cache overflows, least-recently-touched counties are evicted from the layer group
-6. If a county file fails to load, the failure is logged to console but doesn't affect other counties or any alert-driving layers
-
-### Multi-state coverage
-Overture is a global dataset. The WNC bbox `(-84.5, 34.8, -81.0, 36.7)` captures buildings in NC, TN, GA, SC, and VA wherever they fall inside the bbox — same multi-state coverage we get for debris flows and county labels. Counties are identified by 5-digit FIPS GEOID codes (state + county), unique across states.
-
-### Dependencies
-The buildings phase requires the `overturemaps` and `duckdb` Python packages. They are pinned in the `pip:` section of `environment.yml`, so `conda env create -f environment.yml` installs them. These are imported lazily inside `fetch_overture_buildings` so the rest of the pipeline runs even if these packages aren't installed — you'd just see a clean error message in the buildings phase.
-
-### Tuning knobs
-
-All in `scripts/config.py`:
-
-| Constant | Default | Effect |
-|---|---|---|
-| `OVERTURE_BUILDINGS_CACHE_TTL_DAYS` | 30 | Days before re-extraction is triggered |
-| `OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG` | 0.000225 (~25m) | Geometry simplification; higher = smaller files, blockier buildings |
-| `OVERTURE_BUILDINGS_COORD_PRECISION` | 5 | Decimal places on coordinates; lower = smaller files, coarser |
-| `OVERTURE_BUILDINGS_MIN_AREA_SQM` | 20.0 | Minimum building footprint area in sq meters; higher drops more small structures |
-
-And in `alerts/js/config.js`:
-
-| Constant | Default | Effect |
-|---|---|---|
-| `OVERTURE_BUILDINGS_MIN_ZOOM` | 12 | Below this zoom, layer doesn't fetch |
-| `OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES` | 20 | Max counties held in browser memory |
+Tuning knobs in `scripts/config.py`: `OVERTURE_BUILDINGS_CACHE_TTL_DAYS`,
+`OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG`, `OVERTURE_BUILDINGS_COORD_PRECISION`,
+`OVERTURE_BUILDINGS_MIN_AREA_SQM`. In `simple/js/config.js` and
+`alerts/js/config.js`: `OVERTURE_BUILDINGS_MIN_ZOOM` and
+`OVERTURE_BUILDINGS_CACHE_MAX_COUNTIES`.

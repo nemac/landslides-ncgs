@@ -1,7 +1,7 @@
 """
 run_local.py - run DFENS Simple entirely on this computer.
 
-Does locally what the two GitHub workflows will do in production:
+Does locally what refresh-simple.yml does in production:
   * every --interval minutes, runs the same NDFD check + refresh as
     refresh-simple.yml and writes the results into simple/data/
   * serves the repo root at http://localhost:<port>/, so the page is at
@@ -13,7 +13,7 @@ URL layout (mirrors production, so relative paths in js/config.js work):
   /alerts/data/...   -> alerts/data/ (building footprints)
 
 Usage, from the landslides-ncgs repo root in a terminal whose Python has
-geopandas (e.g. an Anaconda Prompt with the EWS env activated):
+geopandas (the defns-refresh conda env from environment.yml works):
 
   python simple/pipeline/run_local.py           # run until Ctrl+C
   python simple/pipeline/run_local.py --warm    # prepare the debris cache first
@@ -38,16 +38,16 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent          # .../simple/pipeline
-REPO = HERE.parent.parent                       # .../landslides-ncgs
+HERE = Path(__file__).resolve().parent  # .../simple/pipeline
+REPO = HERE.parent.parent  # .../landslides-ncgs
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(REPO / "scripts"))        # shared main-pipeline modules
+sys.path.insert(0, str(REPO / "scripts"))  # shared main-pipeline modules
 
-import settings as S        # noqa: E402
-import ndfd_check           # noqa: E402
+import ndfd_check  # noqa: E402
+import settings as S  # noqa: E402
 
 DATA_DIR = REPO / "simple" / "data"
-CACHE_FILE = REPO / "cache" / "debris_flows.gpkg"   # shared with scripts/refresh.py
+CACHE_FILE = REPO / "cache" / "debris_flows.gpkg"  # shared with scripts/refresh.py
 
 
 def log(msg: str) -> None:
@@ -61,7 +61,8 @@ def warm_debris_cache() -> None:
     """Load the debris flows now so the first build is fast. Uses the same
     cache/debris_flows.gpkg as scripts/refresh.py; downloads it from NCGS
     (~10-20 min) only if it is missing or older than the shared TTL."""
-    import data as shared_data   # needs geopandas
+    import data as shared_data  # needs geopandas
+
     t0 = time.time()
     log("Loading debris flows (downloads + tags counties/watersheds if needed)...")
     gdf = shared_data.fetch_debris_flows()
@@ -89,8 +90,9 @@ def refresh_once(force: bool) -> None:
     with tempfile.TemporaryDirectory(dir=DATA_DIR) as tmp:
         out = Path(tmp)
         # Rebuild if any data file is missing (e.g. first run after an update).
-        missing = [n for n in (S.FORECAST_FILENAME, S.FLAGGED_FILENAME)
-                   if not (DATA_DIR / n).exists()]
+        missing = [
+            n for n in (S.FORECAST_FILENAME, S.FLAGGED_FILENAME) if not (DATA_DIR / n).exists()
+        ]
         if missing and not force:
             log(f"Missing {', '.join(missing)}; rebuilding.")
         res = ndfd_check.run(out, force=force or bool(missing), prev=read_status())
@@ -99,9 +101,11 @@ def refresh_once(force: bool) -> None:
             try:
                 import refresh_simple
             except ImportError as e:
-                log(f"Can't build: {e}. This Python has no geopandas. Activate a "
+                log(
+                    f"Can't build: {e}. This Python has no geopandas. Activate a "
                     f"conda env with geopandas and restart. Status not updated, "
-                    f"so the page will show as stale.")
+                    f"so the page will show as stale."
+                )
                 return
             refresh_simple.build(out)
 
@@ -111,8 +115,7 @@ def refresh_once(force: bool) -> None:
             if src.exists():
                 os.replace(src, DATA_DIR / name)
         st = read_status() or {}
-        log(f"Refresh: {action} | flagged={st.get('n_flagged')} | "
-            f"NDFD updated {st.get('issued')}")
+        log(f"Refresh: {action} | flagged={st.get('n_flagged')} | NDFD updated {st.get('issued')}")
 
 
 def refresh_loop(interval_min: float, force_first: bool, stop: threading.Event) -> None:
@@ -141,9 +144,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
         path = path.split("?", 1)[0].split("#", 1)[0]
         from urllib.parse import unquote
+
         path = unquote(path).lstrip("/")
         if path.startswith("simple/data/"):
-            base, rest = DATA_DIR, path[len("simple/data/"):]
+            base, rest = DATA_DIR, path[len("simple/data/") :]
         else:
             base, rest = REPO, path
         target = (base / rest).resolve()
@@ -168,27 +172,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_message(self, fmt, *args):
-        pass   # keep the console for refresh messages
+        pass  # keep the console for refresh messages
 
 
-Handler.extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
-                          ".geojson": "application/geo+json",
-                          ".js": "text/javascript", ".json": "application/json"}
+Handler.extensions_map = {
+    **http.server.SimpleHTTPRequestHandler.extensions_map,
+    ".geojson": "application/geo+json",
+    ".js": "text/javascript",
+    ".json": "application/json",
+}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run DFENS Simple locally.")
     ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--host", default="127.0.0.1",
-                    help="127.0.0.1 = this computer only; 0.0.0.0 = your network too")
+    ap.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="127.0.0.1 = this computer only; 0.0.0.0 = your network too",
+    )
     ap.add_argument("--interval", type=float, default=10, help="minutes between checks")
     ap.add_argument("--warm", action="store_true", help="prepare the debris cache before starting")
-    ap.add_argument("--force", action="store_true", help="rebuild on the first cycle even if unchanged")
+    ap.add_argument(
+        "--force", action="store_true", help="rebuild on the first cycle even if unchanged"
+    )
     ap.add_argument("--once", action="store_true", help="refresh once, then only serve")
     ap.add_argument("--no-serve", action="store_true", help="refresh only, no web server")
     args = ap.parse_args()
 
-    os.chdir(REPO)   # scripts/data.py caches to ./cache relative to cwd
+    os.chdir(REPO)  # scripts/data.py caches to ./cache relative to cwd
     # Written into status.json so the page can say when the next check is.
     os.environ["CHECK_INTERVAL_MINUTES"] = f"{args.interval:g}"
     if args.warm:
@@ -198,8 +210,9 @@ def main() -> int:
     if args.once:
         refresh_once(args.force)
     else:
-        threading.Thread(target=refresh_loop, args=(args.interval, args.force, stop),
-                         daemon=True).start()
+        threading.Thread(
+            target=refresh_loop, args=(args.interval, args.force, stop), daemon=True
+        ).start()
 
     if args.no_serve:
         if args.once:
@@ -212,8 +225,10 @@ def main() -> int:
 
     alerts_data = REPO / "alerts" / "data"
     if not (alerts_data / "buildings" / "manifest.json").exists():
-        log(f"Note: no buildings manifest under {alerts_data}; the "
-            f"Building footprints layer will be empty.")
+        log(
+            f"Note: no buildings manifest under {alerts_data}; the "
+            f"Building footprints layer will be empty."
+        )
     server = http.server.ThreadingHTTPServer((args.host, args.port), Handler)
     shown = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     log(f"DFENS Simple running at http://{shown}:{args.port}/simple/  (Ctrl+C to stop)")

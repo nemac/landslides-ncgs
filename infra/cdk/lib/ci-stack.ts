@@ -3,7 +3,13 @@ import type * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
-import { ACCOUNT, GITHUB_REPO } from './config.js';
+import {
+  ACCOUNT,
+  BUILDINGS_PREFIX,
+  DEV_ROLE_NAME,
+  GITHUB_REPO,
+  PROD_ROLE_NAME,
+} from './config.js';
 
 export interface CiStackProps extends StackProps {
   siteBucket: s3.IBucket;
@@ -30,14 +36,33 @@ export class CiStack extends Stack {
       clientIds: ['sts.amazonaws.com'],
     });
 
-    this.prodRole = this.makeRole(provider, 'ProdRole', 'landslides-github-prod', 'production');
+    this.prodRole = this.makeRole(
+      provider,
+      'ProdRole',
+      PROD_ROLE_NAME,
+      'production'
+    );
     props.siteBucket.grantReadWrite(this.prodRole);
-    // The refresh workflows only read and write data objects; nothing deletes.
+    // The refresh workflows read and write data objects. The only deletes
+    // are under the buildings prefix, which refresh-reference.yml mirrors
+    // from a fresh extraction; the bucket is versioned, so even those are
+    // recoverable for DATA_NONCURRENT_VERSION_DAYS.
     props.dataBucket.grantRead(this.prodRole);
     props.dataBucket.grantPut(this.prodRole);
+    this.prodRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:DeleteObject'],
+        resources: [props.dataBucket.arnForObjects(`${BUILDINGS_PREFIX}*`)],
+      })
+    );
     this.allowInvalidation(this.prodRole, props.productionDistribution);
 
-    this.devRole = this.makeRole(provider, 'DevRole', 'landslides-github-dev', 'development');
+    this.devRole = this.makeRole(
+      provider,
+      'DevRole',
+      DEV_ROLE_NAME,
+      'development'
+    );
     props.devSiteBucket.grantReadWrite(this.devRole);
     this.allowInvalidation(this.devRole, props.devDistribution);
 
@@ -45,23 +70,38 @@ export class CiStack extends Stack {
     new CfnOutput(this, 'DevRoleArn', { value: this.devRole.roleArn });
   }
 
-  private makeRole(provider: iam.IOpenIdConnectProvider, id: string, roleName: string, environment: string): iam.Role {
+  private makeRole(
+    provider: iam.IOpenIdConnectProvider,
+    id: string,
+    roleName: string,
+    environment: string
+  ): iam.Role {
     return new iam.Role(this, id, {
       roleName,
       description: `GitHub Actions deploys from the ${environment} environment of ${GITHUB_REPO}`,
-      assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
-        StringEquals: {
-          [`${GITHUB_OIDC_HOST}:aud`]: 'sts.amazonaws.com',
-          [`${GITHUB_OIDC_HOST}:sub`]: `repo:${GITHUB_REPO}:environment:${environment}`,
-        },
-      }),
+      assumedBy: new iam.WebIdentityPrincipal(
+        provider.openIdConnectProviderArn,
+        {
+          StringEquals: {
+            [`${GITHUB_OIDC_HOST}:aud`]: 'sts.amazonaws.com',
+            [`${GITHUB_OIDC_HOST}:sub`]: `repo:${GITHUB_REPO}:environment:${environment}`,
+          },
+        }
+      ),
     });
   }
 
-  private allowInvalidation(role: iam.IRole, distribution: cloudfront.IDistribution): void {
-    role.addToPrincipalPolicy(new iam.PolicyStatement({
-      actions: ['cloudfront:CreateInvalidation'],
-      resources: [`arn:aws:cloudfront::${ACCOUNT}:distribution/${distribution.distributionId}`],
-    }));
+  private allowInvalidation(
+    role: iam.IRole,
+    distribution: cloudfront.IDistribution
+  ): void {
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudfront:CreateInvalidation'],
+        resources: [
+          `arn:aws:cloudfront::${ACCOUNT}:distribution/${distribution.distributionId}`,
+        ],
+      })
+    );
   }
 }
