@@ -39,8 +39,6 @@ jobs:
         working-directory: infra/cdk
       - name: Test the CloudFront Function pieces
         run: node --test "infra/cloudfront/test/*.test.js"
-      - name: Test the preview-site naming script
-        run: node --test "infra/preview/test/*.test.js"
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
 
@@ -113,9 +111,8 @@ jobs:
         run: npm run test:simple
 
   # The real page in Chromium against the fixtures in simple/test/fixtures,
-  # with every outside host blocked. Kept separate so a browser problem
-  # never blocks the other checks, and so the master ruleset can require it
-  # on its own.
+  # with every outside host but unpkg (Leaflet) blocked. Kept separate so a
+  # browser problem never blocks the other checks.
   browser:
     name: Simple dashboard browser test
     runs-on: ubuntu-latest
@@ -152,3 +149,26 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # The one check the master ruleset requires. It waits for every
+  # other job and fails unless all of them succeeded, so adding a job above
+  # only means adding it to `needs` (infra/cdk/test/workflows.test.ts checks
+  # the list), never a ruleset change. always() makes it run and report even
+  # when a job it needs fails or is skipped.
+  all-checks:
+    name: All CI checks passed
+    needs: [infra, pipeline, lint, simple, browser]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done

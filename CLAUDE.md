@@ -14,7 +14,8 @@ for pending work, `OPERATIONS.md` for running things locally, and
   `master` deploys production. Never suggest deleting it, even when it shows
   as fully merged.
 - `master` is protected by a repository ruleset: changes land only through
-  a pull request with the "CDK synth and function tests" check passing, and
+  a pull request with the "All CI checks passed" check passing (the last
+  `ci.yml` job, which fails unless every other job succeeded), and
   the branch cannot be force-pushed or deleted. The rule binds admins too;
   there is no bypass list.
 - Delete feature branches once merged.
@@ -68,7 +69,7 @@ for pending work, `OPERATIONS.md` for running things locally, and
 ## Checks before a PR
 
 - `npm run lint` and `npm run format:check` (ESLint and Prettier over
-  `alerts`, `simple`, `infra/cloudfront`, `infra/preview` and the CDK
+  `alerts`, `simple`, `infra/cloudfront` and the CDK
   TypeScript).
 - `npm run lint:py` and `npm run format:py:check` (ruff over `scripts`,
   `simple/pipeline` and `infra/lambda`). ruff lives in `.venv`; create it
@@ -96,12 +97,12 @@ for pending work, `OPERATIONS.md` for running things locally, and
 Details live in `BACKLOG.md`; this is the short list.
 
 - Link DFENS Simple from the home page when it is ready for the public.
-- Require all five CI checks in the master ruleset; test `scripts/analysis.py`.
+- Test `scripts/analysis.py` (the intersection logic).
 - Make the archived flagged Simple runs reproducible (inputs, thresholds,
   commit).
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
 - Slack dev requests: a Slack request opens a GitHub issue, an agent run in
-  Actions opens a PR with a `<branch>.landslidesncgs.org` preview.
+  Actions opens a PR with a `pr-N.landslidesncgs.org` preview.
 - Content-Security-Policy header, started in report-only mode.
 - A custom 404 page: a missing object currently returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
