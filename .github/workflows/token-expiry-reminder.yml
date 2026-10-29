@@ -45,8 +45,8 @@ jobs:
 
           1. Create a new fine-grained token at https://github.com/settings/personal-access-tokens/new: resource owner \`nemac\`, repository \`nemac/landslides-ncgs\`, permission *Actions: Read and write*. Note the new expiry date.
           2. Store it (the command prompts for the token without echoing it):
-             \`read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token --region us-east-1 --secret-string \"\$TOKEN\" && unset TOKEN\`
-          3. Confirm it works: \`aws lambda invoke --function-name landslides-refresh-simple-trigger /dev/stdout\` should return \`{\"status\": 204, ...}\`.
+             \`read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token --region us-east-1 --profile landslidesncgs --secret-string \"\$TOKEN\" && unset TOKEN\`
+          3. Confirm it works: \`aws lambda invoke --function-name landslides-refresh-simple-trigger --profile landslidesncgs /dev/stdout\` should return \`{\"status\": 204, ...}\`.
           4. Set the next reminder: update \`REMINDER_AT\` in \`infra/cdk/lib/config.ts\` to a month before the new expiry and the \`expires\` default in \`.github/workflows/token-expiry-reminder.yml\` to the new expiry date, then run \`npx cdk deploy Trigger\` from \`infra/cdk/\`, which replaces the one-time schedule.
           5. Delete the old token on GitHub.
 
