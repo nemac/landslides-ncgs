@@ -7,8 +7,7 @@
 // and the files are linted as scripts.
 //
 // infra/cloudfront holds CloudFront Function sources (the JS 2.0 runtime,
-// roughly ES 2020, no modules) and Node test files for them. infra/preview
-// holds the Node script that names preview sites, and its tests. infra/cdk is
+// roughly ES 2020, no modules) and Node test files for them. infra/cdk is
 // TypeScript and is checked by its own `npm run typecheck`, not by ESLint.
 import js from '@eslint/js';
 import globals from 'globals';
@@ -63,7 +62,6 @@ export default [
     files: [
       'simple/test/**/*.js',
       'infra/cloudfront/test/**/*.js',
-      'infra/preview/**/*.js',
     ],
     languageOptions: {
       ecmaVersion: 2022,

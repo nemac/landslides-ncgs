@@ -68,7 +68,7 @@ for pending work, `OPERATIONS.md` for running things locally, and
 ## Checks before a PR
 
 - `npm run lint` and `npm run format:check` (ESLint and Prettier over
-  `alerts`, `simple`, `infra/cloudfront`, `infra/preview` and the CDK
+  `alerts`, `simple`, `infra/cloudfront` and the CDK
   TypeScript).
 - `npm run lint:py` and `npm run format:py:check` (ruff over `scripts`,
   `simple/pipeline` and `infra/lambda`). ruff lives in `.venv`; create it
@@ -101,7 +101,7 @@ Details live in `BACKLOG.md`; this is the short list.
   commit).
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
 - Slack dev requests: a Slack request opens a GitHub issue, an agent run in
-  Actions opens a PR with a `<branch>.landslidesncgs.org` preview.
+  Actions opens a PR with a `pr-N.landslidesncgs.org` preview.
 - Content-Security-Policy header, started in report-only mode.
 - A custom 404 page: a missing object currently returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.

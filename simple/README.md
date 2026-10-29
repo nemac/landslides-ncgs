@@ -123,7 +123,7 @@ from the repo root with `npm ci` done once.
 | Command | What it covers |
 |---------|----------------|
 | `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table and CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
-| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host is blocked. Needs `npx playwright install chromium` once |
+| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Needs `npx playwright install chromium` once |
 | `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py` |
 
 The fixtures in `simple/test/fixtures/` are three data folders (`live`,

@@ -81,10 +81,10 @@ CACHE_TTL_DAYS = 120
 # captures NC + TN + GA + SC + VA wherever they fall inside the WNC bbox.
 # Same bbox semantics as our county / watershed pipelines.
 #
-# Update cadence: monthly. Overture publishes releases monthly, and building
-# stock turnover is glacial compared to weather data. The freshness check
-# below means the slow extraction (5-15 min) only runs ~once per month even
-# though refresh.py itself runs every ~15 min for weather data.
+# Update cadence: the daily refresh-reference.yml workflow rebuilds the
+# footprints (refresh.py --buildings) when Overture publishes a new release
+# or the last build is older than REBUILD_AFTER_DAYS (scripts/reference_check.py).
+# A plain refresh.py run never touches them.
 #
 # Output schema per county file: id, geometry. ID is Overture's GERS UUID
 # (stable across releases, useful for future spatial joins with flagged

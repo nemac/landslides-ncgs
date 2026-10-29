@@ -1,9 +1,9 @@
 // The real page in a real browser: scripts load in order, Leaflet draws the
 // flagged pathways, the table and map agree, the toggles work, and the CSV
-// downloads. Data comes from simple/test/fixtures/ through ?data=; every
-// other host (basemap tiles, NDFD, NCGS, parcels, fonts) is blocked so the
-// run never depends on an outside service, and the blocked NDFD layer
-// proves the map notice. The clock is fixed to match the fixtures.
+// downloads. Data comes from simple/test/fixtures/ through ?data=. unpkg
+// stays reachable because it serves Leaflet and esri-leaflet; every other
+// host (basemap tiles, NDFD, NCGS, parcels, fonts) is blocked, and the
+// blocked NDFD layer proves the map notice. The clock is fixed to match the fixtures.
 const { test, expect } = require('@playwright/test');
 
 const FIXED_NOW = new Date('2026-10-27T18:40:00Z');

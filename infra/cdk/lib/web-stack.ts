@@ -213,8 +213,9 @@ export class WebStack extends Stack {
     );
   }
 
-  // Every open pull request into development, at <slug>.landslidesncgs.org.
-  // The function maps the host onto the <slug>/ folder of the preview bucket.
+  // Every open pull request into development, at
+  // pr-<number>.landslidesncgs.org. The function maps the host onto the
+  // pr-<number>/ folder of the preview bucket.
   private makePreviewDistribution(
     props: WebStackProps
   ): cloudfront.IDistribution {
@@ -227,7 +228,7 @@ export class WebStack extends Stack {
     return this.retained(
       new cloudfront.Distribution(this, 'PreviewDistribution', {
         comment:
-          'Pull request previews at <branch>.landslidesncgs.org, basic auth, reads production data',
+          'Pull request previews at pr-<number>.landslidesncgs.org, basic auth, reads production data',
         domainNames: [PREVIEW_HOSTNAME],
         certificate: props.certificate,
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,

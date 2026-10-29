@@ -107,14 +107,14 @@ gh api -X POST repos/nemac/landslides-ncgs/environments/ENV/deployment-branch-po
 ## Pull request previews
 
 `.github/workflows/pr-preview.yml` deploys every open pull request into
-`development` to `<slug>.landslidesncgs.org` (see `OPERATIONS.md` for how
-the slug is chosen). The pieces, all in the `Web` and `Ci` stacks:
+`development` to `pr-<number>.landslidesncgs.org`. The pieces, all in the
+`Web` and `Ci` stacks:
 
 | Piece | Name |
 |---|---|
-| Bucket, one folder per slug, objects expire after 60 days | `landslidesncgs-preview-site` |
+| Bucket, one `pr-<number>/` folder per pull request, objects expire 60 days after upload | `landslidesncgs-preview-site` |
 | Distribution with the alias `*.landslidesncgs.org` | `Web` output `PreviewDistributionId` |
-| Viewer-request function: basic auth, rewrite, then the slug prefix | `landslides-preview` |
+| Viewer-request function: basic auth, rewrite, then the host's folder prefix | `landslides-preview` |
 | Wildcard A and AAAA records in the `.org` zone | `*.landslidesncgs.org` |
 | OIDC role, trusted by the `preview` GitHub environment only | `landslides-github-preview` |
 
