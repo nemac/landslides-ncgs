@@ -111,9 +111,8 @@ jobs:
         run: npm run test:simple
 
   # The real page in Chromium against the fixtures in simple/test/fixtures,
-  # with every outside host but unpkg (Leaflet) blocked. Kept separate so a browser problem
-  # never blocks the other checks, and so the master ruleset can require it
-  # on its own.
+  # with every outside host but unpkg (Leaflet) blocked. Kept separate so a
+  # browser problem never blocks the other checks.
   browser:
     name: Simple dashboard browser test
     runs-on: ubuntu-latest
@@ -151,7 +150,7 @@ jobs:
             test-results/
           retention-days: 7
 
-  # The one check the master ruleset should require. It waits for every
+  # The one check the master ruleset requires. It waits for every
   # other job and fails unless all of them succeeded, so adding a job above
   # only means adding it to `needs` (infra/cdk/test/workflows.test.ts checks
   # the list), never a ruleset change. always() makes it run and report even

@@ -11,13 +11,8 @@ details belong in an issue or PR once someone picks it up.
   `https://dashboard.landslidesncgs.org/`. (The SIREN dashboard at
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
-- **Require every CI check on master, and test the intersections.**
-  `ci.yml` ends with an "All CI checks passed" job that fails unless every
-  other job succeeded. The master ruleset still requires only "CDK synth
-  and function tests"; once "All CI checks passed" has reported on a pull
-  request, make it the required check in the repository settings, then
-  update `README.md`, `CLAUDE.md` and `infra/README.md`. Still to write:
-  tests for `scripts/analysis.py` (the intersection logic).
+- **Test the intersections.** Still to write: tests for
+  `scripts/analysis.py` (the intersection logic).
 - **Make the archived flagged runs reproducible.** Since 2026-10-27
   `refresh-simple.yml` copies the three output files of every run that
   flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,
