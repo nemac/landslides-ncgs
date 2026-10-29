@@ -152,3 +152,26 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # The one check the master ruleset should require. It waits for every
+  # other job and fails unless all of them succeeded, so adding a job above
+  # only means adding it to `needs` (infra/cdk/test/workflows.test.ts checks
+  # the list), never a ruleset change. always() makes it run and report even
+  # when a job it needs fails or is skipped.
+  all-checks:
+    name: All CI checks passed
+    needs: [infra, pipeline, lint, simple, browser]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done

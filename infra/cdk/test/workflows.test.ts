@@ -166,3 +166,22 @@ test('deploy workflows name the right buckets and a plausible distribution id', 
     );
   }
 });
+
+function jobIds(workflow: string): string[] {
+  const jobsSection = workflow.split(/^jobs:\n/m)[1] ?? '';
+  return [...jobsSection.matchAll(/^ {2}([a-z][\w-]*):\n/gm)].map(
+    (match) => match[1]
+  );
+}
+
+test('the all-checks job in ci.yml waits for every other job', () => {
+  const text = workflows()['ci.yml'];
+  const needs = text
+    .match(/all-checks:\n[\s\S]*?needs: \[([^\]]*)\]/)?.[1]
+    ?.split(',')
+    .map((id) => id.trim());
+  const others = jobIds(text).filter((id) => id !== 'all-checks');
+  assert.ok(others.length >= 5, 'found the other ci.yml jobs');
+  assert.deepEqual([...(needs ?? [])].sort(), others.sort());
+  assert.match(text, /all-checks:\n[\s\S]*?if: always\(\)\n/);
+});
