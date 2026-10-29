@@ -7,7 +7,8 @@
 // and the files are linted as scripts.
 //
 // infra/cloudfront holds CloudFront Function sources (the JS 2.0 runtime,
-// roughly ES 2020, no modules) and Node test files for them. infra/cdk is
+// roughly ES 2020, no modules) and Node test files for them. infra/preview
+// holds the Node script that names preview sites, and its tests. infra/cdk is
 // TypeScript and is checked by its own `npm run typecheck`, not by ESLint.
 import js from '@eslint/js';
 import globals from 'globals';
@@ -58,8 +59,12 @@ export default [
     rules,
   },
   {
-    // Node test files, run with `node --test`.
-    files: ['simple/test/**/*.js', 'infra/cloudfront/test/**/*.js'],
+    // Node scripts and test files, run with `node` and `node --test`.
+    files: [
+      'simple/test/**/*.js',
+      'infra/cloudfront/test/**/*.js',
+      'infra/preview/**/*.js',
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'commonjs',
@@ -70,9 +75,23 @@ export default [
     rules,
   },
   {
+    // Playwright specs: Node files whose page.evaluate callbacks run in
+    // the browser, so both sets of globals apply.
+    files: ['simple/e2e/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
+    },
+    rules,
+  },
+  {
     // CloudFront Function sources: the JS 2.0 runtime, linted as scripts.
-    // Each piece's top-level function (basicAuth, hostedRedirects, rewrite)
-    // is called by the handler that infra/cdk/lib/compose-function.ts
+    // Each piece's top-level function (basicAuth, hostedRedirects, rewrite,
+    // previewPrefix) is called by the handler that infra/cdk/lib/compose-function.ts
     // appends, so only local variables are checked for use.
     files: ['infra/cloudfront/*.js'],
     languageOptions: {

@@ -16,14 +16,38 @@ GitHub holds only source code. Design: `docs/superpowers/specs/2026-10-21-aws-ac
 cd infra/cdk
 npm ci                       # once per clone
 npm test                     # stack and composer tests, no AWS access
-npm run diff                 # what a deploy would change (SSO profile jbliss-landslidesncgs)
+npm run diff                 # what a deploy would change
 npm run deploy               # deploy every stack
-npx cdk deploy Web --profile jbliss-landslidesncgs   # one stack
+npx cdk deploy Web           # one stack
 ```
 
-Deploys run from a developer machine with the `jbliss-landslidesncgs` SSO
-profile (`aws sso login --profile jbliss-landslidesncgs` first). CI only
-synthesizes. The migration below is complete (2026-10-26). The `cutover`
+Deploys run from a developer machine through an AWS SSO profile named
+`landslidesncgs`, which every maintainer defines in their own
+`~/.aws/config` (the role is whichever one IAM Identity Center gives you):
+
+```ini
+[sso-session landslidesncgs]
+sso_start_url = https://landslidesncgs.awsapps.com/start
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+
+[profile landslidesncgs]
+sso_session = landslidesncgs
+sso_account_id = 710482330128
+sso_role_name = AdministratorAccess
+region = us-east-1
+```
+
+Log in with `aws sso login --profile landslidesncgs`. `cdk.json` names the
+profile, so `cdk` commands run from `infra/cdk/` use it without a flag,
+whatever `AWS_PROFILE` is set to. The `aws` commands in these docs pass
+`--profile landslidesncgs` explicitly for the same reason: without it they
+would run against `AWS_PROFILE` or the default profile, which may be
+another account. The CDK app also pins the account, so a deploy under
+another account's credentials fails rather than landing there. CI only
+synthesizes.
+
+The migration below is complete (2026-10-26). The `cutover`
 context key that staged it (`wildcard`, `subdomains`, `done`) was removed on
 2026-10-27; the production distribution now always claims the eight
 hostnames in `lib/config.ts`, and the `--context cutover=...` flags in the
@@ -37,7 +61,83 @@ are only checked for shape.
 
 Secrets never live in this repo. Two values are set by hand, once, with the
 commands in step 4 below: the GitHub token in Secrets Manager and the dev
-site's basic-auth credential in a CloudFront KeyValueStore.
+site's basic-auth credential in a CloudFront KeyValueStore. The pull request
+preview sites share that KeyValueStore, so the same credential opens them.
+
+## GitHub environments and branch locks
+
+Each deploy role trusts one GitHub environment (the OIDC `sub` is
+`repo:nemac/landslides-ncgs:environment:<name>`). The trust policy cannot
+see the branch, so the environment's deployment-branch policy is what stops
+a workflow on any other branch from naming that environment and assuming
+the role. Those policies live in the repository settings, not in CDK; they
+were set on 2026-10-28:
+
+| Environment | Role | Branches allowed to deploy |
+|---|---|---|
+| `production` | `landslides-github-prod` | `master` only |
+| `development` | `landslides-github-dev` | `development` only |
+| `preview` | `landslides-github-preview` | any (the role reaches only the preview bucket and distribution) |
+
+Every workflow that uses `production` already runs from `master`: the push
+deploy, the schedules, and the EventBridge dispatches, which pass
+`ref: master`. A hand-run production workflow, such as `refresh-reference.yml`
+with `force=true`, must therefore be started from `master`; started from
+any other branch it is refused before it gets a token.
+
+Check them:
+
+```bash
+for env in production development preview; do
+  gh api "repos/nemac/landslides-ncgs/environments/$env" \
+    --jq '{name, deployment_branch_policy}'
+done
+gh api repos/nemac/landslides-ncgs/environments/production/deployment-branch-policies \
+  --jq '[.branch_policies[].name]'
+```
+
+Set them again, for example on a new environment (replace `ENV` and
+`BRANCH`):
+
+```bash
+gh api -X PUT repos/nemac/landslides-ncgs/environments/ENV --input - <<<'{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}'
+gh api -X POST repos/nemac/landslides-ncgs/environments/ENV/deployment-branch-policies -f name=BRANCH -f type=branch
+```
+
+## Pull request previews
+
+`.github/workflows/pr-preview.yml` deploys every open pull request into
+`development` to `<slug>.landslidesncgs.org` (see `OPERATIONS.md` for how
+the slug is chosen). The pieces, all in the `Web` and `Ci` stacks:
+
+| Piece | Name |
+|---|---|
+| Bucket, one folder per slug, objects expire after 60 days | `landslidesncgs-preview-site` |
+| Distribution with the alias `*.landslidesncgs.org` | `Web` output `PreviewDistributionId` |
+| Viewer-request function: basic auth, rewrite, then the slug prefix | `landslides-preview` |
+| Wildcard A and AAAA records in the `.org` zone | `*.landslidesncgs.org` |
+| OIDC role, trusted by the `preview` GitHub environment only | `landslides-github-preview` |
+
+The wildcard covers only names nothing else claims: CloudFront sends a
+request to the distribution with the exact alias when there is one, and
+Route 53 answers from an exact record before the wildcard, so production,
+dev and the other named hosts are unaffected. The certificate already
+covers `*.landslidesncgs.org`. GitHub creates the `preview` environment on
+the first run; it needs no branch restriction, since any branch may have a
+pull request.
+
+To set it up, or after changing any of the above:
+
+```bash
+cd infra/cdk
+npx cdk diff Web Ci
+npx cdk deploy Web
+npx cdk deploy Ci
+```
+
+Copy the `Web` output `PreviewDistributionId` into both places in
+`pr-preview.yml` (the `distribution_id` input and the `--distribution-id`
+flag); `test/workflows.test.ts` checks that they agree.
 
 ---
 
@@ -46,7 +146,7 @@ site's basic-auth credential in a CloudFront KeyValueStore.
 Done once, in order. Every step can be checked before
 the next. Nothing in the old account is turned off until step 10, and by
 then it serves only the two apex redirects. The old account is the default
-AWS profile; the new one is `--profile jbliss-landslidesncgs`. Steps marked
+AWS profile; the new one is `--profile landslidesncgs` (see Day to day). Steps marked
 **(hand)** are outside CDK.
 
 Placeholders used below, all read from stack outputs after step 2:
@@ -62,7 +162,7 @@ Placeholders used below, all read from stack outputs after step 2:
 Read outputs at any time with:
 
 ```bash
-aws cloudformation describe-stacks --stack-name Web --profile jbliss-landslidesncgs \
+aws cloudformation describe-stacks --stack-name Web --profile landslidesncgs \
   --query 'Stacks[0].Outputs' --output table
 ```
 
@@ -70,8 +170,8 @@ aws cloudformation describe-stacks --stack-name Web --profile jbliss-landslidesn
 
 ```bash
 cd infra/cdk && npm ci
-npx cdk bootstrap aws://710482330128/us-east-1 --profile jbliss-landslidesncgs
-npx cdk deploy Dns --profile jbliss-landslidesncgs
+npx cdk bootstrap aws://710482330128/us-east-1
+npx cdk deploy Dns
 ```
 
 The deploy pauses on the certificate: ACM writes two validation CNAMEs into
@@ -81,8 +181,8 @@ them and copy them into the old zones **(hand)**:
 ```bash
 # new account: the two validation records (one per domain)
 for z in landslidesncgs.org landslidesncgs.com; do
-  ID=$(aws route53 list-hosted-zones-by-name --dns-name $z --profile jbliss-landslidesncgs --query 'HostedZones[0].Id' --output text)
-  aws route53 list-resource-record-sets --hosted-zone-id "$ID" --profile jbliss-landslidesncgs \
+  ID=$(aws route53 list-hosted-zones-by-name --dns-name $z --profile landslidesncgs --query 'HostedZones[0].Id' --output text)
+  aws route53 list-resource-record-sets --hosted-zone-id "$ID" --profile landslidesncgs \
     --query "ResourceRecordSets[?Type=='CNAME'].{Name:Name,Value:ResourceRecords[0].Value}" --output table
 done
 ```
@@ -102,7 +202,7 @@ few minutes and the deploy finishes. Check: `Dns` stack status `CREATE_COMPLETE`
 ### 2. Deploy the rest with aliases off
 
 ```bash
-npx cdk deploy --all --context cutover=wildcard --profile jbliss-landslidesncgs
+npx cdk deploy --all --context cutover=wildcard
 ```
 
 In this stage the production distribution's only domain names are
@@ -116,9 +216,9 @@ Data bucket, from a checkout that has `alerts/data/` (about 870 MB):
 
 ```bash
 aws s3 sync alerts/data/buildings s3://landslidesncgs-data/alerts/data/buildings \
-  --content-type application/json --cache-control "public, max-age=86400" --profile jbliss-landslidesncgs
+  --content-type application/json --cache-control "public, max-age=86400" --profile landslidesncgs
 aws s3 sync alerts/data s3://landslidesncgs-data/alerts/data --exclude "buildings/*" \
-  --content-type application/json --cache-control "public, max-age=300" --profile jbliss-landslidesncgs
+  --content-type application/json --cache-control "public, max-age=300" --profile landslidesncgs
 ```
 
 DFENS Simple data, via a local copy (the three small files):
@@ -126,16 +226,16 @@ DFENS Simple data, via a local copy (the three small files):
 ```bash
 aws s3 sync s3://landslides-ncgs/simple/data /tmp/simple-data
 aws s3 sync /tmp/simple-data s3://landslidesncgs-data/simple/data --exclude status.json \
-  --content-type application/json --cache-control "public, max-age=60" --profile jbliss-landslidesncgs
+  --content-type application/json --cache-control "public, max-age=60" --profile landslidesncgs
 aws s3 cp /tmp/simple-data/status.json s3://landslidesncgs-data/simple/data/status.json \
-  --content-type application/json --cache-control "public, max-age=30" --profile jbliss-landslidesncgs
+  --content-type application/json --cache-control "public, max-age=30" --profile landslidesncgs
 ```
 
 Site and dev-site buckets are seeded by the deploy workflows in step 6. To
 test earlier, run the two sync passes from `.github/workflows/deploy-site.yml`
 by hand with the profile.
 
-Check: `aws s3 ls s3://landslidesncgs-data/alerts/data/ --profile jbliss-landslidesncgs`
+Check: `aws s3 ls s3://landslidesncgs-data/alerts/data/ --profile landslidesncgs`
 lists the live files and `buildings/`, `historical/`.
 
 ### 4. Set the two hand values (hand)
@@ -145,16 +245,16 @@ reused):
 
 ```bash
 read -s TOKEN && aws secretsmanager put-secret-value --secret-id landslides/github-dispatch-token \
-  --secret-string "$TOKEN" --profile jbliss-landslidesncgs && unset TOKEN
+  --secret-string "$TOKEN" --profile landslidesncgs && unset TOKEN
 ```
 
 Dev basic-auth credential, typed as `user:password`:
 
 ```bash
 read -s CRED
-ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn KVS_ARN --profile jbliss-landslidesncgs --query ETag --output text)
+ETAG=$(aws cloudfront-keyvaluestore describe-key-value-store --kvs-arn KVS_ARN --profile landslidesncgs --query ETag --output text)
 aws cloudfront-keyvaluestore put-key --kvs-arn KVS_ARN --key basic-auth \
-  --value "$(printf '%s' "$CRED" | base64)" --if-match "$ETAG" --profile jbliss-landslidesncgs
+  --value "$(printf '%s' "$CRED" | base64)" --if-match "$ETAG" --profile landslidesncgs
 unset CRED
 ```
 
@@ -169,7 +269,7 @@ for s in landslides-refresh-simple-10min landslides-github-token-expiry-reminder
 done
 ```
 
-Check: `aws lambda invoke --function-name landslides-refresh-simple-trigger --profile jbliss-landslidesncgs /dev/stdout`
+Check: `aws lambda invoke --function-name landslides-refresh-simple-trigger --profile landslidesncgs /dev/stdout`
 prints `"status": 204`.
 
 ### 5. Test before anything moves
@@ -204,7 +304,7 @@ must print the expected `grep -c` counts.
 
 Host-dependent logic (dashboard mapping, inventory page, mapviewer
 redirects) is covered by the function tests and can be exercised live with
-`aws cloudfront test-function --name landslides-production --stage LIVE --event-object fileb://event.json --profile jbliss-landslidesncgs`
+`aws cloudfront test-function --name landslides-production --stage LIVE --event-object fileb://event.json --profile landslidesncgs`
 using an event whose `request.headers.host.value` is the host to test.
 
 ### 6. Switch the workflows
@@ -262,11 +362,11 @@ aws cloudfront update-distribution --id OLD_PROD --if-match "$(jq -r .ETag /tmp/
 aws cloudfront wait distribution-deployed --id OLD_PROD
 
 # new account: add
-aws cloudfront get-distribution-config --id PROD_ID --profile jbliss-landslidesncgs > /tmp/new.json
+aws cloudfront get-distribution-config --id PROD_ID --profile landslidesncgs > /tmp/new.json
 jq --arg name "$NAME" '.DistributionConfig | .Aliases.Items += [$name] | .Aliases.Quantity = (.Aliases.Items | length)' /tmp/new.json > /tmp/new-config.json
 jq --arg name "$NAME" '[.Aliases.Items[] | select(. == $name)] | length' /tmp/new-config.json   # must print 1
-aws cloudfront update-distribution --id PROD_ID --if-match "$(jq -r .ETag /tmp/new.json)" --distribution-config file:///tmp/new-config.json --profile jbliss-landslidesncgs > /dev/null
-aws cloudfront wait distribution-deployed --id PROD_ID --profile jbliss-landslidesncgs
+aws cloudfront update-distribution --id PROD_ID --if-match "$(jq -r .ETag /tmp/new.json)" --distribution-config file:///tmp/new-config.json --profile landslidesncgs > /dev/null
+aws cloudfront wait distribution-deployed --id PROD_ID --profile landslidesncgs
 
 curl -sI https://$NAME/ | head -1
 ```
@@ -285,7 +385,7 @@ certificate with zero aliases.
 reverse. When all six are moved:
 
 ```bash
-npx cdk deploy --all --context cutover=subdomains --profile jbliss-landslidesncgs
+npx cdk deploy --all --context cutover=subdomains
 ```
 
 This matches the CDK state to what CloudFront already has and adds the six
@@ -361,13 +461,13 @@ aws cloudfront update-distribution --id OLD_PROD --if-match "$(jq -r .ETag /tmp/
 aws cloudfront wait distribution-deployed --id OLD_PROD
 
 for apex in landslidesncgs.org landslidesncgs.com; do
-  ETAG=$(aws cloudfront get-distribution-config --id PROD_ID --profile jbliss-landslidesncgs --query ETag --output text)
+  ETAG=$(aws cloudfront get-distribution-config --id PROD_ID --profile landslidesncgs --query ETag --output text)
   aws cloudfront update-domain-association --domain $apex \
-    --target-resource DistributionId=PROD_ID --if-match "$ETAG" --profile jbliss-landslidesncgs
+    --target-resource DistributionId=PROD_ID --if-match "$ETAG" --profile landslidesncgs
 done
-aws cloudfront wait distribution-deployed --id PROD_ID --profile jbliss-landslidesncgs
+aws cloudfront wait distribution-deployed --id PROD_ID --profile landslidesncgs
 
-npx cdk deploy --all --context cutover=done --profile jbliss-landslidesncgs
+npx cdk deploy --all --context cutover=done
 ```
 
 **Immediately after the association, before the deploy**, repoint the apex
@@ -392,8 +492,8 @@ Then the name servers. Read the new zones' servers:
 
 ```bash
 for z in landslidesncgs.org landslidesncgs.com; do
-  ID=$(aws route53 list-hosted-zones-by-name --dns-name $z --profile jbliss-landslidesncgs --query 'HostedZones[0].Id' --output text)
-  echo "== $z"; aws route53 get-hosted-zone --id "$ID" --profile jbliss-landslidesncgs --query 'DelegationSet.NameServers' --output text
+  ID=$(aws route53 list-hosted-zones-by-name --dns-name $z --profile landslidesncgs --query 'HostedZones[0].Id' --output text)
+  echo "== $z"; aws route53 get-hosted-zone --id "$ID" --profile landslidesncgs --query 'DelegationSet.NameServers' --output text
 done
 ```
 

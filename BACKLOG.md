@@ -5,52 +5,45 @@ details belong in an issue or PR once someone picks it up.
 
 ## Committed to
 
-- **Update documentation.** Done 2026-10-27: `README.md`, `OPERATIONS.md`,
-  `scripts/README.md`, `alerts/README.md` and `simple/README.md` describe
-  how the site is actually built, refreshed and deployed. Keep them that
-  way; `CLAUDE.md` has the documentation rules.
 - **Link DFENS Simple from the home page.** The dashboard at `/simple/`
   is not linked from `index.html` yet. When it is ready for the public,
   add it to the home-page card grid and the site nav, linking
   `https://dashboard.landslidesncgs.org/`. (The SIREN dashboard at
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
-- **PR checks and tests.** `ci.yml` already runs the CDK typecheck, tests
-  and synth plus the CloudFront Function tests on every pull request. As of
-  2026-10-27 its `lint` job also runs `npm run lint`, `npm run format:check`,
-  `ruff check` and `ruff format --check` over every source file, and the
-  `infra/lambda/refresh-simple-trigger` unit tests. Still to add: tests for
-  `scripts/analysis.py` (the intersection logic) and the frontend's
-  threshold filtering.
-- **Decommission the NEMAC account resources.** After the cutover in
-  `infra/README.md` reaches step 12 (48 hours after the GoDaddy name-server
-  change), run its decommission list and record the date here.
-  Done: ____-__-__.
-
-- **Reproducible snapshots of flagged runs.** Requested 2026-10-21. Today
-  each refresh overwrites `alerts/data/flagged_*.geojson`, and the only
-  record of past runs was git history, which the move to S3 gave up.
-  - When nothing is flagged, keep nothing but one log line (run time,
-    windows checked, "nothing flagged").
-  - When a run flags any debris flows, keep a dated, read-only snapshot
-    (`s3://landslidesncgs-data/alerts/snapshots/<run time>/`, a prefix
-    reserved for this) with
-    every asset and input needed to reproduce that forecast exactly: the
-    flagged outputs, the NDFD/MRMS precipitation inputs per window, the
-    thresholds and category cutoffs in force, the debris-flow basin data
-    version, and the code commit.
-
+- **Require every CI check on master, and test the intersections.**
+  `ci.yml` runs five checks on every pull request: "CDK synth and function
+  tests", "Lint and format", "Pipeline tests (pinned environment)",
+  "Simple dashboard tests" and "Simple dashboard browser test". The master
+  ruleset requires only the first; add the other four to its required
+  checks in the repository settings. Still to write: tests for
+  `scripts/analysis.py` (the intersection logic).
+- **Make the archived flagged runs reproducible.** Since 2026-10-27
+  `refresh-simple.yml` copies the three output files of every run that
+  flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,
+  a prefix CloudFront does not serve and the lifecycle rule does not touch.
+  Those files show what was flagged but not how to get there again: the
+  archive still needs the NDFD precipitation input for the window, the
+  thresholds and category cutoffs in force, the debris-flow data version
+  and the code commit. Runs that flag nothing keep nothing but their log.
 - **Run the pipelines on AWS ("Option B").** Decided 2026-10-21 as the end
-  state; the data move, the dedicated account and the CDK app are done (see
-  `infra/`). What remains: run `simple/pipeline/` and then `scripts/refresh.py`
-  on AWS instead of GitHub Actions. That means a container image with
-  geopandas and GDAL (ECR), the 570 MB debris-flow cache in S3 instead of
-  `actions/cache`, an execution role with data-bucket access, and Fargate
-  or Lambda with enough storage. Lambda's 15-minute limit is shorter than
-  the monthly cold debris-flow fetch (~20 min), so either keep that one
-  step on Actions or use Fargate. `scripts/` would then have two runtimes
-  to keep working. The EventBridge trigger (`infra/cdk/lib/trigger-stack.ts`)
-  already exists and would invoke the task directly instead of GitHub.
+  state. Done so far: the dedicated account and CDK app (`infra/`), data in
+  S3, the debris-flow GeoPackage kept in the data bucket by
+  `refresh-reference.yml`, and the EventBridge schedules
+  (`infra/cdk/lib/trigger-stack.ts`) that dispatch the GitHub workflows.
+  What remains: run `simple/pipeline/` (every 10 minutes) and the
+  `refresh-reference.yml` rebuilds on AWS instead of GitHub Actions. That
+  means a container image with geopandas and GDAL (ECR), an execution role
+  with data-bucket access, and Fargate or Lambda with enough storage.
+  Lambda's 15-minute limit fits the Simple pipeline but not a reference
+  rebuild (an Overture extract is 5 to 15 minutes, a debris-flow re-fetch
+  10 to 20), so those need Fargate. The schedules would then invoke the
+  task directly instead of GitHub.
+- **Slack dev requests.** A request in Slack opens a GitHub issue; an agent
+  run in Actions works the issue and opens a pull request into
+  `development`, which gets its own preview site at
+  `<branch>.landslidesncgs.org` (`pr-preview.yml`, live since 2026-10-28).
+  The design was written 2026-10-21; nothing beyond the previews is built.
 
 ## From the October 2026 audit, not yet decided
 
@@ -63,18 +56,14 @@ details belong in an issue or PR once someone picks it up.
   number of external hosts. Flagged files above 10 MB are still served
   uncompressed (CloudFront's limit); pre-compressing them at upload is the
   fix if it matters.
-- Decide whether `FLAGGED_MIN_CATEGORY = 0` is the intended production
-  setting or a leftover from testing.
-- **Explore and resolve config drift between `scripts/config.py` and
-  `alerts/js/config.js`.** Known today: `config.py` defines the
-  `DEBRIS_CONTEXT_TILE_*` block twice, still carries Folium and Streamlit
-  leftovers (`OUTPUT_DIR`, `MAP_FILENAME`, `MAP_CENTER`), and has two
-  bounding boxes that disagree on the east edge (`WNC_BBOX_WGS84` xmax
-  -80.8 vs `WNC_BBOX` -81.0). `config.js` mirrors thresholds, category
-  cutoffs, bbox and window lists by hand with nothing checking they match.
-  Work out which constants are actually read on each side, delete the dead
-  ones, and add a small Python test that parses `config.js` and asserts the
-  shared values agree (first candidate for the tests item above).
+- **A custom 404 page.** A missing page on the production site answers
+  S3's raw `AccessDenied` XML with a 403 (checked 2026-10-28), because
+  origin access gives CloudFront no `s3:ListBucket`. Add a `/404/` page and
+  an error response on each distribution that serves it with a 404 for a
+  403 from the site bucket, leaving the data behaviors alone so a missing
+  data file still fails loudly.
+- Decide whether `FLAGGED_MIN_CATEGORY = 0` in `scripts/config.py` is the
+  intended production setting or a leftover from testing.
 - **Flat-site cleanup, readable without a framework.** The five main-site
   pages each carry their own copy of the header, nav, footer and colour
   token CSS.
@@ -82,30 +71,35 @@ details belong in an issue or PR once someone picks it up.
   with each page keeping only its own styles; move inline styles into
   classes; for the repeated header and nav markup either keep one short
   identical block per page or add a 30-line Python script that stitches
-  partials (Python is already in use for the pipelines). Keep the existing BEM class names and
-  one file per page. No React or build framework.
+  partials (Python is already in use for the pipelines). Keep the existing
+  BEM class names and one file per page. No React or build framework.
 - **Overture buildings layer size and leftovers.** Simplification tolerance
   is not the lever that matters: 841 MB across 77 county files with single
   files up to 63 MB is. If the layer survives the simplified dashboard,
   convert it to vector tiles (PMTiles via tippecanoe, one file served with
   range requests) instead of per-county GeoJSON. Either way fix the
   `fetch_overture_buildings` log line that still prints "~3m" with
-  tolerance 0, and the `_refresh_overture_buildings` docstring that names a
-  single-file output that no longer exists.
+  tolerance 0.
 
 ## Deferred
 
-- **Publish partial `refresh.py` results safely.** Deferred 2026-10-27: this
-  only affects the nightly pipeline for the SIREN alerts dashboard, which
-  has been offline since 2026-10-22. DFENS Simple has its own pipeline and
-  is not affected. Revisit if the alerts dashboard returns.
-  currently fails the CI step, so the commit and deploy are skipped and no
-  window publishes that day. Exit code 2 covers two different cases that
-  need different handling: some precipitation windows failed but the rest
-  were intersected (safe to publish), and the debris-flow load failed after
+These affect only the SIREN alerts pipeline (`scripts/refresh.py`,
+`refresh-data.yml`), which has run by hand only since the alerts dashboard
+went offline on 2026-10-22. DFENS Simple has its own pipeline and is not
+affected. Revisit if the alerts dashboard returns.
+
+- **Publish partial `refresh.py` results safely.** Deferred 2026-10-27. A
+  partial refresh (exit code 2) fails the workflow step, so nothing is
+  uploaded and no window publishes. Exit code 2 covers two cases that need
+  different handling: some precipitation windows failed but the rest were
+  intersected (safe to publish), and the debris-flow load failed after
   precipitation was written (must not publish, or fresh precipitation sits
   next to stale flagged files). Split those into separate codes in
   `refresh.py`, then have `refresh-data.yml` publish on the first and fail
-  on the second. Low urgency: in 96 runs it has only happened twice, both
-  on 2026-07-20 during setup, and the only realistic trigger is the monthly
-  cold debris-flow cache.
+  on the second. In 96 scheduled runs it happened twice, both on
+  2026-07-20 during setup.
+- **Config parity between `scripts/config.py` and `alerts/js/config.js`.**
+  The duplicate and dead constants are gone and both files now share one
+  `WNC_BBOX` (checked 2026-10-28), but `config.js` still mirrors the
+  thresholds, category cutoffs, bbox and window lists by hand. Add a small
+  Python test that parses `config.js` and asserts the shared values agree.

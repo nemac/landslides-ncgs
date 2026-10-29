@@ -100,7 +100,6 @@ CACHE_TTL_DAYS = 120
 # frontend caches up to 20 counties at a time (LRU eviction).
 OVERTURE_BUILDINGS_SUBDIR = "buildings"  # subdirectory under alerts/data
 OVERTURE_BUILDINGS_MANIFEST_NAME = "manifest.json"  # inside that subdir
-OVERTURE_BUILDINGS_CACHE_TTL_DAYS = 30
 # Geometry simplification tolerance in degrees. Set to 0 (2026-07-22) to
 # preserve full source-fidelity building shapes. Coordinate precision below
 # still snaps vertices to a ~1.1m grid on write, which acts as a mild

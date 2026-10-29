@@ -6,8 +6,7 @@ Three modes:
 
   python scripts/refresh.py
       Default: fetch live NDFD forecast and MRMS observed for every window,
-      run the debris flow intersections, refresh the building footprints
-      when their manifest is older than 30 days, write to alerts/data/.
+      run the debris flow intersections, write to alerts/data/.
 
   python scripts/refresh.py --hindcast
       Generate historical (hindcast) data for every event in events.py.
@@ -23,7 +22,10 @@ Live mode writes, to alerts/data/:
     flagged_ndfd_{N}h.geojson   Debris flow polygons + max NDFD category
     observed_{N}h.geojson       MRMS precipitation polygons, N in MRMS_WINDOWS_HOURS
     flagged_mrms_{N}h.geojson   Debris flow polygons + max MRMS category
-    buildings/                  Overture footprints per county + manifest.json
+
+The building footprints (alerts/data/buildings/) are not part of live mode:
+refresh-reference.yml rebuilds them with --buildings when Overture
+publishes a new release.
 
 Hindcast mode writes (per event):
     alerts/data/historical/{event_id}_precip.geojson
@@ -81,8 +83,9 @@ def main() -> int:
         "--buildings",
         action="store_true",
         help=(
-            "Only re-extract the Overture building footprints, ignoring the "
-            "manifest age. OVERTURE_RELEASE in the environment pins the release."
+            "Only rebuild the Overture building footprints under "
+            "alerts/data/buildings/, as the daily refresh-reference.yml workflow "
+            "does. OVERTURE_RELEASE in the environment pins the release."
         ),
     )
     parser.add_argument(
@@ -116,9 +119,7 @@ def _main_reference(*, buildings: bool, debris: bool) -> int:
         release = os.environ.get("OVERTURE_RELEASE") or None
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         ok &= _safely(
-            lambda: defns_data.fetch_overture_buildings(
-                output_dir=DATA_DIR, force_refresh=True, release=release
-            ),
+            lambda: defns_data.fetch_overture_buildings(output_dir=DATA_DIR, release=release),
             f"Buildings (Overture {release or 'latest'})",
         )
     return 0 if ok else 1
@@ -157,14 +158,6 @@ def _main_live() -> int:
             lambda h=hrs: _refresh_mrms(window_hours=h),
             f"MRMS observed ({hrs}h)",
         )
-
-    # ---- Phase 1.5: Overture buildings (independent reference layer) ---
-    # Runs regardless of precip success because buildings are a reference
-    # layer, not part of the alert pipeline. The cache check inside
-    # fetch_overture_buildings means this is a near-instant no-op on
-    # most runs - the slow extraction only fires when the file is
-    # missing or older than ~30 days.
-    _safely(_refresh_overture_buildings, "Buildings (Overture)")
 
     # ---- Phase 2: load debris flows once for all intersections ---------
     any_precip_ok = any(ndfd_window_ok.values()) or any(mrms_window_ok.values())
@@ -408,25 +401,6 @@ def _refresh_flagged_mrms(window_hours: int = 1) -> None:
         out_path=DATA_DIR / f"flagged_mrms_{window_hours}h.geojson",
         source_label="MRMS",
     )
-
-
-def _refresh_overture_buildings() -> None:
-    """Extract WNC building footprints from Overture Maps Foundation.
-
-    Delegates to defns_data.fetch_overture_buildings, which handles the
-    cache TTL check internally. On most runs (cache fresh), this returns
-    in milliseconds with a "skipping extraction" log message. When the
-    cache is stale or missing, this is the slow phase: 5-15 minutes of
-    DuckDB-against-Overture-S3 work.
-
-    Writes alerts/data/buildings_wnc.geojson which the frontend loads
-    lazily when the user toggles the "Building footprints" layer on.
-
-    Failures here are non-fatal - _safely() in the orchestrator will log
-    the exception and continue. A missing buildings file just means the
-    layer toggle does nothing client-side; it doesn't affect alerts.
-    """
-    defns_data.fetch_overture_buildings(output_dir=DATA_DIR)
 
 
 def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None:

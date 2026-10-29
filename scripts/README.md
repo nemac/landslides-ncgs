@@ -37,8 +37,9 @@ Live mode, to `alerts/data/`:
 
 - `forecast_{N}h.geojson` and `flagged_ndfd_{N}h.geojson` for N in 12, 24, 48, 72
 - `observed_{N}h.geojson` and `flagged_mrms_{N}h.geojson` for N in 1, 24, 72
-- `buildings/manifest.json` and one `{GEOID}.geojson` per county, refreshed
-  when the manifest is older than 30 days
+
+`--buildings` writes `buildings/manifest.json` and one `{GEOID}.geojson`
+per county; live mode never touches `buildings/`.
 
 Every GeoJSON carries a top-level `meta` object with timestamps and source.
 `--hindcast` writes `historical/{event_id}_precip.geojson`,
@@ -56,12 +57,19 @@ environment, run `refresh.py --debris-cache` and/or `--buildings`, upload
 the GeoPackage to `s3://landslidesncgs-data/cache/` and the footprints to
 `alerts/data/buildings/` (mirrored with `--delete`), and record the new
 markers in `alerts/data/reference_state.json`. A failed rebuild is retried
-the next day because the state is written only after success.
+the next day because the state is written only after success. The buildings
+rebuild fails rather than writes a partial set when one state's counties
+cannot be fetched, since the mirror would otherwise delete that state's
+files. Only a missing state file (HTTP 404) counts as a first run; a 403,
+like any other error reading it, fails the check so the job retries the next
+day, since the file has existed since 2026-10-28 and a 403 now points at the
+bucket policy or origin access. A `force=true` dispatch accepts a 403 and
+records a fresh state, which is the way back if the file really is gone.
 
 **Manual: `.github/workflows/refresh-data.yml`** runs the full alerts
-pipeline from the Actions tab: fetch the buildings manifest (so the
-extraction is skipped), download the GeoPackage from the bucket, create the
-environment, run `python scripts/refresh.py`, and upload `alerts/data/`.
+pipeline from the Actions tab: download the GeoPackage from the bucket,
+create the environment, run `python scripts/refresh.py`, and upload
+`alerts/data/` except `buildings/`, which only the daily workflow writes.
 A non-zero exit fails the job before the upload, so a broken run never
 replaces good files. Exit code 2 (some windows failed but others were
 written) is treated the same way; splitting it so partial results publish
@@ -75,7 +83,8 @@ historical files are uploaded by hand (`OPERATIONS.md`).
 ```bash
 conda env create -f environment.yml   # once
 conda activate defns-refresh
-python scripts/refresh.py             # live files; first run also extracts buildings (5 to 15 min)
+python scripts/refresh.py             # live files
+python scripts/refresh.py --buildings # building footprints (5 to 15 min)
 python scripts/refresh.py --hindcast  # historical events
 ```
 

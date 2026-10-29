@@ -8,6 +8,7 @@ import {
   BUILDINGS_PREFIX,
   DEV_ROLE_NAME,
   GITHUB_REPO,
+  PREVIEW_ROLE_NAME,
   PROD_ROLE_NAME,
 } from './config.js';
 
@@ -15,8 +16,10 @@ export interface CiStackProps extends StackProps {
   siteBucket: s3.IBucket;
   dataBucket: s3.IBucket;
   devSiteBucket: s3.IBucket;
+  previewSiteBucket: s3.IBucket;
   productionDistribution: cloudfront.IDistribution;
   devDistribution: cloudfront.IDistribution;
+  previewDistribution: cloudfront.IDistribution;
 }
 
 const GITHUB_OIDC_URL = 'https://token.actions.githubusercontent.com';
@@ -28,6 +31,7 @@ const GITHUB_OIDC_HOST = 'token.actions.githubusercontent.com';
 export class CiStack extends Stack {
   readonly prodRole: iam.IRole;
   readonly devRole: iam.IRole;
+  readonly previewRole: iam.IRole;
 
   constructor(scope: Construct, id: string, props: CiStackProps) {
     super(scope, id, { terminationProtection: true, ...props });
@@ -66,8 +70,22 @@ export class CiStack extends Stack {
     props.devSiteBucket.grantReadWrite(this.devRole);
     this.allowInvalidation(this.devRole, props.devDistribution);
 
+    // pr-preview.yml runs for pull requests from any branch of this repo, so
+    // this role reaches nothing but the preview bucket and distribution.
+    this.previewRole = this.makeRole(
+      provider,
+      'PreviewRole',
+      PREVIEW_ROLE_NAME,
+      'preview'
+    );
+    props.previewSiteBucket.grantReadWrite(this.previewRole);
+    this.allowInvalidation(this.previewRole, props.previewDistribution);
+
     new CfnOutput(this, 'ProdRoleArn', { value: this.prodRole.roleArn });
     new CfnOutput(this, 'DevRoleArn', { value: this.devRole.roleArn });
+    new CfnOutput(this, 'PreviewRoleArn', {
+      value: this.previewRole.roleArn,
+    });
   }
 
   private makeRole(

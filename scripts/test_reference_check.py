@@ -3,6 +3,7 @@
 Run: python3 -m unittest scripts/test_reference_check.py
 """
 
+import io
 import sys
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -68,11 +69,52 @@ class UpstreamParsingTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rc.debris_last_edit(lambda url: {"editingInfo": {}})
 
-    def test_missing_previous_state_is_first_run(self):
-        def fetch(url):
-            raise rc.urllib.error.URLError("404")
 
-        self.assertEqual(rc.previous_state(fetch, url="http://x/state.json"), {})
+def _raising(exc: Exception):
+    def fetch(url):
+        raise exc
+
+    return fetch
+
+
+class PreviousStateTest(unittest.TestCase):
+    """Only a 404 on the state file is a first run. A 403 used to count too,
+    because CloudFront answers 403 for a missing object, but the file has
+    existed since 2026-10-28, so a 403 now means the bucket policy or origin
+    access broke: the check must fail so the job is retried tomorrow instead
+    of rebuilding both datasets. A forced run rebuilds everything anyway, so
+    it accepts a 403 and starts from an empty state: that is the way back if
+    the file really is gone."""
+
+    URL = "http://x/state.json"
+
+    def _http_error(self, code: int) -> Exception:
+        error = rc.urllib.error.HTTPError(self.URL, code, "err", {}, io.BytesIO(b""))
+        self.addCleanup(error.close)
+        return error
+
+    def test_missing_state_404_is_first_run(self):
+        self.assertEqual(rc.previous_state(_raising(self._http_error(404)), url=self.URL), {})
+
+    def test_forbidden_state_403_fails_the_run(self):
+        with self.assertRaises(rc.urllib.error.HTTPError):
+            rc.previous_state(_raising(self._http_error(403)), url=self.URL)
+
+    def test_forced_run_accepts_403_as_first_run(self):
+        state = rc.previous_state(_raising(self._http_error(403)), url=self.URL, force=True)
+        self.assertEqual(state, {})
+
+    def test_server_error_propagates(self):
+        with self.assertRaises(rc.urllib.error.HTTPError):
+            rc.previous_state(_raising(self._http_error(503)), url=self.URL)
+
+    def test_connection_failure_propagates(self):
+        with self.assertRaises(rc.urllib.error.URLError):
+            rc.previous_state(_raising(rc.urllib.error.URLError("refused")), url=self.URL)
+
+    def test_unparseable_state_propagates(self):
+        with self.assertRaises(ValueError):
+            rc.previous_state(_raising(ValueError("not json")), url=self.URL)
 
 
 if __name__ == "__main__":

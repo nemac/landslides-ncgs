@@ -24,8 +24,10 @@ new CiStack(app, 'Ci', {
   siteBucket: web.siteBucket,
   dataBucket: web.dataBucket,
   devSiteBucket: web.devSiteBucket,
+  previewSiteBucket: web.previewSiteBucket,
   productionDistribution: web.productionDistribution,
   devDistribution: web.devDistribution,
+  previewDistribution: web.previewDistribution,
 });
 
 new TriggerStack(app, 'Trigger', protect);

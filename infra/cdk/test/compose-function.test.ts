@@ -6,6 +6,7 @@ import {
   MAX_FUNCTION_BYTES,
   composeDevFunction,
   composeFrom,
+  composePreviewFunction,
   composeProductionFunction,
 } from '../lib/compose-function.js';
 
@@ -34,13 +35,23 @@ test('dev function imports cloudfront and awaits basicAuth', () => {
   assert.match(code, /function rewrite\(/);
 });
 
-test('both stay under the CloudFront limit', () => {
-  assert.ok(
-    Buffer.byteLength(composeProductionFunction(), 'utf8') < MAX_FUNCTION_BYTES
-  );
-  assert.ok(
-    Buffer.byteLength(composeDevFunction(), 'utf8') < MAX_FUNCTION_BYTES
-  );
+test('preview function awaits basicAuth, then rewrites, then prefixes', () => {
+  const code = composePreviewFunction();
+  assert.ok(code.startsWith("import cf from 'cloudfront';"));
+  assert.equal(code.match(/async function handler\(/g)?.length, 1);
+  assert.match(code, /await basicAuth\(event, kvs\)/);
+  assert.match(code, /function rewrite\(/);
+  assert.match(code, /return previewPrefix\(out\)/);
+});
+
+test('all three stay under the CloudFront limit', () => {
+  for (const code of [
+    composeProductionFunction(),
+    composeDevFunction(),
+    composePreviewFunction(),
+  ]) {
+    assert.ok(Buffer.byteLength(code, 'utf8') < MAX_FUNCTION_BYTES);
+  }
 });
 
 test('production handler behaves end to end', () => {
@@ -57,6 +68,39 @@ test('production handler behaves end to end', () => {
   assert.equal(dashboard.uri, '/simple/data/status.json');
   const rewritten = handler(eventFor('landslidesncgs.org', '/simple/'));
   assert.equal(rewritten.uri, '/simple/index.html');
+});
+
+// The composed preview handler with a stand-in for the cloudfront module,
+// whose key value store always holds `credential`.
+function previewHandler(credential: string) {
+  const code = composePreviewFunction().replace(
+    "import cf from 'cloudfront';",
+    ''
+  );
+  const cf = { kvs: () => ({ get: async () => credential }) };
+  return new Function('cf', code + '\n; return handler;')(cf);
+}
+
+test('preview handler behaves end to end', async () => {
+  const credential = Buffer.from('user:pass').toString('base64');
+  const handler = previewHandler(credential);
+  const host = 'update-name.landslidesncgs.org';
+  const signedIn = (uri: string) => {
+    const event = eventFor(host, uri);
+    Object.assign(event.request.headers, {
+      authorization: { value: 'Basic ' + credential },
+    });
+    return event;
+  };
+
+  assert.equal((await handler(eventFor(host, '/'))).statusCode, 401);
+  const page = await handler(signedIn('/about/'));
+  assert.equal(page.uri, '/update-name/about/index.html');
+  const redirect = await handler(signedIn('/about'));
+  assert.equal(redirect.statusCode, 301);
+  assert.equal(redirect.headers.location.value, '/about/');
+  const data = await handler(signedIn('/simple/data/status.json'));
+  assert.equal(data.uri, '/simple/data/status.json');
 });
 
 test('oversized piece throws at compose time', () => {
