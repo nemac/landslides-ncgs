@@ -12,12 +12,12 @@ details belong in an issue or PR once someone picks it up.
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
 - **Require every CI check on master, and test the intersections.**
-  `ci.yml` runs five checks on every pull request: "CDK synth and function
-  tests", "Lint and format", "Pipeline tests (pinned environment)",
-  "Simple dashboard tests" and "Simple dashboard browser test". The master
-  ruleset requires only the first; add the other four to its required
-  checks in the repository settings. Still to write: tests for
-  `scripts/analysis.py` (the intersection logic).
+  `ci.yml` ends with an "All CI checks passed" job that fails unless every
+  other job succeeded. The master ruleset still requires only "CDK synth
+  and function tests"; once "All CI checks passed" has reported on a pull
+  request, make it the required check in the repository settings, then
+  update `README.md`, `CLAUDE.md` and `infra/README.md`. Still to write:
+  tests for `scripts/analysis.py` (the intersection logic).
 - **Make the archived flagged runs reproducible.** Since 2026-10-27
   `refresh-simple.yml` copies the three output files of every run that
   flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,
