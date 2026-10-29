@@ -67,7 +67,7 @@ stored in GitHub. Nothing any workflow produces is committed to git.
 
 | Workflow | Runs | What it does |
 |---|---|---|
-| `ci.yml` | Every pull request | Typechecks, tests and synths the CDK app; runs every test suite (CloudFront functions, both pipelines, the Lambda, the DFENS Simple frontend in Node and in Chromium, the CDN integrity hashes); and lints and format-checks the JavaScript, TypeScript and Python. The job names in the file say which is which. `master` requires "CDK synth and function tests" to pass. |
+| `ci.yml` | Every pull request | Typechecks, tests and synths the CDK app; runs every test suite (CloudFront functions, both pipelines, the Lambda, the DFENS Simple frontend in Node and in Chromium, the CDN integrity hashes); and lints and format-checks the JavaScript, TypeScript and Python. The job names in the file say which is which. `master` requires its last job, "All CI checks passed", which fails unless every other job succeeded. |
 | `deploy-dev.yml` | Push to `development` | Deploys the tree to the dev bucket and invalidates the dev distribution, via `deploy-site.yml`. |
 | `deploy-prod.yml` | Push to `master` | The same for production. |
 | `pr-preview.yml` | Pull request into `development` opened, pushed to, reopened or closed | Deploys the merge result into the preview bucket's `pr-<number>/` folder via `deploy-site.yml`, served at `pr-<number>.landslidesncgs.org`, and deletes the folder when the pull request closes. Skips pull requests from forks. |
