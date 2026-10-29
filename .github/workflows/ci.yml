@@ -39,8 +39,6 @@ jobs:
         working-directory: infra/cdk
       - name: Test the CloudFront Function pieces
         run: node --test "infra/cloudfront/test/*.test.js"
-      - name: Test the preview-site naming script
-        run: node --test "infra/preview/test/*.test.js"
       - name: Test the DFENS Simple check script (stdlib only)
         run: python3 -m unittest discover -s simple/pipeline -p "test_*.py"
 
@@ -113,7 +111,7 @@ jobs:
         run: npm run test:simple
 
   # The real page in Chromium against the fixtures in simple/test/fixtures,
-  # with every outside host blocked. Kept separate so a browser problem
+  # with every outside host but unpkg (Leaflet) blocked. Kept separate so a browser problem
   # never blocks the other checks, and so the master ruleset can require it
   # on its own.
   browser:

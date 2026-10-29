@@ -13,7 +13,7 @@ pipelines are Python.
 | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` | The main site, one directory per page, served at `/<name>/` |
 | `assets/` | Images shared by every page |
 | `simple/` | DFENS Simple dashboard and its ten-minute data pipeline |
-| `alerts/` | The earlier SIREN dashboard, offline since 2026-10-22; its pages redirect to `/simple/` and its daily pipeline still writes `alerts/data/` |
+| `alerts/` | The earlier SIREN dashboard, offline since 2026-10-22; its pages redirect to `/simple/`. Its data in `alerts/data/` comes from the manual alerts pipeline, except the building footprints and reference state, which the daily `refresh-reference.yml` owns |
 | `scripts/` | The alerts pipeline (`refresh.py`, manual since 2026-10-27) and the daily reference-data check (`reference_check.py`) |
 | `infra/` | Every AWS resource as a CDK app, the CloudFront functions, and the cutover runbook |
 | `.github/workflows/` | CI, site deploys and data refreshes |
@@ -43,7 +43,7 @@ only in S3.
   invalidates CloudFront.
 - **Pull requests preview.** Every open pull request into `development`
   from a branch of this repository is deployed to
-  `<branch>.landslidesncgs.org`, behind the same basic auth as dev, and
+  `pr-<number>.landslidesncgs.org`, behind the same basic auth as dev, and
   removed when the pull request closes. One distribution claims
   `*.landslidesncgs.org` for all of them; the named hostnames take
   precedence over the wildcard.
@@ -67,10 +67,10 @@ stored in GitHub. Nothing any workflow produces is committed to git.
 
 | Workflow | Runs | What it does |
 |---|---|---|
-| `ci.yml` | Every pull request | Three jobs: CDK typecheck, tests and synth plus the CloudFront function and Simple-pipeline tests; ESLint, Prettier, ruff, the Lambda tests and the CDN integrity-hash check; and the `scripts/` tests in the pinned Python environment. `master` requires the first job to pass. |
+| `ci.yml` | Every pull request | Typechecks, tests and synths the CDK app; runs every test suite (CloudFront functions, both pipelines, the Lambda, the DFENS Simple frontend in Node and in Chromium, the CDN integrity hashes); and lints and format-checks the JavaScript, TypeScript and Python. The job names in the file say which is which. `master` requires "CDK synth and function tests" to pass. |
 | `deploy-dev.yml` | Push to `development` | Deploys the tree to the dev bucket and invalidates the dev distribution, via `deploy-site.yml`. |
 | `deploy-prod.yml` | Push to `master` | The same for production. |
-| `pr-preview.yml` | Pull request into `development` opened, pushed to, reopened or closed | Turns the branch name into a DNS label (`infra/preview/preview-slug.js`; `pr-<number>` when the name is unusable or taken), deploys the merge result into that folder of the preview bucket via `deploy-site.yml`, and deletes the folder when the pull request closes. Skips pull requests from forks. |
+| `pr-preview.yml` | Pull request into `development` opened, pushed to, reopened or closed | Deploys the merge result into the preview bucket's `pr-<number>/` folder via `deploy-site.yml`, served at `pr-<number>.landslidesncgs.org`, and deletes the folder when the pull request closes. Skips pull requests from forks. |
 | `deploy-site.yml` | Called by the three above | Syncs pages, CSS and JS with `no-cache` and `assets/` with a one-day cache, deleting files that left the repo, then invalidates CloudFront. Pipelines, infra, docs and data folders are excluded. |
 | `refresh-simple.yml` | Every 10 minutes (EventBridge) | The DFENS Simple pipeline. A stdlib check asks NDFD whether the forecast changed; if not, only `status.json` is re-uploaded as a heartbeat. If it did, the forecast and flagged files are rebuilt, downloading the debris-flow GeoPackage from the bucket only when rain at or above the threshold is forecast. Any run that flags pathways is also copied to `simple/archive/<timestamp>/` in the data bucket and kept for good. A `force` input rebuilds regardless. |
 | `refresh-reference.yml` | Daily at 05:00 UTC (EventBridge) | Keeps the building footprints and the debris-flow GeoPackage current. `scripts/reference_check.py` reads Overture's latest release id and the NCGS layer's edit date, logs both next to the values recorded at the last build, and rebuilds a dataset only when its marker changed, when its last build is 90 days old, or when `force` is set. What was built is recorded in `alerts/data/reference_state.json`. |

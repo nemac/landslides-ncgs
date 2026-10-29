@@ -42,7 +42,7 @@ details belong in an issue or PR once someone picks it up.
 - **Slack dev requests.** A request in Slack opens a GitHub issue; an agent
   run in Actions works the issue and opens a pull request into
   `development`, which gets its own preview site at
-  `<branch>.landslidesncgs.org` (`pr-preview.yml`, live since 2026-10-28).
+  `pr-<number>.landslidesncgs.org` (`pr-preview.yml`, live since 2026-10-28).
   The design was written 2026-10-21; nothing beyond the previews is built.
 
 ## From the October 2026 audit, not yet decided

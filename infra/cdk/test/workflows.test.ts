@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -77,7 +76,15 @@ test('the preview workflow uses only the preview role, bucket and environment', 
   for (const arn of arns) assert.equal(arn, previewArn);
   assert.match(text, /environment: preview\n/);
   assert.match(text, new RegExp(`bucket: ${PREVIEW_SITE_BUCKET}\\n`));
-  assert.match(text, new RegExp(`s3://${PREVIEW_SITE_BUCKET}/\\$SLUG/`));
+  assert.match(
+    text,
+    /folder: pr-\$\{\{ github\.event\.pull_request\.number \}\}\n/
+  );
+  assert.match(
+    text,
+    /FOLDER: pr-\$\{\{ github\.event\.pull_request\.number \}\}\n/
+  );
+  assert.match(text, new RegExp(`s3://${PREVIEW_SITE_BUCKET}/\\$FOLDER/`));
   assert.doesNotMatch(text, new RegExp(`${SITE_BUCKET}\\b`));
   assert.doesNotMatch(text, new RegExp(DATA_BUCKET));
 });
@@ -90,14 +97,15 @@ test('preview distribution id is the same plausible id in both places', () => {
   assert.equal(removeId, deployId);
 });
 
-test('preview slugs avoid every real hostname under the .org domain', () => {
-  const require = createRequire(import.meta.url);
-  const { RESERVED_LABELS } = require('../../preview/preview-slug.js');
+test('no real hostname under the .org domain looks like a preview', () => {
   const orgSuffix = `.${ORG_DOMAIN}`;
   const realLabels = [...PROD_HOSTNAMES, DEV_HOSTNAME]
     .filter((host) => host.endsWith(orgSuffix))
     .map((host) => host.slice(0, -orgSuffix.length));
-  assert.deepEqual([...RESERVED_LABELS].sort(), realLabels.sort());
+  assert.ok(realLabels.length > 0, 'at least one real .org hostname');
+  for (const label of realLabels) {
+    assert.doesNotMatch(label, /^pr-\d+$/, `${label} shadows a preview`);
+  }
 });
 
 test('refresh workflows use the production role and the data bucket', () => {
