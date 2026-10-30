@@ -1,5 +1,7 @@
 # Landslides in Western North Carolina
 
+<!-- claude platform test comment -->
+
 Public website for the North Carolina Geological Survey's landslide program
 at <https://landslidesncgs.org>, with the DFENS Simple debris-flow dashboard
 at `/simple/` (also served as <https://dashboard.landslidesncgs.org>). The
