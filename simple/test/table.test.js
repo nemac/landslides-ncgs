@@ -112,6 +112,15 @@ test('Enter and Space on a row select it; other keys do not', () => {
   assert.deepEqual(picked, [301, 301]);
 });
 
+test('the summary uses a comma as the thousands separator', () => {
+  const t = tableParts();
+  const many = Array.from({ length: 1234 }, (_, i) =>
+    feature({ ...SWANNANOA.properties, OBJECTID: i + 1 })
+  );
+  t.TABLE.render(many, t.tbody, t.summary, () => {});
+  assert.equal(t.summary.textContent, '1,234 pathways in 1 county.');
+});
+
 test('render with no pathways shows the none-flagged message', () => {
   const t = tableParts();
   t.TABLE.render([], t.tbody, t.summary, () => {});

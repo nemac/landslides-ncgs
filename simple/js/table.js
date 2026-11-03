@@ -98,7 +98,7 @@ window.DFS_TABLE = (function () {
     const n = features.length;
     summaryEl.classList.remove('is-none');
     summaryEl.textContent =
-      n +
+      n.toLocaleString('en-US') +
       ' pathway' +
       (n === 1 ? '' : 's') +
       ' in ' +

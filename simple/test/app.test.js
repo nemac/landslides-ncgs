@@ -109,6 +109,20 @@ test('the status cards show the window in ET and UTC and the check times', async
   assert.equal(p.$('check-interval-text').textContent, '10');
 });
 
+test('large pathway counts use a comma as the thousands separator', async () => {
+  const data = fixture('live');
+  const template = data.flagged.features.find(
+    (f) => f.properties.max_category >= 11
+  );
+  data.flagged.features = Array.from({ length: 12674 }, (_, i) => ({
+    ...template,
+    properties: { ...template.properties, OBJECTID: 100000 + i },
+  }));
+  const p = await open({ data });
+  assert.equal(p.$('status-count').textContent, '12,674');
+  assert.match(p.$('table-summary').textContent, /^12,674 pathways in /);
+});
+
 test('an issued time on another day shows its date', async () => {
   const data = fixture('live');
   data.flagged.meta.issued = '2026-10-26T20:30:00+00:00';
