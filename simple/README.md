@@ -29,7 +29,7 @@ pathways table (click a row to zoom, CSV download), and seven layer toggles:
 - NEXRAD radar, current (reference only)
 - Flagged debris flow pathways (from this pipeline)
 - Potential channelized debris flow pathways (NCGS AGOL, live)
-- NC Parcels (NC OneMap, live, zoom 14+, clickable)
+- NC parcels (NC OneMap, live, zoom 14+, clickable)
 - Building footprints (rebuilt by `refresh-reference.yml` when Overture
   publishes a release, read from `../alerts/data/` on the same origin)
 
