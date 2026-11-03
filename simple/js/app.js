@@ -310,7 +310,7 @@
     const m = state.meta;
     const n = state.features.length;
 
-    els.statusCount.textContent = String(n);
+    els.statusCount.textContent = n.toLocaleString('en-US');
     els.statusCard.classList.toggle('has-alerts', n > 0);
     els.statusCard.classList.toggle('is-zero', n === 0);
 
