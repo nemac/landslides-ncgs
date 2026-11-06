@@ -44,7 +44,7 @@ env:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Most days this is the check alone, well under a minute. The headroom is
     # for a rebuild: ~10-20 min for the debris layer, 5-15 min for buildings.
     timeout-minutes: 90
@@ -52,12 +52,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Python (stdlib check)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -70,14 +70,14 @@ jobs:
       # ---- Rebuild path: something changed, is 90 days old, or was forced ----
       - name: Configure AWS credentials (OIDC)
         if: steps.check.outputs.any == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up environment (micromamba)
         if: steps.check.outputs.any == 'true'
-        uses: mamba-org/setup-micromamba@v2
+        uses: mamba-org/setup-micromamba@v3
         with:
           environment-file: environment.yml
           init-shell: bash

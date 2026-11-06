@@ -19,11 +19,11 @@ permissions:
 jobs:
   infra:
     name: CDK synth and function tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -47,12 +47,12 @@ jobs:
   # pipeline itself uses. The environment is cached by file contents.
   pipeline:
     name: Pipeline tests (pinned environment)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up environment (micromamba)
-        uses: mamba-org/setup-micromamba@v2
+        uses: mamba-org/setup-micromamba@v3
         with:
           environment-file: environment.yml
           init-shell: bash
@@ -63,11 +63,11 @@ jobs:
 
   lint:
     name: Lint and format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -78,7 +78,7 @@ jobs:
         run: npm run lint
       - name: Prettier
         run: npm run format:check
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install ruff
@@ -96,11 +96,11 @@ jobs:
   # hashes (that last one downloads from unpkg).
   simple:
     name: Simple dashboard tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -115,11 +115,11 @@ jobs:
   # browser problem never blocks the other checks.
   browser:
     name: Simple dashboard browser test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -128,7 +128,7 @@ jobs:
         run: npm ci
       - name: Cache the Playwright browser
         id: browser-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -142,7 +142,7 @@ jobs:
         run: npm run test:e2e
       - name: Keep the report and traces of a failed run
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
@@ -159,7 +159,7 @@ jobs:
     name: All CI checks passed
     needs: [infra, pipeline, lint, simple, browser]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Fail unless every job succeeded

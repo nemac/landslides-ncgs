@@ -32,7 +32,7 @@ env:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # With the debris-flow GeoPackage downloaded from the bucket the run is
     # quick. The headroom is for a bucket without one yet, when refresh.py
     # re-fetches the ~225k NCGS debris polygons and augments them (10-20 min).
@@ -61,12 +61,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
@@ -88,7 +88,7 @@ jobs:
       # the file's pip section. The environment cache key includes the
       # file's contents, so editing a pin rebuilds the environment.
       - name: Set up environment (micromamba)
-        uses: mamba-org/setup-micromamba@v2
+        uses: mamba-org/setup-micromamba@v3
         with:
           environment-file: environment.yml
           init-shell: bash
