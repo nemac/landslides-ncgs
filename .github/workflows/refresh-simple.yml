@@ -95,11 +95,7 @@ jobs:
       # library versions in both places. Cached by file contents.
       - name: Set up environment (micromamba)
         if: steps.check.outputs.action == 'build'
-        uses: mamba-org/setup-micromamba@v3
-        with:
-          environment-file: environment.yml
-          init-shell: bash
-          cache-environment: true
+        uses: ./.github/actions/setup-conda-env
 
       - name: Build forecast + flagged files
         if: steps.check.outputs.action == 'build'
