@@ -1,7 +1,9 @@
 # Pinned Python environment for the SIREN data pipeline (scripts/refresh.py).
 #
 # One file for both places the pipeline runs:
-#   - CI: .github/workflows/refresh-data.yml creates it with micromamba.
+#   - CI: .github/actions/setup-conda-env creates it with micromamba, for
+#     every workflow that runs the pipelines. The micromamba version is
+#     pinned in that action, not here.
 #   - Local: conda env create -f environment.yml   (or micromamba create -f)
 #            conda activate defns-refresh
 #

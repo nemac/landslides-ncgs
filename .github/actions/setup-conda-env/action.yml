@@ -1,28 +1,31 @@
 name: Set up the conda environment
 description: >-
-  Installs micromamba and builds the environment from environment.yml, with
-  the micromamba program cached so most runs never download it.
+  Installs micromamba and builds the environment from environment.yml. Both
+  are cached, so most runs make no request to GitHub at all.
 
-# Why this exists: given a version (or none, meaning "latest"),
-# setup-micromamba v3 asks the GitHub API for the newest release and then
-# checks the file exists with one HEAD request, with no retry. On
+# Why this does not use mamba-org/setup-micromamba: v3 asks the GitHub API
+# for a release and then checks the file with one HEAD request that has no
+# retry, and it does both even when it is told not to download. On
 # 2026-11-08 and 2026-11-09 GitHub slowed anonymous traffic, and 9 DFENS
-# Simple builds failed at that check. Passing a token does not help: the
-# download server answers any request that carries a token with 401, which
-# v3 reports as "Could not find a micromamba binary". So this action:
-#   * restores the micromamba program from the Actions cache when it can,
-#     so there is no download at all;
-#   * otherwise passes the release file's direct URL, which skips the API
-#     lookup and the HEAD check and goes straight to a download that retries.
+# Simple builds failed at that check or at its download. These steps make no
+# GitHub request when the cache has micromamba, and when it does not, they
+# keep retrying the download for up to five minutes.
 
 inputs:
   micromamba-version:
     description: >-
       The micromamba release to install, as named on
-      https://github.com/mamba-org/micromamba-releases/releases. Change the
-      default here to upgrade; the cache key includes it, so the next run
-      downloads the new program once.
+      https://github.com/mamba-org/micromamba-releases/releases. To upgrade,
+      change this and micromamba-sha256 together. The cache keys include the
+      version, so the next run downloads the new program and rebuilds the
+      environment once.
     default: 2.10.0-0
+  micromamba-sha256:
+    description: >-
+      The SHA-256 checksum of micromamba-linux-64 in that release, from the
+      micromamba-linux-64.sha256 file published next to it. A download that
+      does not match fails the job.
+    default: 701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd
 
 runs:
   using: composite
@@ -32,17 +35,54 @@ runs:
       uses: actions/cache@v6
       with:
         path: ~/micromamba-bin/micromamba
-        key: micromamba-${{ inputs.micromamba-version }}-${{ runner.os }}-${{ runner.arch }}
+        # The file is for x64 Linux, the only runner these workflows use.
+        key: micromamba-${{ inputs.micromamba-version }}-linux-64
 
-    - name: Set up environment (micromamba)
-      uses: mamba-org/setup-micromamba@v3
+    # curl tries again after any error, waiting longer each time, and gives
+    # up after five minutes. It sends no token: GitHub's download server
+    # answers 401 to a request that carries one.
+    - name: Download micromamba
+      if: steps.micromamba-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.micromamba-version }}
+        SHA256: ${{ inputs.micromamba-sha256 }}
+      run: |
+        mkdir -p ~/micromamba-bin
+        curl --fail --location --silent --show-error \
+          --retry 10 --retry-all-errors --retry-max-time 300 \
+          --connect-timeout 20 --max-time 120 \
+          --output ~/micromamba-bin/micromamba \
+          "https://github.com/mamba-org/micromamba-releases/releases/download/${VERSION}/micromamba-linux-64"
+        echo "${SHA256}  ${HOME}/micromamba-bin/micromamba" | sha256sum --check
+        chmod +x ~/micromamba-bin/micromamba
+
+    - name: Restore the conda environment
+      id: environment-cache
+      uses: actions/cache@v6
       with:
-        micromamba-binary-path: ~/micromamba-bin/micromamba
-        # setup-micromamba refuses a URL when it is not downloading, so the
-        # URL is passed only on a cache miss and left empty on a hit. The
-        # file name is for x64 Linux, the only runner these workflows use.
-        download-micromamba: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' }}
-        micromamba-url: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' && format('https://github.com/mamba-org/micromamba-releases/releases/download/{0}/micromamba-linux-64', inputs.micromamba-version) || '' }}
-        environment-file: environment.yml
-        init-shell: bash
-        cache-environment: true
+        path: ~/micromamba-env
+        key: conda-env-${{ inputs.micromamba-version }}-linux-64-${{ hashFiles('environment.yml') }}
+
+    # The packages come from conda-forge, not GitHub.
+    - name: Build the conda environment
+      if: steps.environment-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: >-
+        ~/micromamba-bin/micromamba create --yes
+        --root-prefix ~/micromamba
+        --prefix ~/micromamba-env
+        --file environment.yml
+
+    # Steps that use the environment run with `shell: bash -el {0}`. The -l
+    # makes bash read ~/.bash_profile, which then turns the environment on.
+    # Activating (not just adding it to PATH) also runs the packages' own
+    # setup scripts, such as the one that tells GDAL where its data is.
+    - name: Turn the environment on in later steps
+      shell: bash
+      run: |
+        cat >> ~/.bash_profile <<'EOF'
+        export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+        eval "$("$HOME/micromamba-bin/micromamba" shell hook --shell bash)"
+        micromamba activate "$HOME/micromamba-env"
+        EOF

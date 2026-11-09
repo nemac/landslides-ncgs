@@ -17,7 +17,7 @@ pipelines are Python.
 | `scripts/` | The alerts pipeline (`refresh.py`, manual since 2026-10-27) and the daily reference-data check (`reference_check.py`) |
 | `infra/` | Every AWS resource as a CDK app, the CloudFront functions, and the cutover runbook |
 | `.github/workflows/` | CI, site deploys and data refreshes |
-| `.github/actions/` | `setup-conda-env`, the shared micromamba setup the pipeline workflows use, with the micromamba version pinned and cached |
+| `.github/actions/` | `setup-conda-env`, the shared conda setup the pipeline workflows use: it installs a pinned micromamba with its own retrying download and caches both micromamba and the environment |
 | `BACKLOG.md` | Pending work and known issues |
 | `OPERATIONS.md` | Running the pipelines and the site locally |
 
