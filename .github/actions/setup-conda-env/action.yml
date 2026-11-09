@@ -1,0 +1,46 @@
+name: Set up the conda environment
+description: >-
+  Installs micromamba and builds the environment from environment.yml, with
+  the micromamba program cached so most runs never download it.
+
+# Why this exists: setup-micromamba v3 fetches micromamba from GitHub with
+# up to three requests on every run, and it signs them only when a
+# GITHUB_TOKEN variable is set. On 2026-11-08 and 2026-11-09 GitHub slowed
+# unsigned traffic, and 9 DFENS Simple builds failed at this step. So this
+# action:
+#   * restores the micromamba program from the Actions cache when it can,
+#     so there is no download at all;
+#   * otherwise pins the version, which skips the "which release is latest"
+#     lookup, and passes the job's token so the remaining check is signed.
+
+inputs:
+  micromamba-version:
+    description: >-
+      The micromamba release to install. Change the default here to upgrade;
+      the cache key includes it, so the next run downloads the new program
+      once.
+    default: 2.10.0-0
+
+runs:
+  using: composite
+  steps:
+    - name: Restore the micromamba program
+      id: micromamba-cache
+      uses: actions/cache@v6
+      with:
+        path: ~/micromamba-bin/micromamba
+        key: micromamba-${{ inputs.micromamba-version }}-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Set up environment (micromamba)
+      uses: mamba-org/setup-micromamba@v3
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        micromamba-binary-path: ~/micromamba-bin/micromamba
+        # setup-micromamba refuses a version when it is not downloading, so
+        # the version is passed only on a cache miss and left empty on a hit.
+        download-micromamba: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' }}
+        micromamba-version: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' && inputs.micromamba-version || '' }}
+        environment-file: environment.yml
+        init-shell: bash
+        cache-environment: true
