@@ -88,11 +88,7 @@ jobs:
       # the file's pip section. The environment cache key includes the
       # file's contents, so editing a pin rebuilds the environment.
       - name: Set up environment (micromamba)
-        uses: mamba-org/setup-micromamba@v3
-        with:
-          environment-file: environment.yml
-          init-shell: bash
-          cache-environment: true
+        uses: ./.github/actions/setup-conda-env
 
       # A non-zero exit here fails the job and nothing below runs, so a
       # broken run never uploads. (Splitting the partial-success exit code

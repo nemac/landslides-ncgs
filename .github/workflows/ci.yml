@@ -52,11 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up environment (micromamba)
-        uses: mamba-org/setup-micromamba@v3
-        with:
-          environment-file: environment.yml
-          init-shell: bash
-          cache-environment: true
+        uses: ./.github/actions/setup-conda-env
       - name: Test the alerts pipeline modules
         shell: bash -el {0}
         run: python -m unittest discover -s scripts -p "test_*.py" -v
