@@ -3,22 +3,25 @@ description: >-
   Installs micromamba and builds the environment from environment.yml, with
   the micromamba program cached so most runs never download it.
 
-# Why this exists: setup-micromamba v3 fetches micromamba from GitHub with
-# up to three requests on every run, and it signs them only when a
-# GITHUB_TOKEN variable is set. On 2026-11-08 and 2026-11-09 GitHub slowed
-# unsigned traffic, and 9 DFENS Simple builds failed at this step. So this
-# action:
+# Why this exists: given a version (or none, meaning "latest"),
+# setup-micromamba v3 asks the GitHub API for the newest release and then
+# checks the file exists with one HEAD request, with no retry. On
+# 2026-11-08 and 2026-11-09 GitHub slowed anonymous traffic, and 9 DFENS
+# Simple builds failed at that check. Passing a token does not help: the
+# download server answers any request that carries a token with 401, which
+# v3 reports as "Could not find a micromamba binary". So this action:
 #   * restores the micromamba program from the Actions cache when it can,
 #     so there is no download at all;
-#   * otherwise pins the version, which skips the "which release is latest"
-#     lookup, and passes the job's token so the remaining check is signed.
+#   * otherwise passes the release file's direct URL, which skips the API
+#     lookup and the HEAD check and goes straight to a download that retries.
 
 inputs:
   micromamba-version:
     description: >-
-      The micromamba release to install. Change the default here to upgrade;
-      the cache key includes it, so the next run downloads the new program
-      once.
+      The micromamba release to install, as named on
+      https://github.com/mamba-org/micromamba-releases/releases. Change the
+      default here to upgrade; the cache key includes it, so the next run
+      downloads the new program once.
     default: 2.10.0-0
 
 runs:
@@ -33,14 +36,13 @@ runs:
 
     - name: Set up environment (micromamba)
       uses: mamba-org/setup-micromamba@v3
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
       with:
         micromamba-binary-path: ~/micromamba-bin/micromamba
-        # setup-micromamba refuses a version when it is not downloading, so
-        # the version is passed only on a cache miss and left empty on a hit.
+        # setup-micromamba refuses a URL when it is not downloading, so the
+        # URL is passed only on a cache miss and left empty on a hit. The
+        # file name is for x64 Linux, the only runner these workflows use.
         download-micromamba: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' }}
-        micromamba-version: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' && inputs.micromamba-version || '' }}
+        micromamba-url: ${{ steps.micromamba-cache.outputs.cache-hit != 'true' && format('https://github.com/mamba-org/micromamba-releases/releases/download/{0}/micromamba-linux-64', inputs.micromamba-version) || '' }}
         environment-file: environment.yml
         init-shell: bash
         cache-environment: true
