@@ -348,32 +348,6 @@ window.DFS_MAP = (function () {
     const cb = document.getElementById('layer-ndfd');
     if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
   }
-  // Simulated storms (pipeline/simulate_storm.py) draw their own rings
-  // from forecast_24h.geojson instead of the live NWS layer.
-  function setForecastLocal(geojson) {
-    const wasOn = !layers.forecast || map.hasLayer(layers.forecast);
-    if (layers.forecast) map.removeLayer(layers.forecast);
-    _forecastKey = null;
-    layers.forecast = L.geoJSON(
-      geojson || { type: 'FeatureCollection', features: [] },
-      {
-        pane: 'forecastPane',
-        style: function (feature) {
-          const c = CFG.PRECIP_COLORS[feature.properties.category] || '#888';
-          return {
-            fillColor: c,
-            color: c,
-            weight: 0.5,
-            fillOpacity: 0.45,
-            opacity: 0.6,
-          };
-        },
-        attribution: 'SIMULATED storm (not an NWS forecast)',
-      }
-    );
-    const cb = document.getElementById('layer-ndfd');
-    if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
-  }
   function setForecastVisible(visible) {
     if (!layers.forecast) return;
     if (visible && !map.hasLayer(layers.forecast)) layers.forecast.addTo(map);
@@ -1157,7 +1131,6 @@ window.DFS_MAP = (function () {
   return {
     init,
     setForecastPeriod,
-    setForecastLocal,
     setForecastVisible,
     setRadarVisible,
     setObservedVisible,

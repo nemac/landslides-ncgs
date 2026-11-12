@@ -322,8 +322,7 @@
       if (seq !== _loadSeq) return; // superseded by a newer load
       // Map layer: full NDFD coverage straight from the service, for the
       // same 24-h period as the flagged pathways.
-      if (fc && fc.meta && fc.meta.simulated) MAP.setForecastLocal(forecast);
-      else MAP.setForecastPeriod(fc && fc.meta);
+      MAP.setForecastPeriod(fc && fc.meta);
       MAP.refreshObserved();
       if (!fc || fc.type !== 'FeatureCollection')
         throw new Error('flagged file is not GeoJSON');
@@ -438,14 +437,6 @@
 
   function _renderStale(m, status) {
     const now = new Date();
-    els.staleBanner.classList.toggle('is-simulated', !!m.simulated);
-    if (m.simulated) {
-      els.staleBanner.hidden = false;
-      els.staleBanner.textContent =
-        'SIMULATED STORM: sample data for testing only. ' +
-        'This is not a real National Weather Service forecast.';
-      return;
-    }
     const msgs = [];
     const checked = (status && status.checked_at) || m.generated_at;
     if (checked) {
@@ -499,7 +490,6 @@
       windowStart: m.window_start,
       windowEnd: m.window_end,
       issued: m.issued,
-      simulated: !!m.simulated,
     });
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const url = URL.createObjectURL(
@@ -507,11 +497,7 @@
     );
     const a = document.createElement('a');
     a.href = url;
-    a.download =
-      (m.simulated ? 'SIMULATED-' : '') +
-      'dfens-flagged-24h-5in-' +
-      ts +
-      'Z.csv';
+    a.download = 'dfens-flagged-24h-5in-' + ts + 'Z.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -103,6 +103,8 @@ Details live in `BACKLOG.md`; this is the short list.
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
 - Slack dev requests: a Slack request opens a GitHub issue, an agent run in
   Actions opens a PR with a `pr-N.landslidesncgs.org` preview.
+- A simulated-storm test mode for DFENS Simple: work in progress, parked in
+  `simple/pipeline/simulated-storm/`.
 - Content-Security-Policy header, started in report-only mode.
 - A custom 404 page: a missing object currently returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.

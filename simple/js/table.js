@@ -284,7 +284,6 @@ window.DFS_TABLE = (function () {
       'window_end_utc',
       'nws_updated_utc',
       'exported_utc',
-      'forecast_source',
     ];
     const exported = new Date().toISOString();
     const rows = [header.join(',')];
@@ -308,9 +307,6 @@ window.DFS_TABLE = (function () {
             ctx.windowEnd || '',
             ctx.issued || '',
             exported,
-            ctx.simulated
-              ? 'SIMULATED (test data, not an NWS forecast)'
-              : 'NWS NDFD',
           ]
             .map(_csvEscape)
             .join(',')
