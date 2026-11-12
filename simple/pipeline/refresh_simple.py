@@ -125,22 +125,32 @@ def load_fire_districts() -> gpd.GeoDataFrame:
     log("downloading NC fire districts (WNC)...")
     feats, offset = [], 0
     while True:
-        r = requests.get(S.FIRE_DISTRICTS_URL + "/query", params={
-            "where": "1=1", "outFields": ",".join(_FD_FIELDS),
-            "geometry": ",".join(str(c) for c in S.WNC_BBOX),
-            "geometryType": "esriGeometryEnvelope", "inSR": "4326",
-            "spatialRel": "esriSpatialRelIntersects",
-            "outSR": 4326, "f": "geojson", "returnGeometry": "true",
-            "resultOffset": offset, "resultRecordCount": 2000,
-        }, timeout=120)
+        r = requests.get(
+            S.FIRE_DISTRICTS_URL + "/query",
+            params={
+                "where": "1=1",
+                "outFields": ",".join(_FD_FIELDS),
+                "geometry": ",".join(str(c) for c in S.WNC_BBOX),
+                "geometryType": "esriGeometryEnvelope",
+                "inSR": "4326",
+                "spatialRel": "esriSpatialRelIntersects",
+                "outSR": 4326,
+                "f": "geojson",
+                "returnGeometry": "true",
+                "resultOffset": offset,
+                "resultRecordCount": 2000,
+            },
+            timeout=120,
+        )
         r.raise_for_status()
         page = r.json()
         if "error" in page:
             raise RuntimeError(f"fire district query error: {page['error']}")
         batch = page.get("features") or []
         feats.extend(batch)
-        more = page.get("exceededTransferLimit") or \
-            (page.get("properties") or {}).get("exceededTransferLimit")
+        more = page.get("exceededTransferLimit") or (page.get("properties") or {}).get(
+            "exceededTransferLimit"
+        )
         if not batch or not more:
             break
         offset += len(batch)
@@ -172,16 +182,18 @@ def assign_fire_districts(flagged: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             return out
         fd = fd.to_crs(INTERSECTION_CRS)
         fd["_area"] = fd.geometry.area
-        pts = gpd.GeoDataFrame({"_row": range(len(out))},
-                               geometry=out.to_crs(INTERSECTION_CRS).geometry.representative_point().values,
-                               crs=INTERSECTION_CRS)
+        pts = gpd.GeoDataFrame(
+            {"_row": range(len(out))},
+            geometry=out.to_crs(INTERSECTION_CRS).geometry.representative_point().values,
+            crs=INTERSECTION_CRS,
+        )
         j = gpd.sjoin(pts, fd, how="inner", predicate="within")
         j = j.sort_values("_area").drop_duplicates("_row", keep="first").set_index("_row")
 
         def clean(v):
             if v is None or (isinstance(v, float) and v != v):
                 return None
-            v = " ".join(str(v).split())     # also collapses double spaces
+            v = " ".join(str(v).split())  # also collapses double spaces
             return v or None
 
         for row, rec in j.iterrows():
@@ -193,8 +205,11 @@ def assign_fire_districts(flagged: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             d = rec.get("dateupdated")
             if d is not None and d == d:
                 try:
-                    ts = d if hasattr(d, "strftime") else \
-                        datetime.fromtimestamp(float(d) / 1000, tz=timezone.utc)
+                    ts = (
+                        d
+                        if hasattr(d, "strftime")
+                        else datetime.fromtimestamp(float(d) / 1000, tz=UTC)
+                    )
                     out.at[i, "district_updated"] = ts.strftime("%Y-%m-%d")
                 except Exception:
                     pass

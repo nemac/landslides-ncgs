@@ -253,7 +253,7 @@
     let tableOpen = true;
     try {
       tableOpen = localStorage.getItem('siren.tableOpen') !== '0';
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
     _setTableOpen(tableOpen);
@@ -277,7 +277,7 @@
       .classList.toggle('is-collapsed', !open);
     try {
       localStorage.setItem('siren.tableOpen', open ? '1' : '0');
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
     const m = MAP._internalMap && MAP._internalMap();
