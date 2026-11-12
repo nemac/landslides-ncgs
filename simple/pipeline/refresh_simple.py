@@ -107,6 +107,103 @@ def repair_polygons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return gdf
 
 
+# ---------------------------------------------------------------------------
+# Fire districts (NC OSFM) - primary district per flagged pathway
+# ---------------------------------------------------------------------------
+_FD_FIELDS = ["FDID", "firedepartment", "fdcounty", "fdaddress", "dateupdated"]
+
+
+def load_fire_districts() -> gpd.GeoDataFrame:
+    """WNC fire districts, from a local cache refreshed every
+    FIRE_DISTRICTS_TTL_DAYS. ~355 polygons, one request."""
+    cache = Path(S.FIRE_DISTRICTS_CACHE)
+    if cache.exists():
+        age_days = (time.time() - cache.stat().st_mtime) / 86400
+        if age_days < S.FIRE_DISTRICTS_TTL_DAYS:
+            return gpd.read_file(cache)
+
+    log("downloading NC fire districts (WNC)...")
+    feats, offset = [], 0
+    while True:
+        r = requests.get(S.FIRE_DISTRICTS_URL + "/query", params={
+            "where": "1=1", "outFields": ",".join(_FD_FIELDS),
+            "geometry": ",".join(str(c) for c in S.WNC_BBOX),
+            "geometryType": "esriGeometryEnvelope", "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outSR": 4326, "f": "geojson", "returnGeometry": "true",
+            "resultOffset": offset, "resultRecordCount": 2000,
+        }, timeout=120)
+        r.raise_for_status()
+        page = r.json()
+        if "error" in page:
+            raise RuntimeError(f"fire district query error: {page['error']}")
+        batch = page.get("features") or []
+        feats.extend(batch)
+        more = page.get("exceededTransferLimit") or \
+            (page.get("properties") or {}).get("exceededTransferLimit")
+        if not batch or not more:
+            break
+        offset += len(batch)
+    gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
+    gdf = repair_polygons(gdf)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cache.with_suffix(".tmp")
+    tmp.write_text(gdf.to_json(), encoding="utf-8")
+    tmp.replace(cache)
+    log(f"fire districts cached: {len(gdf)} polygons")
+    return gdf
+
+
+def assign_fire_districts(flagged: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Add fdid / fire_department / fd_county / fd_address / district_updated.
+
+    Primary district = the district containing a point guaranteed to be
+    inside the pathway (representative_point). If districts overlap there,
+    the smaller (more specific) one wins. Pathways outside NC get None.
+    Never raises: on any failure the columns are added empty and logged.
+    """
+    cols = ["fdid", "fire_department", "fd_county", "fd_address", "district_updated"]
+    out = flagged.copy()
+    for c in cols:
+        out[c] = None
+    try:
+        fd = load_fire_districts()
+        if fd.empty:
+            return out
+        fd = fd.to_crs(INTERSECTION_CRS)
+        fd["_area"] = fd.geometry.area
+        pts = gpd.GeoDataFrame({"_row": range(len(out))},
+                               geometry=out.to_crs(INTERSECTION_CRS).geometry.representative_point().values,
+                               crs=INTERSECTION_CRS)
+        j = gpd.sjoin(pts, fd, how="inner", predicate="within")
+        j = j.sort_values("_area").drop_duplicates("_row", keep="first").set_index("_row")
+
+        def clean(v):
+            if v is None or (isinstance(v, float) and v != v):
+                return None
+            v = " ".join(str(v).split())     # also collapses double spaces
+            return v or None
+
+        for row, rec in j.iterrows():
+            i = out.index[row]
+            out.at[i, "fdid"] = clean(rec.get("FDID"))
+            out.at[i, "fire_department"] = clean(rec.get("firedepartment"))
+            out.at[i, "fd_county"] = clean(rec.get("fdcounty"))
+            out.at[i, "fd_address"] = clean(rec.get("fdaddress"))
+            d = rec.get("dateupdated")
+            if d is not None and d == d:
+                try:
+                    ts = d if hasattr(d, "strftime") else \
+                        datetime.fromtimestamp(float(d) / 1000, tz=timezone.utc)
+                    out.at[i, "district_updated"] = ts.strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+        log(f"fire districts: {len(j)} of {len(out)} flagged pathways in an NC district")
+    except Exception as e:
+        log(f"WARNING: fire district tagging skipped ({type(e).__name__}: {e})")
+    return out
+
+
 def round_coords(geom_json: dict, nd: int) -> None:
     def rnd(c):
         if c and isinstance(c[0], (int, float)):
@@ -175,6 +272,7 @@ def build(out: Path) -> int:
     features = []
     if flagged is not None and not flagged.empty:
         flagged = flagged.rename(columns={"category": "max_category"})
+        flagged = assign_fire_districts(flagged)
         proj = flagged.to_crs(INTERSECTION_CRS)
         proj["geometry"] = proj.geometry.simplify(S.SIMPLIFY_METERS, preserve_topology=True)
         flagged = proj.to_crs(DISPLAY_CRS)

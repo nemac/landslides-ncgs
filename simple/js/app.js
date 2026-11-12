@@ -40,6 +40,9 @@
     layerAlerts: $('layer-alerts'),
     layerReference: $('layer-reference'),
     layerParcels: $('layer-parcels'),
+    layerFire: $('layer-fire'),
+    toggleTable: $('toggle-table'),
+    tableWrapper: $('table-wrapper'),
     layerBuildings: $('layer-buildings'),
   };
 
@@ -241,12 +244,47 @@
         if (on) _setLoading(false);
       });
     });
+    els.layerFire.addEventListener('change', function () {
+      MAP.setFireDistrictsVisible(this.checked);
+    });
+    els.toggleTable.addEventListener('click', function () {
+      _setTableOpen(els.toggleTable.getAttribute('aria-expanded') !== 'true');
+    });
+    let tableOpen = true;
+    try {
+      tableOpen = localStorage.getItem('siren.tableOpen') !== '0';
+    } catch (e) {
+      /* ignore */
+    }
+    _setTableOpen(tableOpen);
     els.layerParcels.addEventListener('change', function () {
       MAP.setParcelsVisible(this.checked);
     });
     els.layerBuildings.addEventListener('change', function () {
       MAP.setBuildingsVisible(this.checked);
     });
+  }
+
+  // Hide/show the attribute table; the map takes the freed space.
+  function _setTableOpen(open) {
+    els.toggleTable.setAttribute('aria-expanded', String(open));
+    const label = open ? 'Hide table' : 'Show table';
+    els.toggleTable.setAttribute('aria-label', label);
+    els.toggleTable.title = label;
+    els.tableWrapper.hidden = !open;
+    document
+      .querySelector('.table-section')
+      .classList.toggle('is-collapsed', !open);
+    try {
+      localStorage.setItem('siren.tableOpen', open ? '1' : '0');
+    } catch (e) {
+      /* ignore */
+    }
+    const m = MAP._internalMap && MAP._internalMap();
+    if (m)
+      setTimeout(function () {
+        m.invalidateSize();
+      }, 50);
   }
 
   // ---- Data ----------------------------------------------------------------
@@ -284,7 +322,8 @@
       if (seq !== _loadSeq) return; // superseded by a newer load
       // Map layer: full NDFD coverage straight from the service, for the
       // same 24-h period as the flagged pathways.
-      MAP.setForecastPeriod(fc && fc.meta);
+      if (fc && fc.meta && fc.meta.simulated) MAP.setForecastLocal(forecast);
+      else MAP.setForecastPeriod(fc && fc.meta);
       MAP.refreshObserved();
       if (!fc || fc.type !== 'FeatureCollection')
         throw new Error('flagged file is not GeoJSON');
@@ -310,7 +349,7 @@
     const m = state.meta;
     const n = state.features.length;
 
-    els.statusCount.textContent = String(n);
+    els.statusCount.textContent = n.toLocaleString('en-US');
     els.statusCard.classList.toggle('has-alerts', n > 0);
     els.statusCard.classList.toggle('is-zero', n === 0);
 
@@ -321,7 +360,10 @@
     MAP.setAlerts({ type: 'FeatureCollection', features: state.features });
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    TABLE.render(state.features, els.tbody, els.tableSummary, MAP.zoomToAlert);
+    TABLE.render(state.features, els.tbody, els.tableSummary, {
+      onSelect: MAP.zoomToAlert,
+      onZoomGroup: MAP.zoomToAlerts,
+    });
     els.exportBtn.disabled = n === 0;
   }
 
@@ -396,6 +438,14 @@
 
   function _renderStale(m, status) {
     const now = new Date();
+    els.staleBanner.classList.toggle('is-simulated', !!m.simulated);
+    if (m.simulated) {
+      els.staleBanner.hidden = false;
+      els.staleBanner.textContent =
+        'SIMULATED STORM: sample data for testing only. ' +
+        'This is not a real National Weather Service forecast.';
+      return;
+    }
     const msgs = [];
     const checked = (status && status.checked_at) || m.generated_at;
     if (checked) {
@@ -433,7 +483,7 @@
     els.staleBanner.textContent =
       'Forecast data could not be loaded. Try again in a few minutes, and ' +
       'check current NWS forecasts at weather.gov.';
-    els.tableSummary.textContent = 'Data unavailable.';
+    els.tableSummary.textContent = 'Data unavailable';
     els.tableSummary.classList.remove('is-none');
     els.statusCard.classList.remove('is-zero');
     els.tbody.innerHTML =
@@ -449,6 +499,7 @@
       windowStart: m.window_start,
       windowEnd: m.window_end,
       issued: m.issued,
+      simulated: !!m.simulated,
     });
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const url = URL.createObjectURL(
@@ -456,7 +507,11 @@
     );
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'dfens-flagged-24h-5in-' + ts + 'Z.csv';
+    a.download =
+      (m.simulated ? 'SIMULATED-' : '') +
+      'dfens-flagged-24h-5in-' +
+      ts +
+      'Z.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
