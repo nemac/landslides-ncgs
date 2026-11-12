@@ -3,9 +3,10 @@ name: Refresh DFENS Simple data (every 10 min)
 # Data pipeline for the DFENS Simple dashboard at /simple/ (simple/pipeline/).
 # Nothing is committed to git; outputs go straight to
 # s3://landslidesncgs-data/simple/data/. The debris-flow GeoPackage it
-# intersects against is kept current in the same bucket under cache/ by
-# refresh-reference.yml, so a heavy-rain build downloads it instead of
-# re-fetching 225k polygons.
+# intersects against, and the WNC fire district file it tags flagged
+# pathways with, are kept current in the same bucket under cache/ by
+# refresh-reference.yml, so a heavy-rain build downloads them instead of
+# re-fetching 225k polygons and the districts.
 #
 # Each run:
 #   1. ndfd_check.py (stdlib, ~5 s): has NDFD changed since the last
@@ -89,6 +90,16 @@ jobs:
           mkdir -p cache
           aws s3 cp "s3://landslidesncgs-data/cache/debris_flows.gpkg" cache/debris_flows.gpkg \
             || echo "No GeoPackage in the bucket yet; the build will fetch the layer itself."
+
+      # The fire district file (~50 MB) tags each flagged pathway with its
+      # fire district, so it is needed in the same case. If the bucket has
+      # none yet, refresh_simple.py downloads the districts itself.
+      - name: Fetch the fire district file
+        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
+        run: |
+          mkdir -p cache
+          aws s3 cp "s3://landslidesncgs-data/cache/fire_districts_wnc.geojson" cache/fire_districts_wnc.geojson \
+            || echo "No fire district file in the bucket yet; the build will fetch the districts itself."
 
       # The same pinned environment as the alerts pipeline, so the shared
       # modules (scripts/data.py, scripts/analysis.py) run on the same

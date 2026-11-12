@@ -21,18 +21,18 @@ FORECAST_FILENAME = "forecast_24h.geojson"  # all categories, for the map layer
 # Bump when the set or format of output files changes. A published
 # status.json with a different version forces a rebuild even if NDFD
 # itself hasn't changed (v2 added forecast_24h.geojson).
-PIPELINE_VERSION = 3  # v3: flagged pathways carry their primary fire district
+PIPELINE_VERSION = 3  # v3: fire district fields and the meta.fire_districts marker
 
-# NC Office of State Fire Marshal fire district boundaries (NC only).
-# Each flagged pathway is tagged with its primary district: the district
-# containing a point inside the pathway. Boundaries change every 3-5 years,
-# so the WNC subset is cached locally and refreshed monthly.
+# NC Office of State Fire Marshal fire district boundaries. The layer
+# covers all of NC; land with no fire district is marked "No District".
+# Each flagged pathway is tagged with its primary district. The WNC copy
+# is read from cache/: in production a copy kept in the data bucket, and
+# fetched straight from the service when the file is missing.
 FIRE_DISTRICTS_URL = (
     "https://services5.arcgis.com/yCv672AxcRF0kngG/arcgis/rest/services/"
     "NC_Fire_Districts/FeatureServer/0"
 )
 FIRE_DISTRICTS_CACHE = "cache/fire_districts_wnc.geojson"  # relative to repo root
-FIRE_DISTRICTS_TTL_DAYS = 30
 
 # Where the page (and the change check) read the last published status.
 PUBLIC_STATUS_URL = "https://landslidesncgs.org/simple/data/status.json"

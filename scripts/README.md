@@ -3,10 +3,11 @@
 Python that produces the data files under `alerts/data/`. It was written
 for the SIREN alerts dashboard, which has been offline since 2026-10-22.
 Since 2026-10-27 it no longer runs on a schedule; what still runs daily is
-the reference-data check, which rebuilds the two datasets DFENS Simple
-depends on (building footprints and the debris-flow GeoPackage) only when
-their upstreams change. DFENS Simple also imports this folder's modules for
-the debris-flow intersection. Current as of 2026-10-27.
+the reference-data check, which rebuilds the three datasets DFENS Simple
+depends on (building footprints, the debris-flow GeoPackage and the WNC
+fire districts) only when their upstreams change. DFENS Simple also imports
+this folder's modules for the debris-flow intersection. Current as of
+2026-10-27.
 
 ## Files
 
@@ -17,8 +18,9 @@ scripts/
                   historical event files; --buildings and --debris-cache
                   rebuild one reference dataset each.
   reference_check.py  Daily decision (stdlib): compares Overture's latest
-                  release and the NCGS layer's edit date with what was last
-                  built, applies the 90-day floor and FORCE, logs both.
+                  release and the edit dates of the NCGS debris-flow layer
+                  and the NC fire district layer with what was last built,
+                  applies the 90-day floor and FORCE, logs all three.
   data.py         Fetchers: NDFD forecast, MRMS observed, Stage IV hindcast,
                   NCGS debris-flow pathways (cached in cache/debris_flows.gpkg),
                   county and watershed tagging, Overture building footprints.
@@ -50,13 +52,17 @@ Every GeoJSON carries a top-level `meta` object with timestamps and source.
 **Daily: `.github/workflows/refresh-reference.yml`**, dispatched at 05:00
 UTC by the EventBridge schedule in `infra/cdk/lib/trigger-stack.ts`.
 `reference_check.py` runs first on plain Python and decides, per dataset,
-whether to rebuild: Overture published a new release, or the NCGS layer's
-data-last-edit date moved, or the last build is 90 days old, or `force` was
-set. Only then does the job assume the OIDC role, create the pinned
-environment, run `refresh.py --debris-cache` and/or `--buildings`, upload
-the GeoPackage to `s3://landslidesncgs-data/cache/` and the footprints to
-`alerts/data/buildings/` (mirrored with `--delete`), and record the new
-markers in `alerts/data/reference_state.json`. A failed rebuild is retried
+whether to rebuild: Overture published a new release, or the data-last-edit
+date of the NCGS debris-flow layer or the State Fire Marshal fire district
+layer moved, or the last build is 90 days old, or `force` was set. Only
+then does the job assume the OIDC role, create the pinned environment, run
+`refresh.py --debris-cache` and/or `--buildings` and/or
+`simple/pipeline/fire_districts.py`, upload the GeoPackage and
+`fire_districts_wnc.geojson` to `s3://landslidesncgs-data/cache/` and the
+footprints to `alerts/data/buildings/` (mirrored with `--delete`), and
+record the new markers in `alerts/data/reference_state.json`. A state file
+written before the fire districts were tracked has no entry for them, so
+the first run after that change builds them. A failed rebuild is retried
 the next day because the state is written only after success. The buildings
 rebuild fails rather than writes a partial set when one state's counties
 cannot be fetched, since the mirror would otherwise delete that state's

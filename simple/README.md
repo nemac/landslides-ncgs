@@ -51,6 +51,8 @@ Nothing under `simple/data/` is committed to git.
       any >= 5" polygons? download cache/debris_flows.gpkg from the data
       bucket (kept current by refresh-reference.yml), bbox prefilter,
       find_alerts() on candidates
+      any flagged pathways? tag each with its fire district from
+      cache/fire_districts_wnc.geojson (also from the data bucket)
   -> s3://landslidesncgs-data/simple/data/
         forecast_24h.geojson             (map layer, Cache-Control max-age=60)
         flagged_ndfd_24h_min11.geojson   (max-age=60)
@@ -63,6 +65,32 @@ watershed tagging, and the intersection), so results match the full
 dashboard. The debris-flow GeoPackage (`cache/debris_flows.gpkg`) is
 rebuilt by `refresh-reference.yml` when the NCGS layer changes and shared
 through the data bucket.
+
+### Fire districts
+
+Each flagged pathway is tagged with its NC fire district from the NC
+Office of State Fire Marshal layer. The WNC districts are kept in
+`cache/fire_districts_wnc.geojson`, which `refresh-reference.yml` rebuilds
+and shares through the data bucket when the layer's data-last-edit date
+changes (or after 90 days, or when forced). If the file is missing, the
+pipeline downloads the districts from the service itself
+(`simple/pipeline/fire_districts.py`). The match is done in
+`simple/pipeline/fire_district_join.py`.
+
+Each pathway in the flagged file carries six fields:
+
+| Field | Meaning |
+|-------|---------|
+| `fdid` | The fire department's id |
+| `fire_department` | The fire department's name |
+| `fd_county` | The district's county |
+| `fd_address` | The fire department's address |
+| `district_updated` | When the state last updated the district (YYYY-MM-DD) |
+| `fire_district_status` | `district`; `no_district` for land the state marks "No District"; `outside_nc` when no district polygon matches |
+
+The flagged file's `meta.fire_districts` says how the lookup went for the
+whole file: `ok`; `unavailable` when the lookup failed, in which case the
+six fields are empty; or `not_run` when nothing was flagged.
 
 ### Expected freshness
 
@@ -124,7 +152,7 @@ from the repo root with `npm ci` done once.
 |---------|----------------|
 | `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table and CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
 | `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Needs `npx playwright install chromium` once |
-| `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py` |
+| `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script, the fire district fields and download, the fire district join, and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py`. The join tests need geopandas and are skipped without it; run them in the `defns-refresh` environment |
 
 The fixtures in `simple/test/fixtures/` are three data folders (`live`,
 `stale`, `empty`) whose timestamps sit around 2026-10-27T18:40Z, the

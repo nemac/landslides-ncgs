@@ -49,12 +49,48 @@ class DecideTest(unittest.TestCase):
 
 class NextStateTest(unittest.TestCase):
     def test_rebuilt_takes_new_marker_and_others_carry_over(self):
-        previous = {"buildings": recorded("2026-09-23.1", 40), "debris": recorded("2026-03-03", 40)}
-        upstream = {"buildings": "2026-10-21.0", "debris": "2026-03-03"}
-        state = rc.next_state(previous, upstream, {"buildings": True, "debris": False}, NOW)
+        previous = {
+            "buildings": recorded("2026-09-23.1", 40),
+            "debris": recorded("2026-03-03", 40),
+            "fire_districts": recorded("2025-07-25", 40),
+        }
+        upstream = {
+            "buildings": "2026-10-21.0",
+            "debris": "2026-03-03",
+            "fire_districts": "2025-07-25",
+        }
+        rebuild = {"buildings": True, "debris": False, "fire_districts": False}
+        state = rc.next_state(previous, upstream, rebuild, NOW)
         self.assertEqual(state["buildings"], {"value": "2026-10-21.0", "built_at": NOW.isoformat()})
         self.assertEqual(state["debris"], previous["debris"])
+        self.assertEqual(state["fire_districts"], previous["fire_districts"])
         self.assertEqual(state["checked_at"], NOW.isoformat())
+
+    def test_rebuilt_fire_districts_take_new_marker(self):
+        previous = {"fire_districts": recorded("2025-07-25", 40)}
+        upstream = {"buildings": "b", "debris": "d", "fire_districts": "2026-11-01"}
+        rebuild = {"buildings": False, "debris": False, "fire_districts": True}
+        state = rc.next_state(previous, upstream, rebuild, NOW)
+        expected = {"value": "2026-11-01", "built_at": NOW.isoformat()}
+        self.assertEqual(state["fire_districts"], expected)
+
+
+class OlderStateTest(unittest.TestCase):
+    """A state file written before fire districts were tracked has no
+    fire_districts entry. The first run after the change must rebuild it."""
+
+    def test_state_without_fire_districts_rebuilds_them(self):
+        previous = {"buildings": recorded("2026-10-21.0", 1), "debris": recorded("2026-03-03", 1)}
+        rebuild, reason = rc.decide("2025-07-25", previous.get("fire_districts"), NOW)
+        self.assertEqual((rebuild, reason), (True, "no previous build recorded"))
+
+    def test_new_state_records_fire_districts_after_rebuild(self):
+        previous = {"buildings": recorded("2026-10-21.0", 1), "debris": recorded("2026-03-03", 1)}
+        upstream = {"buildings": "2026-10-21.0", "debris": "2026-03-03", "fire_districts": "f"}
+        rebuild = {"buildings": False, "debris": False, "fire_districts": True}
+        state = rc.next_state(previous, upstream, rebuild, NOW)
+        self.assertEqual(state["fire_districts"]["value"], "f")
+        self.assertEqual(state["debris"], previous["debris"])
 
 
 class UpstreamParsingTest(unittest.TestCase):
@@ -70,6 +106,32 @@ class UpstreamParsingTest(unittest.TestCase):
         self.assertEqual(rc.debris_last_edit(fetch), "2026-03-03T17:13:07+00:00")
         with self.assertRaises(RuntimeError):
             rc.debris_last_edit(lambda url: {"editingInfo": {}})
+
+    def test_fire_districts_edit_date_from_editing_info(self):
+        ms = int(datetime(2025, 7, 25, 14, 30, tzinfo=UTC).timestamp() * 1000)
+        urls = []
+
+        def fetch(url):
+            urls.append(url)
+            return {"editingInfo": {"dataLastEditDate": ms}}
+
+        self.assertEqual(rc.fire_districts_last_edit(fetch), "2025-07-25T14:30:00+00:00")
+        self.assertEqual(urls, [rc.FIRE_DISTRICTS_SERVICE_URL + "?f=json"])
+
+    def test_fire_districts_edit_date_falls_back_to_last_edit_date(self):
+        ms = int(datetime(2025, 7, 25, tzinfo=UTC).timestamp() * 1000)
+        fetch = lambda url: {"editingInfo": {"lastEditDate": ms}}  # noqa: E731
+        self.assertEqual(rc.fire_districts_last_edit(fetch), "2025-07-25T00:00:00+00:00")
+
+    def test_fire_districts_without_edit_date_fail(self):
+        with self.assertRaisesRegex(RuntimeError, "NC fire district layer reports no edit date"):
+            rc.fire_districts_last_edit(lambda url: {"editingInfo": {}})
+        with self.assertRaisesRegex(RuntimeError, "NC fire district layer reports no edit date"):
+            rc.fire_districts_last_edit(lambda url: {})
+
+    def test_debris_error_wording_is_kept(self):
+        with self.assertRaisesRegex(RuntimeError, "NCGS debris-flow layer reports no edit date"):
+            rc.debris_last_edit(lambda url: {})
 
 
 def _raising(exc: Exception):

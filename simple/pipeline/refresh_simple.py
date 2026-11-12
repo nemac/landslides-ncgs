@@ -33,10 +33,12 @@ REPO = HERE.parent.parent  # .../landslides-ncgs
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "scripts"))  # shared main-pipeline modules
 
+import fire_districts  # noqa: E402
 import geopandas as gpd  # noqa: E402
 import ndfd_check  # noqa: E402
 import requests  # noqa: E402
 import settings as S  # noqa: E402
+from fire_district_join import assign_fire_districts, empty_fire_columns  # noqa: E402
 from shapely.geometry import box  # noqa: E402
 from shapely.ops import unary_union  # noqa: E402
 
@@ -94,13 +96,14 @@ def _polygonal(geom):
 
 
 def repair_polygons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """NDFD contour polygons are occasionally self-intersecting, which makes
-    GEOS overlay operations (clip, intersection) throw a TopologyException
-    ("side location conflict"). Repair invalid ones with make_valid and drop
-    anything that isn't polygonal afterwards."""
+    """Service polygons (NDFD contours, fire districts) are occasionally
+    self-intersecting, which makes GEOS overlay operations (clip,
+    intersection) throw a TopologyException ("side location conflict").
+    Repair invalid ones with make_valid and drop anything that isn't
+    polygonal afterwards."""
     bad = ~gdf.geometry.is_valid
     if bad.any():
-        log(f"repairing {int(bad.sum())} invalid NDFD polygon(s)")
+        log(f"repairing {int(bad.sum())} invalid polygon(s)")
         fixed = gdf.geometry.make_valid().apply(_polygonal)
         gdf = gdf.set_geometry(fixed)
         gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
@@ -110,113 +113,33 @@ def repair_polygons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 # ---------------------------------------------------------------------------
 # Fire districts (NC OSFM) - primary district per flagged pathway
 # ---------------------------------------------------------------------------
-_FD_FIELDS = ["FDID", "firedepartment", "fdcounty", "fdaddress", "dateupdated"]
-
-
 def load_fire_districts() -> gpd.GeoDataFrame:
-    """WNC fire districts, from a local cache refreshed every
-    FIRE_DISTRICTS_TTL_DAYS. ~355 polygons, one request."""
-    cache = Path(S.FIRE_DISTRICTS_CACHE)
-    if cache.exists():
-        age_days = (time.time() - cache.stat().st_mtime) / 86400
-        if age_days < S.FIRE_DISTRICTS_TTL_DAYS:
-            return gpd.read_file(cache)
-
-    log("downloading NC fire districts (WNC)...")
-    feats, offset = [], 0
-    while True:
-        r = requests.get(
-            S.FIRE_DISTRICTS_URL + "/query",
-            params={
-                "where": "1=1",
-                "outFields": ",".join(_FD_FIELDS),
-                "geometry": ",".join(str(c) for c in S.WNC_BBOX),
-                "geometryType": "esriGeometryEnvelope",
-                "inSR": "4326",
-                "spatialRel": "esriSpatialRelIntersects",
-                "outSR": 4326,
-                "f": "geojson",
-                "returnGeometry": "true",
-                "resultOffset": offset,
-                "resultRecordCount": 2000,
-            },
-            timeout=120,
-        )
-        r.raise_for_status()
-        page = r.json()
-        if "error" in page:
-            raise RuntimeError(f"fire district query error: {page['error']}")
-        batch = page.get("features") or []
-        feats.extend(batch)
-        more = page.get("exceededTransferLimit") or (page.get("properties") or {}).get(
-            "exceededTransferLimit"
-        )
-        if not batch or not more:
-            break
-        offset += len(batch)
-    gdf = gpd.GeoDataFrame.from_features(feats, crs=DISPLAY_CRS)
-    gdf = repair_polygons(gdf)
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    tmp = cache.with_suffix(".tmp")
-    tmp.write_text(gdf.to_json(), encoding="utf-8")
-    tmp.replace(cache)
-    log(f"fire districts cached: {len(gdf)} polygons")
-    return gdf
+    """The WNC fire districts from cache/. In production a workflow step
+    has already placed the file there; on a developer machine, or before
+    the data bucket has a copy, it is downloaded here first."""
+    path = REPO / S.FIRE_DISTRICTS_CACHE
+    if not path.exists():
+        log("no local fire district file; downloading the WNC districts")
+        collection = fire_districts.fetch_wnc_districts()
+        fire_districts.write_districts(path, collection)
+    districts = gpd.read_file(path)
+    return repair_polygons(districts)
 
 
-def assign_fire_districts(flagged: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Add fdid / fire_department / fd_county / fd_address / district_updated.
-
-    Primary district = the district containing a point guaranteed to be
-    inside the pathway (representative_point). If districts overlap there,
-    the smaller (more specific) one wins. Pathways outside NC get None.
-    Never raises: on any failure the columns are added empty and logged.
-    """
-    cols = ["fdid", "fire_department", "fd_county", "fd_address", "district_updated"]
-    out = flagged.copy()
-    for c in cols:
-        out[c] = None
+def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str]:
+    """Add the fire district columns. Returns the tagged pathways and the
+    lookup result for meta.fire_districts."""
     try:
-        fd = load_fire_districts()
-        if fd.empty:
-            return out
-        fd = fd.to_crs(INTERSECTION_CRS)
-        fd["_area"] = fd.geometry.area
-        pts = gpd.GeoDataFrame(
-            {"_row": range(len(out))},
-            geometry=out.to_crs(INTERSECTION_CRS).geometry.representative_point().values,
-            crs=INTERSECTION_CRS,
-        )
-        j = gpd.sjoin(pts, fd, how="inner", predicate="within")
-        j = j.sort_values("_area").drop_duplicates("_row", keep="first").set_index("_row")
-
-        def clean(v):
-            if v is None or (isinstance(v, float) and v != v):
-                return None
-            v = " ".join(str(v).split())  # also collapses double spaces
-            return v or None
-
-        for row, rec in j.iterrows():
-            i = out.index[row]
-            out.at[i, "fdid"] = clean(rec.get("FDID"))
-            out.at[i, "fire_department"] = clean(rec.get("firedepartment"))
-            out.at[i, "fd_county"] = clean(rec.get("fdcounty"))
-            out.at[i, "fd_address"] = clean(rec.get("fdaddress"))
-            d = rec.get("dateupdated")
-            if d is not None and d == d:
-                try:
-                    ts = (
-                        d
-                        if hasattr(d, "strftime")
-                        else datetime.fromtimestamp(float(d) / 1000, tz=UTC)
-                    )
-                    out.at[i, "district_updated"] = ts.strftime("%Y-%m-%d")
-                except Exception:
-                    pass
-        log(f"fire districts: {len(j)} of {len(out)} flagged pathways in an NC district")
+        districts = load_fire_districts()
+        tagged = assign_fire_districts(flagged, districts, INTERSECTION_CRS)
+    # Deliberately broad: a fire district failure must never stop the
+    # flagged pathways from being published.
     except Exception as e:
-        log(f"WARNING: fire district tagging skipped ({type(e).__name__}: {e})")
-    return out
+        log(f"WARNING: fire district lookup failed ({type(e).__name__}: {e})")
+        return empty_fire_columns(flagged), fire_districts.LOOKUP_UNAVAILABLE
+    in_district = int((tagged["fire_district_status"] == fire_districts.STATUS_DISTRICT).sum())
+    log(f"fire districts: {in_district} of {len(tagged)} flagged pathways in a fire district")
+    return tagged, fire_districts.LOOKUP_OK
 
 
 def round_coords(geom_json: dict, nd: int) -> None:
@@ -285,9 +208,10 @@ def build(out: Path) -> int:
         log(f"flagged: {len(flagged):,} ({time.time() - t0:.0f}s)")
 
     features = []
+    fire_district_lookup = fire_districts.LOOKUP_NOT_RUN
     if flagged is not None and not flagged.empty:
         flagged = flagged.rename(columns={"category": "max_category"})
-        flagged = assign_fire_districts(flagged)
+        flagged, fire_district_lookup = tag_fire_districts(flagged)
         proj = flagged.to_crs(INTERSECTION_CRS)
         proj["geometry"] = proj.geometry.simplify(S.SIMPLIFY_METERS, preserve_topology=True)
         flagged = proj.to_crs(DISPLAY_CRS)
@@ -302,6 +226,7 @@ def build(out: Path) -> int:
 
     now = datetime.now(UTC)
     meta = ndfd_check.build_meta(state, len(features), now)
+    meta["fire_districts"] = fire_district_lookup
     ndfd_check.write_json(
         out / S.FLAGGED_FILENAME, {"type": "FeatureCollection", "features": features, "meta": meta}
     )

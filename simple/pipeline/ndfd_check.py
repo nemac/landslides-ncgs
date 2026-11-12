@@ -113,7 +113,7 @@ def retry(fn: Callable[[], T], *, label: str = "request") -> T:
     raise AssertionError("unreachable")
 
 
-def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
+def get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
     """GET JSON, retrying transient failures up to RETRY_ATTEMPTS times."""
     if params:
         url = url + "?" + urllib.parse.urlencode(params)
@@ -130,12 +130,12 @@ def _from_ms(ms) -> datetime:
 
 def ndfd_state() -> dict:
     """Read cycle start, last data edit, and the >= threshold count."""
-    info = _get_json(S.NDFD_LAYER_URL, {"f": "json"})
+    info = get_json(S.NDFD_LAYER_URL, {"f": "json"})
     edit = info.get("editingInfo") or {}
     last_edit_ms = edit.get("dataLastEditDate") or edit.get("lastEditDate")
     issued = _from_ms(last_edit_ms) if last_edit_ms else None
 
-    first = _get_json(
+    first = get_json(
         S.NDFD_LAYER_URL + "/query",
         {
             "where": "1=1",
@@ -152,7 +152,7 @@ def ndfd_state() -> dict:
     cycle_start = _from_ms(feats[0]["attributes"]["fromdate"])
     window_end = cycle_start + timedelta(hours=S.WINDOW_HOURS)
 
-    count = _get_json(
+    count = get_json(
         S.NDFD_LAYER_URL + "/query",
         {
             "where": S.period_where(cycle_start, S.WINDOW_HOURS, S.THRESHOLD_CATEGORY),
@@ -183,7 +183,7 @@ def previous_status() -> dict | None:
         # status.json is served with max-age=30 and the cache policy ignores
         # query strings, so a copy up to 30 s old is the best available and
         # is fine for a check that runs every 10 minutes.
-        return _get_json(url, timeout=20)
+        return get_json(url, timeout=20)
     except Exception as e:
         print(f"[check] no previous status ({type(e).__name__}: {e})")
         return None
