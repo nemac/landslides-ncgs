@@ -25,9 +25,11 @@ PIPELINE_VERSION = 3  # v3: fire district fields and the meta.fire_districts mar
 
 # NC Office of State Fire Marshal fire district boundaries. The layer
 # covers all of NC; land with no fire district is marked "No District".
-# Each flagged pathway is tagged with its primary district. The WNC copy
-# is read from cache/: in production a copy kept in the data bucket, and
-# fetched straight from the service when the file is missing.
+# The state says each district is updated every 3 to 5 years (the layer's
+# own description, read 2026-11-12). Each flagged pathway is tagged with
+# its primary district. The WNC copy is read from cache/: in production a
+# copy kept in the data bucket, and fetched straight from the service
+# when the file is missing.
 FIRE_DISTRICTS_URL = (
     "https://services5.arcgis.com/yCv672AxcRF0kngG/arcgis/rest/services/"
     "NC_Fire_Districts/FeatureServer/0"
