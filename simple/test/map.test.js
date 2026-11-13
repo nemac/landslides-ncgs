@@ -403,6 +403,24 @@ test('zoomToAlerts fits every listed pathway and closes any open popup', () => {
   });
 });
 
+test('zoomToAlerts leaves each pathway its own bounds', () => {
+  // Growing the first pathway's own bounds to cover the group would make
+  // a later zoom to that one pathway show the whole group instead.
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.zoomToAlerts([205, 301]);
+  const gl = m.created.geoJsonLayers[0];
+  for (const pathway of gl.sub) {
+    assert.equal(
+      pathway.getBounds().grownBy,
+      undefined,
+      'pathway ' + pathway.feature.properties.OBJECTID
+    );
+  }
+  m.MAP.zoomToAlert(301);
+  assert.deepEqual(plain(m.map.fitted).bounds, { of: 301 });
+});
+
 test('zoomToAlerts with one pathway zooms to it and opens its popup', () => {
   const m = mapModule();
   m.MAP.setAlerts(FLAGGED);

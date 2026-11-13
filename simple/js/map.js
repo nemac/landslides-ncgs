@@ -516,14 +516,17 @@ window.DFS_MAP = (function () {
       return;
     }
     const want = new Set(objectids.map(String));
-    let bounds = null;
+    // Start from an empty box and grow it. L.latLngBounds(l.getBounds())
+    // would hand back the pathway's own stored bounds, and growing those
+    // would make a later zoom to that one pathway show the whole group.
+    const bounds = L.latLngBounds();
+    let found = 0;
     layers.alerts.eachLayer(function (l) {
       if (!want.has(String(l.feature.properties.OBJECTID))) return;
-      bounds = bounds
-        ? bounds.extend(l.getBounds())
-        : L.latLngBounds(l.getBounds());
+      bounds.extend(l.getBounds());
+      found += 1;
     });
-    if (!bounds) return;
+    if (found === 0) return;
     if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
     map.closePopup();
     map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });

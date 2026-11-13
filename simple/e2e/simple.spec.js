@@ -188,6 +188,39 @@ test('"Show on map" fits the map to the district pathways', async ({
   await expect(page.locator('.leaflet-popup')).toHaveCount(0);
 });
 
+// The box Leaflet zooms to for each drawn pathway, keyed by pathway ID.
+function pathwayBoxes(page) {
+  return page.evaluate(() => {
+    const boxes = {};
+    window.DFS_MAP._internalMap().eachLayer((layer) => {
+      if (!layer.feature || !layer.getBounds) return;
+      boxes[layer.feature.properties.OBJECTID] = layer
+        .getBounds()
+        .toBBoxString();
+    });
+    return boxes;
+  });
+}
+
+test('"Show on map" leaves each pathway its own zoom box', async ({ page }) => {
+  // Real Leaflet hands out a pathway's stored box itself, not a copy. If
+  // the district zoom grew that box, selecting the pathway afterwards
+  // would show the whole district. The unit tests use a stand-in for
+  // Leaflet, so this is checked here against the real library.
+  await openLive(page);
+  const before = await pathwayBoxes(page);
+  expect(Object.keys(before).sort()).toEqual(['102', '205', '301']);
+  expect(before['205']).not.toBe(before['301']);
+
+  const zoomBefore = await mapZoom(page);
+  await page
+    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
+    .click();
+  await expect.poll(() => mapZoom(page)).toBeGreaterThan(zoomBefore);
+
+  expect(await pathwayBoxes(page)).toEqual(before);
+});
+
 test('selecting a row zooms the map to that pathway and opens its popup', async ({
   page,
 }) => {
