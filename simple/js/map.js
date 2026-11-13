@@ -437,16 +437,28 @@ window.DFS_MAP = (function () {
             _escape(p.watershed || '--') +
             '</dd>' +
             '<dt>Fire district</dt><dd>' +
-            _escape(
-              p.fire_department
-                ? p.fire_department + (p.fdid ? ' (FDID ' + p.fdid + ')' : '')
-                : 'Outside NC fire districts'
-            ) +
+            _escape(_fireDistrictText(p)) +
             '</dd>' +
             '</dl></div>'
         );
       },
     }).addTo(map);
+  }
+
+  // The popup only repeats what the pipeline wrote for this pathway. With
+  // no status (an older file, or a failed lookup) it says so plainly.
+  function _fireDistrictText(p) {
+    if (p.fire_district_status === 'district') {
+      const name = p.fire_department || 'Unnamed fire district';
+      return p.fdid ? name + ' (FDID ' + p.fdid + ')' : name;
+    }
+    if (p.fire_district_status === 'no_district') {
+      return 'No District (state fire district data)';
+    }
+    if (p.fire_district_status === 'outside_nc') {
+      return 'Outside North Carolina';
+    }
+    return 'Not available';
   }
 
   function zoomToAlert(objectid) {
@@ -1151,6 +1163,7 @@ window.DFS_MAP = (function () {
       parseOwnerName: _parseOwnerName,
       buildParcelPopup: _buildParcelPopup,
       escape: _escape,
+      fireDistrictText: _fireDistrictText,
     },
   };
 })();

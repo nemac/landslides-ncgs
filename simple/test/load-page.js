@@ -92,6 +92,9 @@ function fakeMapModule() {
     fire(event) {
       (handlers[event] || []).forEach((fn) => fn());
     },
+    invalidateSize() {
+      calls.push(['invalidateSize']);
+    },
   };
   const stub = { calls, map, reference: null };
   for (const name of [
@@ -104,6 +107,8 @@ function fakeMapModule() {
     'setAlerts',
     'setAlertsVisible',
     'zoomToAlert',
+    'zoomToAlerts',
+    'setFireDistrictsVisible',
     'setParcelsVisible',
     'setBuildingsVisible',
   ]) {
@@ -144,6 +149,11 @@ function loadPage(options) {
   win.clearTimeout = globalThis.clearTimeout;
   win.setInterval = globalThis.setInterval;
   win.clearInterval = globalThis.clearInterval;
+
+  // Values saved by an earlier visit, such as the table being hidden.
+  for (const [key, value] of Object.entries(opts.storage || {})) {
+    win.localStorage.setItem(key, value);
+  }
 
   win.fetch = fakeFetch(data, fetchCalls);
   const MAP = fakeMapModule();

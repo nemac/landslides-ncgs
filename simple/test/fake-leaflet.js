@@ -96,6 +96,12 @@ function fakeLeaflet(document) {
       fitBounds(bounds, opts) {
         this.fitted = { bounds, opts };
       },
+      closePopup() {
+        this.popupClosed = true;
+      },
+      invalidateSize() {
+        this.resized = (this.resized || 0) + 1;
+      },
       setView(latlng, zoom) {
         this.view = { latlng, zoom };
       },
@@ -170,6 +176,17 @@ function fakeLeaflet(document) {
       });
       created.geoJsonLayers.push(l);
       return l;
+    },
+    // Records each bounds it grows by, so a test can see which pathways
+    // a group zoom covered.
+    latLngBounds(first) {
+      return {
+        extended: [first],
+        extend(more) {
+          this.extended.push(more);
+          return this;
+        },
+      };
     },
     canvas(options) {
       return { canvas: true, options };

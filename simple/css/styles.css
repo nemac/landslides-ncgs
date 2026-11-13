@@ -136,12 +136,12 @@ a:hover {
   display: inline-block;
   font-size: 0.875rem;
   margin-bottom: 0.25rem;
-  color: #529866;
+  color: #6fb282; /* 5.3:1 on the header; the brand green #529866 was 3.8:1 */
   text-decoration: none;
 }
 .parent-link:hover {
   text-decoration: underline;
-  color: #529866;
+  color: #6fb282;
 }
 .app-header h1 {
   font-size: 1.85rem;
@@ -462,8 +462,10 @@ a:hover {
   background: transparent;
   border: 2px solid #ff0909;
 }
+/* White fill: the brown ring is only 2:1 against the dark sidebar, but
+   6.5:1 against white. */
 .key-fire {
-  background: transparent;
+  background: #fff;
   border: 2px solid #a83800;
 }
 .key-buildings {
@@ -640,12 +642,13 @@ a:hover {
   display: flex;
   flex-direction: column;
 }
+/* The top padding leaves room for the hide/show tab above the heading. */
 .table-head {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
   flex-wrap: wrap;
-  padding: 1.5rem 1rem 0.6rem;
+  padding: 2.1rem 1rem 0.6rem;
 }
 .table-head h2 {
   margin: 0;
@@ -679,6 +682,17 @@ a:hover {
   display: none;
 }
 
+/* Shown when the fire districts are not known. table.js adds and removes
+   the <p>; the role="status" region around it always stays. */
+.district-notice {
+  margin: 0 1rem 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
 /* Hide/show tab, hanging from the top edge of the table (kept off the
    map so it never covers the basemap credits). */
 .table-tab {
@@ -687,7 +701,7 @@ a:hover {
   left: 50%;
   transform: translateX(-50%);
   width: 52px;
-  height: 22px;
+  height: 1.75rem;
   padding: 0;
   display: flex;
   align-items: center;
@@ -701,6 +715,12 @@ a:hover {
 }
 .table-tab:hover {
   color: var(--accent-text);
+}
+/* Drawn inside the tab: the map's credits sit just above it and would
+   cover the top of an outline drawn outside. */
+.table-tab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
 }
 .table-tab svg {
   transition: transform 0.15s ease;
@@ -771,7 +791,8 @@ tbody tr:nth-child(even) td {
   font-size: 1.05rem;
 }
 
-/* Fire district group headers (one per department). */
+/* Fire district group headings: one per department, then "No District"
+   and "Outside North Carolina". */
 .group-row th {
   background: var(--surface-2);
   text-align: left;
@@ -791,26 +812,34 @@ tbody tr:nth-child(even) td {
   border: 0;
   cursor: pointer;
   text-align: left;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.15rem 0.6rem;
+  /* Plain text flow, so on narrow screens the arrow stays beside the
+     name and the details wrap under it. */
+  display: block;
   padding: 0.5rem 0.6rem;
   flex: 1 1 auto;
   min-width: 0;
 }
+/* Inside the button, so the table's scroll box never clips it. */
+.group-toggle:focus-visible {
+  outline-offset: -3px;
+}
+/* The arrow is decoration: aria-expanded already tells screen readers
+   the state. The "/ ''" part gives it empty alt text where supported. */
 .group-toggle::before {
   content: '\25BE';
+  content: '\25BE' / '';
   color: var(--accent-text);
   width: 0.8em;
   display: inline-block;
 }
 .group-toggle[aria-expanded='false']::before {
   content: '\25B8';
+  content: '\25B8' / '';
 }
 .group-name {
   font-weight: 700;
   font-size: 1rem;
+  margin-right: 0.6rem;
 }
 .group-meta {
   color: var(--text-muted);
@@ -829,12 +858,15 @@ tbody tr:nth-child(even) td {
   color: var(--accent-text);
   border: 1px solid var(--accent-text);
   border-radius: var(--radius);
-  padding: 0.15rem 0.55rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
 }
+/* An underline, not a tint: a tinted background drops the orange text
+   below 4.5:1. */
 .group-zoom:hover {
-  background: rgba(255, 138, 61, 0.15);
+  text-decoration: underline;
 }
-.group-row.is-outside .group-name {
+.group-row.is-special .group-name {
   font-style: italic;
   font-weight: 600;
 }
@@ -842,13 +874,38 @@ tbody tr:nth-child(even) td {
   padding-left: 1.6rem;
 }
 /* Phones: the table scrolls sideways; keep the district heading and its
-   "Show on map" button pinned to the visible width. */
+   "Show on map" button pinned to the visible width. 100cqi is the width
+   of the table's scroll box. 100vw is the fallback for older browsers,
+   but it counts the page scroll bar, so it can be a little too wide. */
 @media (max-width: 700px) {
+  .table-wrapper {
+    container-type: inline-size;
+  }
   .group-head {
     position: sticky;
     left: 0;
     width: calc(100vw - 2rem);
+    width: 100cqi;
   }
+}
+
+/* Map credits: Leaflet's see-through white sits on the dark map, which
+   left its blue links at 3.2:1. A solid white gives 4.9:1, and the
+   underline sets links apart from the grey text without relying on
+   color. */
+.leaflet-container .leaflet-control-attribution {
+  background: #fff;
+}
+.leaflet-container .leaflet-control-attribution a {
+  text-decoration: underline;
+}
+
+/* Fire district outlines: a thin white halo so the dark brown line still
+   shows on the Dark and Satellite basemaps (about 1.9:1 without it). The
+   whole layer is one SVG in its own pane, so this is one filter, not one
+   per district. */
+.leaflet-fire_districts-pane svg {
+  filter: drop-shadow(0 0 1px #fff);
 }
 
 /* ---------------- Map popups ---------------- */

@@ -233,7 +233,8 @@
 
     <main class="content" id="main-content">
       <section class="map-section" aria-label="Map">
-        <div id="map" role="img"
+        <!-- A region, not an image: Leaflet puts buttons and links inside. -->
+        <div id="map" role="region"
              aria-label="Map of Western North Carolina showing flagged debris flow pathways.
                         The same pathways are listed in the table below."></div>
       </section>
@@ -255,13 +256,16 @@
             Download CSV
           </button>
         </div>
+        <!-- table.js writes the fire district notice in here. The region
+             stays in the page so screen readers announce the text. -->
+        <div id="district-notice" class="district-notice-region" role="status"></div>
         <div class="table-wrapper" id="table-wrapper" tabindex="0" aria-label="Scrollable table of flagged pathways">
           <table id="alerts-table">
+            <!-- table.js rewrites the caption to match how rows are listed. -->
             <caption class="sr-only">
               Debris flow pathways forecast to receive 5 inches or more of
-              rain in 24 hours, grouped by NC fire district, highest rain
-              first. Select a district heading to collapse or expand it, or
-              a row to show that pathway on the map.
+              rain in 24 hours, highest rain first. Select a row to show
+              that pathway on the map.
             </caption>
             <thead>
               <tr>
@@ -272,7 +276,7 @@
                 <th scope="col" class="num">Pathway ID</th>
               </tr>
             </thead>
-            <tbody id="alerts-tbody">
+            <tbody>
               <tr><td colspan="5" class="empty-row">Loading&hellip;</td></tr>
             </tbody>
           </table>

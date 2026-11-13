@@ -30,8 +30,9 @@
     statusChecked: $('status-checked'),
     statusNext: $('status-next'),
     staleBanner: $('stale-banner'),
-    tbody: $('alerts-tbody'),
+    table: $('alerts-table'),
     tableSummary: $('table-summary'),
+    districtNotice: $('district-notice'),
     exportBtn: $('export-csv'),
     sourceLink: $('source-link'),
     layerNdfd: $('layer-ndfd'),
@@ -359,11 +360,19 @@
     MAP.setAlerts({ type: 'FeatureCollection', features: state.features });
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    TABLE.render(state.features, els.tbody, els.tableSummary, {
+    TABLE.render(state.features, m, _tableElements(), {
       onSelect: MAP.zoomToAlert,
       onZoomGroup: MAP.zoomToAlerts,
     });
     els.exportBtn.disabled = n === 0;
+  }
+
+  function _tableElements() {
+    return {
+      table: els.table,
+      summary: els.tableSummary,
+      notice: els.districtNotice,
+    };
   }
 
   function _renderWindow(m) {
@@ -477,20 +486,14 @@
     els.tableSummary.textContent = 'Data unavailable';
     els.tableSummary.classList.remove('is-none');
     els.statusCard.classList.remove('is-zero');
-    els.tbody.innerHTML =
-      '<tr><td colspan="5" class="empty-row">Forecast data could not be loaded.</td></tr>';
+    TABLE.renderMessage('Forecast data could not be loaded.', _tableElements());
     els.exportBtn.disabled = true;
   }
 
   // ---- CSV -----------------------------------------------------------------
   function _exportCsv() {
     if (!state.features.length) return;
-    const m = state.meta;
-    const csv = TABLE.toCSV(state.features, {
-      windowStart: m.window_start,
-      windowEnd: m.window_end,
-      issued: m.issued,
-    });
+    const csv = TABLE.toCSV(state.features, state.meta);
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const url = URL.createObjectURL(
       new Blob([csv], { type: 'text/csv;charset=utf-8' })

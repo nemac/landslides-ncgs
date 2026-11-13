@@ -92,6 +92,30 @@ The flagged file's `meta.fire_districts` says how the lookup went for the
 whole file: `ok`; `unavailable` when the lookup failed, in which case the
 six fields are empty; or `not_run` when nothing was flagged.
 
+### How the page shows fire districts
+
+The page shows only what the flagged file says and never guesses a
+district. It trusts the districts only when `meta.fire_districts` is `ok`
+and every pathway has one of the three statuses.
+
+- **Districts known:** the table is grouped. Real districts come first
+  (highest forecast rain, then most pathways, then name), then a
+  "No District" group and an "Outside North Carolina" group, each shown
+  only when it has pathways. Each heading can be collapsed, and has a
+  "Show on map" button that fits the map to that group. The summary reads
+  like `12 pathways in 3 fire districts (2 with no district, 1 outside
+  North Carolina)`.
+- **Districts not known** (the lookup failed, or a file from before the
+  fire district fields): the table is a plain list sorted by rain, county
+  and pathway ID, and a notice says that fire district information is
+  unavailable right now.
+
+The pathway popup on the map shows the district, "No District (state fire
+district data)", "Outside North Carolina", or "Not available". The CSV
+puts five fire district columns first and ends with a
+`fire_district_status` column: `district`, `no_district`, `outside_nc`,
+or `unavailable` when the districts are not known.
+
 ### Expected freshness
 
 | Step | Typical time |
@@ -150,14 +174,16 @@ from the repo root with `npm ci` done once.
 
 | Command | What it covers |
 |---------|----------------|
-| `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table and CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
-| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Needs `npx playwright install chromium` once |
+| `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table in both fire district modes, and the CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
+| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Includes an axe scan for WCAG 2.2 A and AA problems in the grouped, plain and empty states. Needs `npx playwright install chromium` once |
 | `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script, the fire district fields and download, the fire district join, and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py`. The join tests need geopandas and are skipped without it; run them in the `defns-refresh` environment |
 
 The fixtures in `simple/test/fixtures/` are three data folders (`live`,
 `stale`, `empty`) whose timestamps sit around 2026-10-27T18:40Z, the
 fixed clock both JavaScript suites use. `live` has four pathways, one of
-them category 10, so the threshold filter has something to drop.
+them category 10, so the threshold filter has something to drop, and
+fire districts for each. `stale` has no fire district fields, like a file
+from the older pipeline, so it shows the plain list and the notice.
 
 In CI these are the "Simple dashboard tests" and "Simple dashboard
 browser test" jobs in `ci.yml`, kept apart so a browser problem never
