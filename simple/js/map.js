@@ -55,8 +55,9 @@ window.DFS_MAP = (function () {
     // predictably above the basemap regardless of add/remove order.
     //
     // Pointer-events: only panes that need click interaction get pointer
-    // events. The `alerts` pane has clickable polygons for flow popups;
-    // the `parcels` pane has clickable parcels for attribute popups.
+    // events. The `alerts` pane has clickable polygons for flow popups,
+    // the `parcels` pane has clickable parcels for attribute popups, and
+    // the `fire_districts` pane has clickable outlines for district popups.
     // All other panes are visual-only and should let clicks through to
     // whichever clickable layer is under the cursor.
     const CLICKABLE_PANES = new Set(['alerts', 'parcels', 'fire_districts']);
@@ -275,26 +276,41 @@ window.DFS_MAP = (function () {
   }
 
   // One on-map notice per layer that failed to load, so a ticked layer
-  // that draws nothing is explained. role="status" has screen readers
-  // announce it.
+  // that draws nothing is explained. The box on the map is for sighted
+  // users. Screen readers hear the same words from the #map-notices
+  // status region (see index.html for why the box itself is not one).
   const _layerNotices = {};
   function _setLayerNotice(layerName, visible, text) {
     if (!map) return;
     const shown = _layerNotices[layerName];
     if (visible && !shown) {
-      const notice = L.control({ position: 'topright' });
-      notice.onAdd = function () {
+      const control = L.control({ position: 'topright' });
+      control.onAdd = function () {
         const div = L.DomUtil.create('div', 'map-notice');
-        div.setAttribute('role', 'status');
         div.textContent = text;
         return div;
       };
-      notice.addTo(map);
-      _layerNotices[layerName] = notice;
+      control.addTo(map);
+      _layerNotices[layerName] = { control: control, text: text };
     } else if (!visible && shown) {
-      shown.remove();
+      shown.control.remove();
       delete _layerNotices[layerName];
     }
+    _announceLayerNotices();
+  }
+
+  // Writes every notice now on the map into the status region. Writing
+  // the same words again would repeat the announcement, so only a change
+  // touches it.
+  function _announceLayerNotices() {
+    const region = document.getElementById('map-notices');
+    if (!region) return;
+    const words = Object.keys(_layerNotices)
+      .map(function (layerName) {
+        return _layerNotices[layerName].text;
+      })
+      .join(' ');
+    if (region.textContent !== words) region.textContent = words;
   }
 
   function _fmtTs(d) {
@@ -645,7 +661,9 @@ window.DFS_MAP = (function () {
   }
 
   // ---- NC fire districts (reference outlines, no fill) ---------------------
-  // Service default symbology: 1 px #A83800 outline, transparent fill.
+  // The service's own colour (#A83800) with no fill. The line is drawn at
+  // 1.3 px, a little heavier than the service's 1 px, so it stays visible
+  // over the basemap.
   // Click an outline for the department name and FDID.
   function setFireDistrictsVisible(visible) {
     if (!visible) {

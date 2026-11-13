@@ -237,6 +237,11 @@
         <div id="map" role="region"
              aria-label="Map of Western North Carolina showing flagged debris flow pathways.
                         The same pathways are listed in the table below."></div>
+        <!-- map.js writes a message here when a map layer fails to load.
+             It is on the page from the start, and only its text changes,
+             because screen readers announce a status region that way but
+             often skip one that is added with its text already in it. -->
+        <div id="map-notices" class="sr-only" role="status"></div>
       </section>
 
       <section class="table-section" aria-labelledby="table-heading">

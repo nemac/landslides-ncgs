@@ -42,6 +42,7 @@ git apply --3way simple/pipeline/simulated-storm/frontend.patch
 ```
 
 The patch was made against the commit that added this folder. The four
-files it touches will change over time, so expect to fix conflicts by
-hand. The original code is also in the `dfens-simple` repo at commit
+files it touches have changed since: on 2026-11-13 it no longer applied
+cleanly to `simple/js/app.js` or `simple/js/table.js`, so expect to fix
+conflicts by hand. The original code is also in the `dfens-simple` repo at commit
 `2f10f05`.

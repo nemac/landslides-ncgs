@@ -7,8 +7,10 @@ Run from the repo root:
 
 import io
 import json
+import tempfile
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest import mock
 
 import fire_districts
@@ -162,6 +164,48 @@ class IsUpToDateTest(unittest.TestCase):
 
     def test_unavailable_matches_the_fire_district_module(self):
         self.assertEqual(ndfd_check.FIRE_DISTRICTS_UNAVAILABLE, fire_districts.LOOKUP_UNAVAILABLE)
+
+
+class IsFireDistrictRetryTest(unittest.TestCase):
+    def test_same_update_with_a_failed_lookup_is_a_retry(self):
+        previous = published(fire_districts=fire_districts.LOOKUP_UNAVAILABLE)
+        self.assertTrue(ndfd_check.is_fire_district_retry(previous, STATE))
+
+    def test_a_good_lookup_is_not_a_retry(self):
+        self.assertFalse(ndfd_check.is_fire_district_retry(published(), STATE))
+
+    def test_a_new_ndfd_update_is_not_a_retry(self):
+        # A new forecast is a new run, whatever the last lookup did.
+        previous = published(ndfd_key="older", fire_districts=fire_districts.LOOKUP_UNAVAILABLE)
+        self.assertFalse(ndfd_check.is_fire_district_retry(previous, STATE))
+
+    def test_no_previous_status_is_not_a_retry(self):
+        self.assertFalse(ndfd_check.is_fire_district_retry(None, STATE))
+
+
+class RunWritesTheRetryFlagTest(unittest.TestCase):
+    """check.json tells the workflow whether this build is a retry."""
+
+    def check_json(self, previous) -> dict:
+        ndfd_state = dict(STATE, n_precip_polygons=1, issued=None, window_start=None)
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch.object(ndfd_check, "ndfd_state", return_value=ndfd_state):
+                with mock.patch.object(ndfd_check, "_iso", return_value="x"):
+                    with mock.patch("builtins.print"):
+                        result = ndfd_check.run(Path(folder), prev=previous)
+            check = json.loads((Path(folder) / "check.json").read_text())
+        return {"action": result["action"], "retry": check["fire_district_retry"]}
+
+    def test_failed_lookup_builds_again_and_is_marked_a_retry(self):
+        previous = published(fire_districts=fire_districts.LOOKUP_UNAVAILABLE)
+        self.assertEqual(self.check_json(previous), {"action": "build", "retry": True})
+
+    def test_new_update_builds_and_is_not_a_retry(self):
+        previous = published(ndfd_key="older")
+        self.assertEqual(self.check_json(previous), {"action": "build", "retry": False})
+
+    def test_unchanged_update_skips(self):
+        self.assertEqual(self.check_json(published()), {"action": "skip", "retry": False})
 
 
 class BuildStatusTest(unittest.TestCase):

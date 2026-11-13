@@ -128,6 +128,25 @@ def load_fire_districts() -> gpd.GeoDataFrame:
     return districts
 
 
+def warn_about_unmatched_pathways(tagged: gpd.GeoDataFrame) -> None:
+    """Flag a run where a pathway matched no district polygon. The state
+    layer covers all of NC, so "Outside North Carolina" should be rare.
+    It is also what a district file with polygons missing would produce,
+    and the count checks cannot catch every such file."""
+    statuses = tagged["fire_district_status"]
+    unmatched = int((statuses == fire_districts.STATUS_OUTSIDE_NC).sum())
+    if unmatched == 0:
+        return
+    # A line that starts with ::warning:: shows as a warning on the
+    # GitHub Actions run page, so it is printed without the log prefix.
+    print(
+        f"::warning::{unmatched} flagged pathway(s) matched no fire district polygon "
+        "and are marked Outside North Carolina. Check that the pathways really are "
+        "outside the state and that cache/fire_districts_wnc.geojson is complete.",
+        flush=True,
+    )
+
+
 def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str]:
     """Add the fire district columns. Returns the tagged pathways and the
     lookup result for meta.fire_districts."""
@@ -139,6 +158,7 @@ def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str
     except Exception as e:
         log(f"WARNING: fire district lookup failed ({type(e).__name__}: {e})")
         return empty_fire_columns(flagged), fire_districts.LOOKUP_UNAVAILABLE
+    warn_about_unmatched_pathways(tagged)
     in_district = int((tagged["fire_district_status"] == fire_districts.STATUS_DISTRICT).sum())
     log(f"fire districts: {in_district} of {len(tagged)} flagged pathways in a fire district")
     return tagged, fire_districts.LOOKUP_OK

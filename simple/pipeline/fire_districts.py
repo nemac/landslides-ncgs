@@ -166,14 +166,21 @@ def require_enough_districts(count: int) -> None:
         )
 
 
-def _query_params(offset: int) -> dict:
+def _wnc_filter_params() -> dict:
+    """The part of a query that picks the districts touching WNC."""
     return {
         "where": "1=1",
-        "outFields": ",".join(SERVICE_FIELDS),
         "geometry": ",".join(str(c) for c in S.WNC_BBOX),
         "geometryType": "esriGeometryEnvelope",
         "inSR": "4326",
         "spatialRel": "esriSpatialRelIntersects",
+    }
+
+
+def _query_params(offset: int) -> dict:
+    return {
+        **_wnc_filter_params(),
+        "outFields": ",".join(SERVICE_FIELDS),
         "outSR": 4326,
         "f": "geojson",
         "returnGeometry": "true",
@@ -190,9 +197,33 @@ def _has_more_pages(page: dict) -> bool:
     return bool(properties.get("exceededTransferLimit"))
 
 
+def fetch_wnc_district_count(get_json=ndfd_check.get_json) -> int:
+    """How many districts the service says touch the WNC box."""
+    params = {**_wnc_filter_params(), "returnCountOnly": "true", "f": "json"}
+    answer = get_json(S.FIRE_DISTRICTS_URL + "/query", params, timeout=REQUEST_TIMEOUT_SECONDS)
+    count = answer.get("count")
+    # bool counts as a number in Python, but it is never a real count.
+    if not isinstance(count, int) or isinstance(count, bool):
+        raise RuntimeError("fire district service did not report a count")
+    return count
+
+
+def require_complete_download(downloaded: int, get_json) -> None:
+    """Raise RuntimeError unless the download holds every district the
+    service has for WNC. The fixed minimum alone would let a download
+    that is a few dozen districts short through."""
+    require_enough_districts(downloaded)
+    expected = fetch_wnc_district_count(get_json)
+    if downloaded != expected:
+        raise RuntimeError(
+            f"downloaded {downloaded} WNC fire districts but the service has {expected}"
+        )
+
+
 def fetch_wnc_districts(get_json=ndfd_check.get_json) -> dict:
     """Every district that touches the WNC box, as a GeoJSON
-    FeatureCollection. Raises RuntimeError if the answer is too short."""
+    FeatureCollection. Raises RuntimeError if the answer is short or does
+    not match the service's own count."""
     features = []
     offset = 0
     while True:
@@ -208,7 +239,7 @@ def fetch_wnc_districts(get_json=ndfd_check.get_json) -> dict:
         offset += len(batch)
 
     # An empty or partial answer must never replace a good copy of the file.
-    require_enough_districts(len(features))
+    require_complete_download(len(features), get_json)
     return {"type": "FeatureCollection", "features": features}
 
 

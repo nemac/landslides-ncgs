@@ -93,11 +93,20 @@ def _pathways_to_match_by_overlap(pathway_count, point_candidates) -> list[int]:
     return by_overlap
 
 
+def _with_valid_shapes(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """A copy where every shape is valid, with the rows unchanged.
+    A polygon that crosses itself makes the overlap step raise an error,
+    and that one error would cost every pathway in the file its district.
+    The pathways are never repaired before they get here, and a district
+    repaired earlier can break again when it is moved to another CRS."""
+    return frame.set_geometry(frame.geometry.make_valid())
+
+
 def match_fire_districts(flagged, districts, crs) -> list[dict | None]:
     """One district record (or None outside NC) per pathway, in order."""
     # Plain 0..n-1 row numbers, so sjoin results point straight at rows.
-    pathways = flagged.to_crs(crs).reset_index(drop=True)
-    districts = districts.to_crs(crs).reset_index(drop=True)
+    pathways = _with_valid_shapes(flagged.to_crs(crs).reset_index(drop=True))
+    districts = _with_valid_shapes(districts.to_crs(crs).reset_index(drop=True))
     records = _district_records(districts)
 
     candidates = _point_candidates(pathways, districts, records)

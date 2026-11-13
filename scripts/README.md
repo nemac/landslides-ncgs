@@ -58,7 +58,9 @@ UTC by the EventBridge schedule in `infra/cdk/lib/trigger-stack.ts`.
 whether to rebuild: Overture published a new release, or the data-last-edit
 date of the NCGS debris-flow layer or the State Fire Marshal fire district
 layer moved, or the last build is 90 days old, or `force` was set. Only
-then does the job assume the OIDC role, create the pinned environment, run
+then does the job assume the OIDC role, create the pinned environment
+(skipped when only the fire districts need rebuilding, which is plain
+Python), run
 `refresh.py --debris-cache` and/or `--buildings` and/or
 `simple/pipeline/fire_districts.py`, upload the GeoPackage and
 `fire_districts_wnc.geojson` to `s3://landslidesncgs-data/cache/` and the

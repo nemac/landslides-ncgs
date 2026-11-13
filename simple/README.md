@@ -93,20 +93,32 @@ The flagged file's `meta.fire_districts` says how the lookup went for the
 whole file: `ok`; `unavailable` when the lookup failed, in which case the
 six fields are empty; or `not_run` when nothing was flagged.
 
-A copy of the districts with fewer than `FIRE_DISTRICTS_MIN_COUNT`
-(`settings.py`) polygons counts as a failed lookup, and a download that
-short is never saved. With districts missing, pathways inside them would
-otherwise be published as `outside_nc`.
+A district file with polygons missing would publish the pathways inside
+them as `outside_nc`, so three checks guard against it:
+
+- A download is saved only when it holds exactly as many districts as
+  the service itself counts for the WNC box.
+- A copy with fewer than `FIRE_DISTRICTS_MIN_COUNT` (`settings.py`)
+  polygons counts as a failed lookup, and a download that short is
+  never saved.
+- A run that marks any pathway `outside_nc` prints a `::warning::` line,
+  which shows on the Actions run page. The state layer covers all of
+  NC, so that answer should be rare and is worth a look.
 
 `status.json` carries the same `fire_districts` value. While it reads
 `unavailable`, `ndfd_check.py` builds again on every 10-minute check
 instead of waiting for the next NDFD update, so a short outage clears
-itself.
+itself. The first run for a forecast is archived as usual; a repeat that
+fails again is not (`archive_decision.py`), so a long outage does not
+fill the archive with copies.
 
 A pathway is matched by a point inside it. When that point is not in a
 real district (it fell in one of the thin "No District" strips the state
 layer puts between districts, or in a gap with no polygon), the pathway
 takes whichever polygon covers most of it, "No District" included.
+Pathway and district shapes that cross themselves are repaired first
+(`make_valid`); one unrepaired shape would make the overlap step fail
+and cost every pathway in the file its district.
 
 ### How the page shows fire districts
 
