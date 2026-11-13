@@ -17,9 +17,9 @@ name: Refresh reference data (daily check)
 # logging every upstream value next to the recorded one on every run; the
 # heavy steps run only when it says so. Each dataset is checked, rebuilt
 # and recorded on its own: when one upstream is down or one rebuild fails,
-# the other two still finish and the run ends as failed. The GeoPackage and the fire district
-# file are shared through the data bucket under cache/, a prefix CloudFront
-# does not serve.
+# the other two still finish and the run ends as failed. The GeoPackage
+# and the fire district file are shared through the data bucket under
+# cache/, a prefix CloudFront does not serve.
 #
 # Trigger: EventBridge Scheduler dispatches this at 05:00 UTC every day
 # (infra/cdk/lib/trigger-stack.ts); the cron below is a late-running backup.
@@ -82,22 +82,28 @@ jobs:
       # outputs) when one upstream could not be read. The job still ends
       # as failed, because the step that failed stays failed.
       - name: Configure AWS credentials (OIDC)
+        id: aws
         if: ${{ !cancelled() && steps.check.outputs.any == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.AWS_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Every step from here on uploads to S3, so each one also needs the
+      # sign-in above to have worked (`steps.aws.outcome == 'success'`).
+      # Without that, a failed sign-in would still run the long rebuilds
+      # and only fail at their uploads.
+
       # Only the debris and buildings rebuilds need this environment.
       - name: Set up environment (micromamba)
-        if: ${{ !cancelled() && (steps.check.outputs.debris == 'true' || steps.check.outputs.buildings == 'true') }}
+        if: ${{ !cancelled() && steps.aws.outcome == 'success' && (steps.check.outputs.debris == 'true' || steps.check.outputs.buildings == 'true') }}
         uses: ./.github/actions/setup-conda-env
 
       # Each rebuild ends by recording itself in out/reference_state.json.
       # The shell stops at the first failed command, so a rebuild or upload
       # that fails is not recorded and is tried again on the next daily check.
       - name: Rebuild the debris-flow GeoPackage
-        if: ${{ !cancelled() && steps.check.outputs.debris == 'true' }}
+        if: ${{ !cancelled() && steps.aws.outcome == 'success' && steps.check.outputs.debris == 'true' }}
         shell: bash -el {0}
         run: |
           python scripts/refresh.py --debris-cache
@@ -107,7 +113,7 @@ jobs:
       # Standard library only, so it runs on the Python from the first
       # setup step rather than in the micromamba login shell.
       - name: Rebuild the fire district file
-        if: ${{ !cancelled() && steps.check.outputs.fire_districts == 'true' }}
+        if: ${{ !cancelled() && steps.aws.outcome == 'success' && steps.check.outputs.fire_districts == 'true' }}
         run: |
           python simple/pipeline/fire_districts.py --out cache/fire_districts_wnc.geojson
           aws s3 cp cache/fire_districts_wnc.geojson "s3://${DATA_BUCKET}/cache/fire_districts_wnc.geojson" \
@@ -116,7 +122,7 @@ jobs:
 
       - name: Rebuild the building footprints
         id: buildings
-        if: ${{ !cancelled() && steps.check.outputs.buildings == 'true' }}
+        if: ${{ !cancelled() && steps.aws.outcome == 'success' && steps.check.outputs.buildings == 'true' }}
         shell: bash -el {0}
         env:
           OVERTURE_RELEASE: ${{ steps.check.outputs.overture_release }}
@@ -138,7 +144,7 @@ jobs:
       # The file holds the new marker for each dataset recorded above and
       # the old entry for every other one.
       - name: Upload the record of what was built
-        if: ${{ !cancelled() && steps.check.outputs.any == 'true' }}
+        if: ${{ !cancelled() && steps.aws.outcome == 'success' }}
         run: |
           aws s3 cp out/reference_state.json "s3://${DATA_BUCKET}/alerts/data/reference_state.json" \
             --content-type application/json \
