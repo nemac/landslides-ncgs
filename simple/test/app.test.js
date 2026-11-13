@@ -356,6 +356,10 @@ async function expectErrorState(p) {
   assert.equal(p.$('status-window').textContent, 'Unavailable');
   assert.equal(p.$('status-window-note').textContent, '');
   assert.equal(p.$('status-next').textContent, '');
+  assert.ok(!p.$('status-next').classList.contains('is-checking'));
+  assert.equal(p.$('status-issued').textContent, 'Unavailable');
+  assert.equal(p.$('status-checked').textContent, '');
+  assert.ok(!p.$('status-card').classList.contains('has-alerts'));
   assert.equal(p.$('stale-banner').hidden, false);
   assert.match(
     p.$('stale-banner').textContent,
@@ -401,6 +405,25 @@ test('a failed reload clears the pathways a good load had drawn', async () => {
   fail = true;
   p.document.dispatchEvent(new p.window.Event('visibilitychange'));
   await p.settle();
+  await expectErrorState(p);
+});
+
+test('the error state does not go back to the old forecast on the 30-second timer', async () => {
+  let fail = false;
+  const live = fixture('live');
+  const data = {
+    ...live,
+    flagged: () => (fail ? errorResponse(503) : live.flagged),
+  };
+  const p = await open({ data });
+  assert.ok(p.$('status-card').classList.contains('has-alerts'));
+  fail = true;
+  p.document.dispatchEvent(new p.window.Event('visibilitychange'));
+  await p.settle();
+  await expectErrorState(p);
+  // The timer that keeps the cards current must not redraw them from the
+  // forecast that was on the page before the failure.
+  mock.timers.tick(31 * 1000);
   await expectErrorState(p);
 });
 

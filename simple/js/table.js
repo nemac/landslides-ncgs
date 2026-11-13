@@ -22,7 +22,9 @@
  *
  * Public surface (window.DFS_TABLE):
  *   render(features, meta, elements, handlers)
- *       elements: { table, summary, notice }
+ *       elements: { table, summary, notice, focusFallback }
+ *           focusFallback takes focus when the focused row or group
+ *           button is gone after a redraw (the table's heading)
  *       handlers.onSelect(objectid)        row click -> zoom to one pathway
  *       handlers.onZoomGroup([objectid])   "Show on map" -> zoom to a group
  *   renderMessage(text, elements)          one message row (the error state)

@@ -211,6 +211,17 @@ test('a hidden forecast layer stays hidden across a new period', () => {
   assert.ok(!m.map.hasLayer(m.created.featureLayers[1]));
 });
 
+// The status region that says the map notices to screen readers.
+function noticeRegion(m) {
+  return m.document.getElementById('map-notices');
+}
+
+test('the map notice region is on the page, empty, before anything fails', () => {
+  const m = mapModule();
+  assert.equal(noticeRegion(m).getAttribute('role'), 'status');
+  assert.equal(noticeRegion(m).textContent, '');
+});
+
 test('an NDFD request error shows the map notice; success clears it', () => {
   const m = mapModule();
   m.MAP.setForecastPeriod(LIVE_META);
@@ -219,15 +230,19 @@ test('an NDFD request error shows the map notice; success clears it', () => {
   assert.equal(m.map.controls.size, 1);
   const notice = Array.from(m.map.controls)[0];
   assert.equal(notice.el.className, 'map-notice');
-  assert.equal(notice.el.getAttribute('role'), 'status');
   assert.match(
     notice.el.textContent,
     /could not be loaded from the NWS service/
   );
+  // The box is not the status region; the permanent one says the words.
+  assert.equal(notice.el.getAttribute('role'), null);
+  assert.equal(noticeRegion(m).getAttribute('role'), 'status');
+  assert.equal(noticeRegion(m).textContent, notice.el.textContent);
   fl.fire('requesterror', { error: new Error('again') });
   assert.equal(m.map.controls.size, 1, 'one notice, not two');
   fl.fire('requestsuccess');
   assert.equal(m.map.controls.size, 0);
+  assert.equal(noticeRegion(m).textContent, '');
   assert.ok(m.warnings.some((w) => /503/.test(w)));
 });
 
@@ -481,11 +496,11 @@ test('a fire district request error shows a map notice; success clears it', () =
   assert.equal(m.map.controls.size, 1);
   const notice = Array.from(m.map.controls)[0];
   assert.equal(notice.el.className, 'map-notice');
-  assert.equal(notice.el.getAttribute('role'), 'status');
   assert.match(
     notice.el.textContent,
     /fire districts layer could not be loaded/
   );
+  assert.equal(noticeRegion(m).textContent, notice.el.textContent);
   assert.ok(m.warnings.some((w) => /Fire districts.*503/.test(w)));
   fl.fire('requesterror', { error: new Error('again') });
   assert.equal(m.map.controls.size, 1, 'one notice, not two');
@@ -499,6 +514,7 @@ test('hiding the fire district layer clears its notice', () => {
   m.created.featureLayers[0].fire('requesterror', { error: new Error('x') });
   m.MAP.setFireDistrictsVisible(false);
   assert.equal(m.map.controls.size, 0);
+  assert.equal(noticeRegion(m).textContent, '');
 });
 
 test('the fire district and forecast notices do not replace each other', () => {
@@ -508,8 +524,11 @@ test('the fire district and forecast notices do not replace each other', () => {
   m.created.featureLayers[0].fire('requesterror', { error: new Error('a') });
   m.created.featureLayers[1].fire('requesterror', { error: new Error('b') });
   assert.equal(m.map.controls.size, 2);
+  assert.match(noticeRegion(m).textContent, /NWS service.* fire districts/);
   m.created.featureLayers[1].fire('requestsuccess');
   assert.equal(m.map.controls.size, 1);
+  assert.doesNotMatch(noticeRegion(m).textContent, /fire districts/);
+  assert.match(noticeRegion(m).textContent, /NWS service/);
   assert.match(Array.from(m.map.controls)[0].el.textContent, /NWS service/);
 });
 

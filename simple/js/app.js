@@ -524,10 +524,18 @@
     state.features = [];
     _drawnPathways = null;
     MAP.setAlerts(null);
+    // Forget the last good forecast too. The 30-second timer redraws the
+    // status cards from state.meta, and would otherwise put the old
+    // forecast window back beside the "could not be loaded" banner.
+    state.meta = {};
+    state.status = null;
     els.statusCount.textContent = '--';
     els.statusWindow.textContent = 'Unavailable';
     els.windowNote.textContent = '';
+    els.statusIssued.textContent = 'Unavailable';
+    els.statusChecked.textContent = '';
     els.statusNext.textContent = '';
+    els.statusNext.classList.remove('is-checking');
     els.staleBanner.hidden = false;
     els.staleBanner.textContent =
       'Forecast data could not be loaded. Try again in a few minutes, and ' +
@@ -535,6 +543,7 @@
     els.tableSummary.textContent = 'Data unavailable';
     els.tableSummary.classList.remove('is-none');
     els.statusCard.classList.remove('is-zero');
+    els.statusCard.classList.remove('has-alerts');
     TABLE.renderMessage('Forecast data could not be loaded.', _tableElements());
     els.exportBtn.disabled = true;
   }
