@@ -107,6 +107,8 @@ Details live in `BACKLOG.md`; this is the short list.
   `simple/pipeline/simulated-storm/`.
 - Fire district groups: list every county in a heading, and add the county
   to the key used when a district has no FDID.
+- Browser tests: never reuse a server on port 8000 from another checkout
+  (own port, no reuse, and a check that the server is this checkout).
 - Content-Security-Policy header, started in report-only mode.
 - A custom 404 page: a missing object currently returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
