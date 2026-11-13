@@ -45,6 +45,7 @@ Nothing under `simple/data/` is committed to git.
 .github/workflows/refresh-simple.yml   (cron: every 10 min)
   simple/pipeline/ndfd_check.py        stdlib only, ~5 s
       NDFD unchanged since last status.json?  -> skip (re-upload status only)
+      last run had no fire districts?         -> build (try the lookup again)
       otherwise                                -> build
   simple/pipeline/refresh_simple.py    geopandas, only on "build"
       fetch all categories for the 24 h period, clip to WNC -> forecast_24h.geojson
@@ -92,6 +93,21 @@ The flagged file's `meta.fire_districts` says how the lookup went for the
 whole file: `ok`; `unavailable` when the lookup failed, in which case the
 six fields are empty; or `not_run` when nothing was flagged.
 
+A copy of the districts with fewer than `FIRE_DISTRICTS_MIN_COUNT`
+(`settings.py`) polygons counts as a failed lookup, and a download that
+short is never saved. With districts missing, pathways inside them would
+otherwise be published as `outside_nc`.
+
+`status.json` carries the same `fire_districts` value. While it reads
+`unavailable`, `ndfd_check.py` builds again on every 10-minute check
+instead of waiting for the next NDFD update, so a short outage clears
+itself.
+
+A pathway is matched by a point inside it. When that point is not in a
+real district (it fell in one of the thin "No District" strips the state
+layer puts between districts, or in a gap with no polygon), the pathway
+takes whichever polygon covers most of it, "No District" included.
+
 ### How the page shows fire districts
 
 The page shows only what the flagged file says and never guesses a
@@ -110,11 +126,21 @@ and every pathway has one of the three statuses.
   and pathway ID, and a notice says that fire district information is
   unavailable right now.
 
-The pathway popup on the map shows the district, "No District (state fire
-district data)", "Outside North Carolina", or "Not available". The CSV
-puts five fire district columns first and ends with a
-`fire_district_status` column: `district`, `no_district`, `outside_nc`,
-or `unavailable` when the districts are not known.
+The page reloads its data every few minutes. The status cards are redrawn
+on every reload, but the map's pathways and the table are redrawn only
+when the pathways or the `meta.fire_districts` marker changed, so an open
+popup stays open and keyboard focus stays where it was. After a real
+redraw, focus returns to the same row or group button, or to the table's
+heading when that row or group is gone.
+
+The pathway popup on the map and the CSV follow the same rule as the
+table. The popup shows the district, "No District (state fire district
+data)" or "Outside North Carolina", and "Not available" when the
+districts are not known. The CSV starts with the pathway's own columns
+(`pathway_id` first), then `fire_district_status` (`district`,
+`no_district`, `outside_nc`, or `unavailable` when the districts are not
+known) right before the five fire district columns it explains, which are
+blank when it is `unavailable`, and ends with the times.
 
 ### Expected freshness
 

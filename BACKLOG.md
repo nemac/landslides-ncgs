@@ -53,6 +53,19 @@ details belong in an issue or PR once someone picks it up.
   code, pass the forecast file to `MAP.setForecastLocal` (the load code in
   `simple/js/app.js` no longer keeps it in a `forecast` variable), and add
   tests.
+- **Fire district group headings and keys.** Found in the 2026-11-13
+  review of the fire district work, in `simple/js/table.js`:
+  - A group heading shows the county of the group's first pathway. In the
+    WNC district file read on 2026-11-13, 31 FDIDs cover two counties
+    (Blowing Rock Fire & Rescue is in Caldwell and Watauga), so a heading
+    can name the wrong county for some of its pathways. List every county
+    in the group instead.
+  - A district with no FDID is grouped by name alone (`_districtKey`), so
+    two districts with the same name, or with no name, in different
+    counties would merge into one group. No real district in that file
+    lacks an FDID (only the four "No District" rows do), so this cannot
+    happen with today's data. Add the county to the fallback key, and
+    change the test that expects the merge.
 
 ## From the October 2026 audit, not yet decided
 

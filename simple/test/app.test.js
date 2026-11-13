@@ -91,6 +91,8 @@ test('a file from the older pipeline is listed plainly with the notice', async (
   assert.equal(p.$('table-summary').textContent, '3 pathways in 2 counties');
   assert.equal(p.$('district-notice').textContent, NOTICE_TEXT);
   assert.equal(p.$('district-notice').getAttribute('role'), 'status');
+  const alerts = p.mapCalls('setAlerts');
+  assert.equal(alerts[0][2], false, 'the map popups must not name districts');
   assert.doesNotMatch(p.$('alerts-table').caption.textContent, /fire district/);
 });
 
@@ -117,6 +119,7 @@ test('the first load hands the map the window and the flagged pathways', async (
   assert.equal(period[0][1].window_end, '2026-10-28T18:00:00+00:00');
   const alerts = p.mapCalls('setAlerts');
   assert.equal(alerts.length, 1);
+  assert.equal(alerts[0][2], true, 'districts are known in this file');
   assert.deepEqual(
     alerts[0][1].features.map((f) => f.properties.OBJECTID),
     [102, 205, 301]
@@ -434,6 +437,100 @@ test('a good load after an error brings the groups back', async () => {
 });
 
 // ---- Overlapping loads ----------------------------------------------------
+// ---- Reloads that bring the same pathways ------------------------------------
+async function reload(p) {
+  p.document.dispatchEvent(new p.window.Event('visibilitychange'));
+  await p.settle();
+}
+
+test('a reload with the same pathways leaves the table, the map and focus alone', async () => {
+  const live = fixture('live');
+  let checkedMinutesAgo = 2;
+  const data = {
+    ...live,
+    status: () => ({
+      ...live.status,
+      checked_at: isoMinutesBefore(checkedMinutesAgo),
+    }),
+  };
+  const p = await open({ data });
+  const row = p.$('alerts-table').querySelector('tr[data-objectid="205"]');
+  row.focus();
+  const nextBefore = p.$('status-next').textContent;
+
+  checkedMinutesAgo = 0;
+  await reload(p);
+  assert.equal(
+    p.$('alerts-table').querySelector('tr[data-objectid="205"]'),
+    row,
+    'the row was not rebuilt'
+  );
+  assert.equal(p.document.activeElement, row);
+  assert.equal(p.mapCalls('setAlerts').length, 1, 'the map layer was kept');
+  assert.notEqual(
+    p.$('status-next').textContent,
+    nextBefore,
+    'the status card still shows the newer check'
+  );
+});
+
+test('a reload with different pathways redraws the table and the map', async () => {
+  const live = fixture('live');
+  let dropOne = false;
+  const data = {
+    ...live,
+    flagged: () => {
+      if (!dropOne) return live.flagged;
+      const features = live.flagged.features.filter(
+        (f) => f.properties.OBJECTID !== 301
+      );
+      return { ...live.flagged, features };
+    },
+  };
+  const p = await open({ data });
+  p.$('alerts-table').querySelector('tr[data-objectid="205"]').focus();
+  dropOne = true;
+  await reload(p);
+  assert.deepEqual(rowIds(p), ['102', '205']);
+  assert.equal(p.mapCalls('setAlerts').length, 2);
+  assert.equal(p.document.activeElement.dataset.objectid, '205');
+});
+
+test('a change in the fire district marker alone redraws the table', async () => {
+  const live = fixture('live');
+  let lookupFailed = false;
+  const data = {
+    ...live,
+    flagged: () => {
+      if (!lookupFailed) return live.flagged;
+      const meta = { ...live.flagged.meta, fire_districts: 'unavailable' };
+      return { ...live.flagged, meta };
+    },
+  };
+  const p = await open({ data });
+  assert.equal(groupNames(p).length, 2);
+  lookupFailed = true;
+  await reload(p);
+  assert.deepEqual(groupNames(p), []);
+  assert.equal(p.$('district-notice').textContent, NOTICE_TEXT);
+});
+
+test('the same pathways are drawn again after an error', async () => {
+  let fail = false;
+  const live = fixture('live');
+  const data = {
+    ...live,
+    flagged: () => (fail ? errorResponse(503) : live.flagged),
+  };
+  const p = await open({ data });
+  fail = true;
+  await reload(p);
+  assert.deepEqual(rowIds(p), []);
+  fail = false;
+  await reload(p);
+  assert.deepEqual(rowIds(p), ['102', '205', '301']);
+});
+
 test('an older response cannot overwrite a newer load', async () => {
   const live = fixture('live');
   const empty = fixture('empty');
@@ -553,6 +650,31 @@ test('selecting a table row zooms the map to that pathway', async () => {
   assert.deepEqual(p.mapCalls('zoomToAlert'), [['zoomToAlert', 205]]);
 });
 
+test('"Show on map" turns a hidden pathways layer back on and ticks its box', async () => {
+  const p = await open();
+  p.$('layer-alerts').click();
+  assert.equal(p.$('layer-alerts').checked, false);
+  p.$('alerts-table').tBodies[1].querySelector('.group-zoom').click();
+  assert.equal(p.$('layer-alerts').checked, true);
+  const calls = p.mapCalls('setAlertsVisible');
+  assert.deepEqual(calls[calls.length - 1], ['setAlertsVisible', true]);
+  assert.equal(p.mapCalls('zoomToAlerts').length, 1);
+});
+
+test('selecting a row turns a hidden pathways layer back on too', async () => {
+  const p = await open();
+  p.$('layer-alerts').click();
+  p.$('alerts-table').querySelector('tr[data-objectid="205"]').click();
+  assert.equal(p.$('layer-alerts').checked, true);
+});
+
+test('zooming leaves the pathways layer alone when it is already shown', async () => {
+  const p = await open();
+  const before = p.mapCalls('setAlertsVisible').length;
+  p.$('alerts-table').querySelector('tr[data-objectid="205"]').click();
+  assert.equal(p.mapCalls('setAlertsVisible').length, before);
+});
+
 test('"Show on map" zooms the map to every pathway in that district', async () => {
   const p = await open();
   const zoom = p.$('alerts-table').tBodies[1].querySelector('.group-zoom');
@@ -629,12 +751,12 @@ test('the download button saves a CSV named for the fixed view and the time', as
   const text = await p.blobs[0].text();
   const lines = text.split('\r\n');
   assert.equal(lines.length, 5, 'header, three rows, trailing newline');
-  assert.match(lines[0], /^fdid,fire_department,.*,fire_district_status$/);
+  assert.match(lines[0], /^pathway_id,county,.*,exported_utc$/);
   assert.match(
     lines[1],
-    /^44104,Cruso Fire Department,Haywood,"13 Cruso Rd, Canton, NC 28716",2023-07-15,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,102,2026-10-27T18:00:00\+00:00,.*,district$/
+    /^102,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,district,Cruso Fire Department,44104,Haywood,"13 Cruso Rd, Canton, NC 28716",2023-07-15,2026-10-27T18:00:00\+00:00,/
   );
-  assert.match(lines[2], /,205,.*,district$/);
+  assert.match(lines[2], /^205,.*,district,Asheville Fire Department,/);
 });
 
 test('the CSV from an older file marks the district status unavailable', async () => {
@@ -643,7 +765,7 @@ test('the CSV from an older file marks the district status unavailable', async (
   const lines = (await p.blobs[0].text()).split('\r\n');
   assert.match(
     lines[1],
-    /^,,,,,Haywood,"Pigeon River, East Fork",.*,unavailable$/
+    /^102,Haywood,"Pigeon River, East Fork",.*,unavailable,,,,,,2026-/
   );
 });
 

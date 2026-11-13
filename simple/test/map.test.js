@@ -334,12 +334,44 @@ for (const [label, fire, want] of [
         },
       ],
     };
-    m.MAP.setAlerts(fc);
+    m.MAP.setAlerts(fc, true);
     const popup = m.created.geoJsonLayers[0].sub[0].popup;
     assert.ok(
       popup.includes('<dt>Fire district</dt><dd>' + want + '</dd>'),
       popup
     );
+  });
+}
+
+for (const [label, args] of [
+  ['the page says districts are not known', [false]],
+  ['the page does not say', []],
+]) {
+  test('the pathway popup hides a district when ' + label, () => {
+    const m = mapModule();
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: null,
+          properties: {
+            OBJECTID: 1,
+            max_category: 11,
+            fire_district_status: 'district',
+            fire_department: 'Asheville FD',
+            fdid: '11101',
+          },
+        },
+      ],
+    };
+    m.MAP.setAlerts(fc, ...args);
+    const popup = m.created.geoJsonLayers[0].sub[0].popup;
+    assert.ok(
+      popup.includes('<dt>Fire district</dt><dd>Not available</dd>'),
+      popup
+    );
+    assert.ok(!popup.includes('Asheville'), popup);
   });
 }
 
@@ -439,6 +471,54 @@ test('the fire district layer draws outlines in its own pane with a popup', () =
   );
   m.MAP.setFireDistrictsVisible(false);
   assert.ok(!m.map.hasLayer(fl));
+});
+
+test('a fire district request error shows a map notice; success clears it', () => {
+  const m = mapModule();
+  m.MAP.setFireDistrictsVisible(true);
+  const fl = m.created.featureLayers[0];
+  fl.fire('requesterror', { error: new Error('503') });
+  assert.equal(m.map.controls.size, 1);
+  const notice = Array.from(m.map.controls)[0];
+  assert.equal(notice.el.className, 'map-notice');
+  assert.equal(notice.el.getAttribute('role'), 'status');
+  assert.match(
+    notice.el.textContent,
+    /fire districts layer could not be loaded/
+  );
+  assert.ok(m.warnings.some((w) => /Fire districts.*503/.test(w)));
+  fl.fire('requesterror', { error: new Error('again') });
+  assert.equal(m.map.controls.size, 1, 'one notice, not two');
+  fl.fire('requestsuccess');
+  assert.equal(m.map.controls.size, 0);
+});
+
+test('hiding the fire district layer clears its notice', () => {
+  const m = mapModule();
+  m.MAP.setFireDistrictsVisible(true);
+  m.created.featureLayers[0].fire('requesterror', { error: new Error('x') });
+  m.MAP.setFireDistrictsVisible(false);
+  assert.equal(m.map.controls.size, 0);
+});
+
+test('the fire district and forecast notices do not replace each other', () => {
+  const m = mapModule();
+  m.MAP.setForecastPeriod(LIVE_META);
+  m.MAP.setFireDistrictsVisible(true);
+  m.created.featureLayers[0].fire('requesterror', { error: new Error('a') });
+  m.created.featureLayers[1].fire('requesterror', { error: new Error('b') });
+  assert.equal(m.map.controls.size, 2);
+  m.created.featureLayers[1].fire('requestsuccess');
+  assert.equal(m.map.controls.size, 1);
+  assert.match(Array.from(m.map.controls)[0].el.textContent, /NWS service/);
+});
+
+test('the fire district layer warns when esri-leaflet is missing', () => {
+  const m = mapModule();
+  delete m.L.esri;
+  m.MAP.setFireDistrictsVisible(true);
+  assert.equal(m.created.featureLayers.length, 0);
+  assert.ok(m.warnings.some((w) => /fire districts layer unavailable/.test(w)));
 });
 
 // ---- NCGS reference layer -------------------------------------------------
