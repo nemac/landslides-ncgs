@@ -193,3 +193,22 @@ test('the all-checks job in ci.yml waits for every other job', () => {
   assert.deepEqual([...(needs ?? [])].sort(), others.sort());
   assert.match(text, /all-checks:\n[\s\S]*?if: always\(\)\n/);
 });
+
+// Pathway IDs are row numbers in one version of the NCGS layer, so each
+// version's GeoPackage must stay in the bucket for good. An overwritten
+// object is deleted after DATA_NONCURRENT_VERSION_DAYS; a copy under its
+// own key in cache/archive/ is a current object and is never expired.
+test('refresh-reference.yml keeps a copy of each debris-flow layer version', () => {
+  const workflow = workflows()['refresh-reference.yml'];
+  assert.match(
+    workflow,
+    /ARCHIVE="s3:\/\/\$\{DATA_BUCKET\}\/cache\/archive\/debris_flows\/\$\{VERSION\}\/debris_flows\.gpkg"/,
+    'the copy is named for its layer version, under cache/archive/'
+  );
+  assert.ok(
+    s3Commands(workflow).includes(
+      'aws s3 cp cache/debris_flows.gpkg "$ARCHIVE"'
+    ),
+    'the GeoPackage is copied there'
+  );
+});

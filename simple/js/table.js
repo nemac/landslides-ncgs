@@ -532,7 +532,8 @@ window.DFS_TABLE = (function () {
 
   // ---- CSV -----------------------------------------------------------------
   // The pathway's own columns come first. The district status sits right
-  // before the five columns it explains, and the times come last.
+  // before the five columns it explains. Then come the times, and last the
+  // NCGS layer version that the pathway IDs belong to.
   const CSV_HEADER = [
     'pathway_id',
     'county',
@@ -550,6 +551,7 @@ window.DFS_TABLE = (function () {
     'window_end_utc',
     'nws_updated_utc',
     'exported_utc',
+    'ncgs_layer_version',
   ];
 
   function _csvPathwayCells(p) {
@@ -589,7 +591,13 @@ window.DFS_TABLE = (function () {
 
   function _csvRow(p, meta, exported, known) {
     return _csvPathwayCells(p)
-      .concat(_csvDistrictCells(p, known), _csvTimeCells(meta, exported))
+      .concat(
+        _csvDistrictCells(p, known),
+        _csvTimeCells(meta, exported),
+        // A pathway_id is a row number in one version of the NCGS layer,
+        // so the file says which version. Blank for an older file.
+        [meta.ncgs_layer_version || '']
+      )
       .map(_csvEscape)
       .join(',');
   }

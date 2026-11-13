@@ -189,6 +189,7 @@ These files were read only by the offline alerts dashboard.
 | DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
 | Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
+| Every past version of the debris-flow layer | `s3://landslidesncgs-data/cache/archive/debris_flows/<version>/` (see "Layer versions" in `simple/README.md`) |
 | Fire district cache | `cache/fire_districts_wnc.geojson` (never committed) |
 | Python environment | `defns-refresh`, from `environment.yml` |
 | Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |

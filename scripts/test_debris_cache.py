@@ -20,9 +20,13 @@ from shapely.geometry import box, mapping
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import data  # noqa: E402
-from config import PATHWAY_KEY_FIELD  # noqa: E402
+import debris_cache_version  # noqa: E402
+from config import DEBRIS_VERSION_FIELD, PATHWAY_KEY_FIELD  # noqa: E402
 
 SQUARE = box(-82.601, 35.599, -82.599, 35.601)
+# 2026-03-03 17:13:07 UTC, in the milliseconds ArcGIS reports.
+LAYER_LAST_EDIT_MS = 1772557987994
+LAYER_VERSION = "2026-03-03T171307Z"
 
 
 def service_feature(key, objectid):
@@ -62,6 +66,11 @@ class DebrisCacheTest(unittest.TestCase):
         self.cache_path = Path(folder.name) / "debris_flows.gpkg"
         self.patch(data, "_cache_path", return_value=self.cache_path)
         self.patch(data, "_augment_with_admin_boundaries", side_effect=add_county_and_watershed)
+        self.layer_info = self.patch(
+            data,
+            "_agol_request_with_retry",
+            return_value={"editingInfo": {"dataLastEditDate": LAYER_LAST_EDIT_MS}},
+        )
         self.fetch = self.patch(
             data,
             "_fetch_features_paginated",
@@ -122,6 +131,37 @@ class DebrisCacheTest(unittest.TestCase):
             data.fetch_debris_flows()
 
         self.assertFalse(self.cache_path.exists())
+
+    def test_a_new_cache_names_the_layer_version_on_every_row(self):
+        data.fetch_debris_flows()
+
+        cached = gpd.read_file(self.cache_path)
+        self.assertEqual(list(cached[DEBRIS_VERSION_FIELD]), [LAYER_VERSION, LAYER_VERSION])
+
+    def test_a_layer_with_no_edit_date_is_refused(self):
+        # Without the date the file could not be tied to a layer version.
+        self.layer_info.return_value = {"editingInfo": {}}
+
+        with self.assertRaisesRegex(RuntimeError, "edit date"):
+            data.fetch_debris_flows()
+
+        self.assertFalse(self.cache_path.exists())
+
+    def test_the_version_script_reads_the_version_from_the_cache_file(self):
+        data.fetch_debris_flows()
+
+        self.assertEqual(debris_cache_version.read_version(self.cache_path), LAYER_VERSION)
+
+    def test_the_version_script_refuses_a_file_without_a_version(self):
+        write_cache_without_key(self.cache_path)
+
+        with self.assertRaisesRegex(ValueError, DEBRIS_VERSION_FIELD):
+            debris_cache_version.read_version(self.cache_path)
+
+
+class LayerVersionTest(unittest.TestCase):
+    def test_the_version_is_the_edit_time_in_utc_safe_for_a_file_path(self):
+        self.assertEqual(data.layer_version_from_ms(LAYER_LAST_EDIT_MS), LAYER_VERSION)
 
 
 if __name__ == "__main__":

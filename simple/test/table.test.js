@@ -701,7 +701,8 @@ const HEADER =
   'pathway_id,county,watershed,forecast_rain,ndfd_category,area_acres,' +
   'fire_district_status,fire_department,fdid,fd_county,fd_address,' +
   'district_updated,' +
-  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc';
+  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc,' +
+  'ncgs_layer_version';
 
 // Column name -> position, so the tests below do not depend on the order.
 const COL = {};
@@ -725,7 +726,7 @@ function csvFields(line) {
   return line
     .match(/("([^"]|"")*"|[^,]*)(,|$)/g)
     .map((c) => c.replace(/,$/, ''))
-    .slice(0, 16);
+    .slice(0, HEADER.split(',').length);
 }
 
 test('toCSV writes the header, one CRLF row per pathway and a trailing CRLF', () => {
@@ -894,4 +895,19 @@ test('toCSV gives pathways that share an OBJECTID their own pathway_id', () => {
     lines.map((line) => csvFields(line)[COL.pathway_id]),
     ['101', '202']
   );
+});
+
+// ---- Which NCGS layer version the pathway IDs belong to ---------------------
+test('toCSV ends each row with the NCGS layer version from the file', () => {
+  const meta = Object.assign(
+    { ncgs_layer_version: '2026-03-03T171307Z' },
+    META
+  );
+  const row = TABLE.toCSV([SWANNANOA], meta).split('\r\n')[1];
+  assert.equal(csvFields(row)[COL.ncgs_layer_version], '2026-03-03T171307Z');
+});
+
+test('toCSV leaves the layer version blank for a file that does not name one', () => {
+  const row = TABLE.toCSV([SWANNANOA], META).split('\r\n')[1];
+  assert.equal(csvFields(row)[COL.ncgs_layer_version], '');
 });

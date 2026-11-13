@@ -77,7 +77,8 @@ Every flagged pathway is published with two ID fields:
   map lookups, the popup title and the CSV's `pathway_id` column. To find
   a pathway in the NCGS layer, query `OBJECTID_1 = <pathway_id>`. NCGS
   may renumber the rows when it republishes the layer, so an ID is only
-  good for the layer version it was read from.
+  good for the layer version it was read from (see "Layer versions"
+  below).
 - `OBJECTID` is the layer's plain `OBJECTID` field. It is **not unique**:
   the layer is a mosaic of about 55 source tiles and the number restarts
   at 1 in each one, so on 2026-11-13 its 228,870 pathways shared 15,885
@@ -91,6 +92,38 @@ and the CSV showed `OBJECTID` as the pathway ID. Files from before then
 to `OBJECTID` for those, which is safe because each appears once in them.
 A CSV exported before that date holds `OBJECTID` in its `pathway_id`
 column.
+
+#### Layer versions
+
+A `pathway_id` is a row number in one version of the NCGS layer, so
+every place an ID is published also says which version it belongs to:
+
+- `meta.ncgs_layer_version` in the flagged file, and the last column of
+  the CSV (`ncgs_layer_version`). The value is the layer's
+  data-last-edit time in UTC, like `2026-03-03T171307Z`. It is `null`
+  (blank in the CSV) when no pathways were looked up, and in files from
+  before 2026-11-13.
+- Every row of `cache/debris_flows.gpkg` carries the same value in its
+  `ncgs_layer_version` column, read from the layer just before the
+  download.
+
+`refresh-reference.yml` keeps one copy of the GeoPackage for every layer
+version, for good, at
+`s3://landslidesncgs-data/cache/archive/debris_flows/<version>/debris_flows.gpkg`.
+The copy is named from the version inside the file
+(`scripts/debris_cache_version.py`), and the first copy of a version is
+never replaced. The data bucket deletes an overwritten object after 30
+days, but never an object under its own name, and the workflow's role
+cannot delete there. So to look up an old ID, read `ncgs_layer_version`
+next to it, download that version's GeoPackage and find the row with
+that `OBJECTID_1`. Each copy is about 570 MB; NCGS last changed the layer
+on 2026-03-03.
+
+Not covered: IDs published before the first rebuild with this code have
+no version, and the copy kept for them is the first one made after
+2026-11-13 (the layer had not changed since 2026-03-03, so the rows are
+the same). And if NCGS republishes twice between two daily checks, the
+version in between is never downloaded.
 
 The pipeline refuses to flag pathways from a GeoPackage that has no
 `OBJECTID_1` column. `scripts/data.py` treats such a file as missing and
@@ -183,7 +216,8 @@ districts are not known. The CSV starts with the pathway's own columns
 (`pathway_id` first, see "Pathway IDs" above), then `fire_district_status` (`district`,
 `no_district`, `outside_nc`, or `unavailable` when the districts are not
 known) right before the five fire district columns it explains, which are
-blank when it is `unavailable`, and ends with the times.
+blank when it is `unavailable`. Then come the times, and last
+`ncgs_layer_version`.
 
 ### Expected freshness
 

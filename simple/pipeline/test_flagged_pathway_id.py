@@ -111,6 +111,19 @@ class FlaggedPathwayIdTest(unittest.TestCase):
         for feature in flagged["features"]:
             self.assertNotIn("OBJECTID_1", feature["properties"])
 
+    def test_the_file_names_the_ncgs_layer_version_the_ids_came_from(self):
+        pathways = two_pathways_sharing_an_objectid()
+        pathways["ncgs_layer_version"] = "2026-03-03T171307Z"
+
+        flagged = self.build_flagged_file(pathways)
+
+        self.assertEqual(flagged["meta"]["ncgs_layer_version"], "2026-03-03T171307Z")
+
+    def test_the_layer_version_is_empty_for_a_cache_that_does_not_name_one(self):
+        flagged = self.build_flagged_file(two_pathways_sharing_an_objectid())
+
+        self.assertIsNone(flagged["meta"]["ncgs_layer_version"])
+
     def test_pathways_without_the_unique_key_are_not_published(self):
         old_cache = two_pathways_sharing_an_objectid().drop(columns=["OBJECTID_1"])
 

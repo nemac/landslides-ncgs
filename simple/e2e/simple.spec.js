@@ -321,7 +321,8 @@ test('the CSV download carries the grouped pathways and their status', async ({
     'pathway_id,county,watershed,forecast_rain,ndfd_category,area_acres,' +
       'fire_district_status,fire_department,fdid,fd_county,fd_address,' +
       'district_updated,' +
-      'window_start_utc,window_end_utc,nws_updated_utc,exported_utc'
+      'window_start_utc,window_end_utc,nws_updated_utc,exported_utc,' +
+      'ncgs_layer_version'
   );
   expect(lines[1]).toMatch(
     /^102,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,district,Cruso Fire Department,44104,Haywood,".*",2023-07-15,/

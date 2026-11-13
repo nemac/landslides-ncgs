@@ -24,6 +24,7 @@ from config import (
     CACHE_TTL_DAYS,
     DEBRIS_CACHE_FILENAME,
     DEBRIS_FLOW_SERVICE_URL,
+    DEBRIS_VERSION_FIELD,
     DISPLAY_CRS,
     NDFD_PRECIP_SERVICE_URL,
     OVERTURE_BUILDINGS_COORD_PRECISION,
@@ -258,6 +259,27 @@ def _cache_is_fresh() -> bool:
     return age_days < CACHE_TTL_DAYS
 
 
+def layer_version_from_ms(last_edit_ms: int) -> str:
+    """An ArcGIS edit time (milliseconds since 1970, UTC) as a version name
+    that is safe in a file path, like "2026-03-03T171307Z"."""
+    last_edit = datetime.fromtimestamp(int(last_edit_ms) / 1000, tz=UTC)
+    return last_edit.strftime("%Y-%m-%dT%H%M%SZ")
+
+
+def _debris_layer_version() -> str:
+    """Which version of the NCGS layer is being served right now."""
+    info = _agol_request_with_retry(
+        DEBRIS_FLOW_SERVICE_URL, {"f": "json"}, label="debris flow layer info"
+    )
+    last_edit_ms = (info.get("editingInfo") or {}).get("dataLastEditDate")
+    if not last_edit_ms:
+        raise RuntimeError(
+            "The NCGS debris-flow layer reports no data edit date, so this "
+            "download could not be tied to a layer version."
+        )
+    return layer_version_from_ms(last_edit_ms)
+
+
 def _cache_has_pathway_key() -> bool:
     """False for a cache file built before PATHWAY_KEY_FIELD was kept.
     Reads one row only, so it is quick even though the file is large."""
@@ -309,8 +331,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     Returns
     -------
     GeoDataFrame in EPSG:4326 with columns OBJECTID_1 (the unique pathway
-    key, see config.PATHWAY_KEY_FIELD), OBJECTID (not unique), county,
-    watershed, geometry.
+    key, see config.PATHWAY_KEY_FIELD), OBJECTID (not unique),
+    ncgs_layer_version (see config.DEBRIS_VERSION_FIELD; missing in a
+    cache built before 2026-11-13), county, watershed, geometry.
     """
     cache_p = _cache_path()
 
@@ -357,6 +380,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
     print(f"Fetching debris flow polygons from NCGS (WNC bbox = {bbox_str})...")
+    # Read before the download, so the rows are never newer than the name.
+    layer_version = _debris_layer_version()
+    print(f"  NCGS layer version: {layer_version}")
 
     # The debris model is a Western NC dataset, so ~225k of its ~228k polygons
     # fall inside the WNC bbox - the spatial filter trims almost nothing, it
@@ -404,6 +430,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
     print(f"  -> {len(gdf):,} debris flow polygons within WNC bbox")
     _require_unique_pathway_keys(gdf)
+    gdf[DEBRIS_VERSION_FIELD] = layer_version
 
     # Augment with administrative boundaries (county + HUC12 watershed)
     gdf = _augment_with_admin_boundaries(gdf)

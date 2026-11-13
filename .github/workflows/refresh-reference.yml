@@ -108,6 +108,18 @@ jobs:
         run: |
           python scripts/refresh.py --debris-cache
           aws s3 cp cache/debris_flows.gpkg "s3://${DATA_BUCKET}/cache/debris_flows.gpkg"
+          # Pathway IDs are row numbers in one version of the NCGS layer,
+          # so one copy of every version is kept for good. The bucket
+          # deletes an overwritten object after 30 days, but never a copy
+          # under its own name. The first copy of a version is the one kept.
+          VERSION=$(python scripts/debris_cache_version.py cache/debris_flows.gpkg)
+          ARCHIVE="s3://${DATA_BUCKET}/cache/archive/debris_flows/${VERSION}/debris_flows.gpkg"
+          if aws s3 ls "$ARCHIVE" > /dev/null 2>&1; then
+            echo "Layer version ${VERSION} is already kept at ${ARCHIVE}"
+          else
+            aws s3 cp cache/debris_flows.gpkg "$ARCHIVE"
+            echo "Kept layer version ${VERSION} at ${ARCHIVE}"
+          fi
           python scripts/reference_record.py debris --out out
 
       # Standard library only, so it runs on the Python from the first

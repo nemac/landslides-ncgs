@@ -27,6 +27,8 @@ scripts/
   data.py         Fetchers: NDFD forecast, MRMS observed, Stage IV hindcast,
                   NCGS debris-flow pathways (cached in cache/debris_flows.gpkg),
                   county and watershed tagging, Overture building footprints.
+  debris_cache_version.py  Prints the NCGS layer version a debris-flow
+                  cache file holds; names the copy kept in cache/archive/.
   analysis.py     find_alerts(): intersects precipitation polygons with
                   debris-flow pathways. Shared with simple/pipeline/.
                   Tells pathways apart by OBJECTID_1, never by OBJECTID.
@@ -118,6 +120,14 @@ of the published files. A cache file built before 2026-11-13 has no
 `OBJECTID_1`: `fetch_debris_flows()` fetches the layer again instead of
 using it, and `find_alerts()` raises if it is handed such data. To
 rebuild the local copy, run `python scripts/refresh.py --debris-cache`.
+
+NCGS may renumber `OBJECTID_1` when it republishes the layer. So each
+row also names its layer version in `ncgs_layer_version` (the layer's
+data-last-edit time, like `2026-03-03T171307Z`), and
+`refresh-reference.yml` keeps one copy of the file per version for good
+under `cache/archive/debris_flows/<version>/` in the data bucket.
+`debris_cache_version.py` prints the version a file holds. See "Layer
+versions" in `simple/README.md`.
 
 ## Lint
 

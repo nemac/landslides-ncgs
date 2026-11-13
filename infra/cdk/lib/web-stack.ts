@@ -135,8 +135,10 @@ export class WebStack extends Stack {
     const rules: s3.LifecycleRule[] = [];
     // A versioned bucket keeps every overwritten object until told
     // otherwise; status.json alone is rewritten 144 times a day. Expire old
-    // versions after a while. Current objects, including the archive copies
-    // of runs that flagged pathways under simple/archive/, are untouched.
+    // versions after a while. Current objects are untouched. That includes
+    // the archive copies: runs that flagged pathways under simple/archive/,
+    // and one debris-flow GeoPackage per NCGS layer version under
+    // cache/archive/.
     if (versioned) {
       rules.push({
         id: 'expire-noncurrent-versions',

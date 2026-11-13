@@ -84,6 +84,14 @@ CACHE_TTL_DAYS = 120
 # tiles, many kilometers apart. (ORIG_FID always equals OBJECTID.)
 PATHWAY_KEY_FIELD = "OBJECTID_1"
 
+# NCGS may renumber OBJECTID_1 when it republishes the layer, so a pathway
+# ID only means something together with the layer version it came from.
+# Every row of the cache file names that version in this column: the
+# layer's data-last-edit time in UTC, like "2026-03-03T171307Z".
+# refresh-reference.yml keeps one copy of the cache file per version in
+# the data bucket, under cache/archive/debris_flows/<version>/.
+DEBRIS_VERSION_FIELD = "ncgs_layer_version"
+
 
 # -----------------------------------------------------------------------------
 # Overture Maps - building footprints

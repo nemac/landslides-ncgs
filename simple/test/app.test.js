@@ -813,7 +813,10 @@ test('the download button saves a CSV named for the fixed view and the time', as
   const text = await p.blobs[0].text();
   const lines = text.split('\r\n');
   assert.equal(lines.length, 5, 'header, three rows, trailing newline');
-  assert.match(lines[0], /^pathway_id,county,.*,exported_utc$/);
+  assert.match(
+    lines[0],
+    /^pathway_id,county,.*,exported_utc,ncgs_layer_version$/
+  );
   assert.match(
     lines[1],
     /^102,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,district,Cruso Fire Department,44104,Haywood,"13 Cruso Rd, Canton, NC 28716",2023-07-15,2026-10-27T18:00:00\+00:00,/

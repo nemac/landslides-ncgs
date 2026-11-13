@@ -44,7 +44,12 @@ from shapely.ops import unary_union  # noqa: E402
 
 import analysis as shared_analysis  # noqa: E402  (scripts/analysis.py)
 import data as shared_data  # noqa: E402  (scripts/data.py)
-from config import DISPLAY_CRS, INTERSECTION_CRS, PATHWAY_KEY_FIELD  # noqa: E402
+from config import (  # noqa: E402
+    DEBRIS_VERSION_FIELD,
+    DISPLAY_CRS,
+    INTERSECTION_CRS,
+    PATHWAY_KEY_FIELD,
+)
 
 
 def log(msg: str) -> None:
@@ -164,6 +169,14 @@ def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str
     return tagged, fire_districts.LOOKUP_OK
 
 
+def debris_layer_version(debris: gpd.GeoDataFrame) -> str | None:
+    """Which NCGS layer version the pathway IDs belong to. None for a
+    cache file that does not name one (built before 2026-11-13)."""
+    if DEBRIS_VERSION_FIELD not in debris.columns or debris.empty:
+        return None
+    return str(debris[DEBRIS_VERSION_FIELD].iloc[0])
+
+
 def round_coords(geom_json: dict, nd: int) -> None:
     def rnd(c):
         if c and isinstance(c[0], (int, float)):
@@ -220,8 +233,10 @@ def build(out: Path) -> int:
     log(f"{len(precip)} precip polygons >= cat {S.THRESHOLD_CATEGORY}")
 
     flagged = None
+    ncgs_layer_version = None
     if not precip.empty:
         debris = shared_data.fetch_debris_flows()  # cached gpkg, WGS84
+        ncgs_layer_version = debris_layer_version(debris)
         log(f"debris flows loaded: {len(debris):,} ({time.time() - t0:.0f}s)")
         minx, miny, maxx, maxy = precip.total_bounds
         cand = debris.cx[minx:maxx, miny:maxy]
@@ -254,6 +269,9 @@ def build(out: Path) -> int:
     now = datetime.now(UTC)
     meta = ndfd_check.build_meta(state, len(features), now)
     meta["fire_districts"] = fire_district_lookup
+    # A pathway_id is a row number in one version of the NCGS layer. This
+    # says which one. It is None when no pathways were looked up.
+    meta["ncgs_layer_version"] = ncgs_layer_version
     ndfd_check.write_json(
         out / S.FLAGGED_FILENAME, {"type": "FeatureCollection", "features": features, "meta": meta}
     )
