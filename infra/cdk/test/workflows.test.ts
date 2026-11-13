@@ -193,3 +193,48 @@ test('the all-checks job in ci.yml waits for every other job', () => {
   assert.deepEqual([...(needs ?? [])].sort(), others.sort());
   assert.match(text, /all-checks:\n[\s\S]*?if: always\(\)\n/);
 });
+
+// Pathway IDs are row numbers in one version of the NCGS layer, so each
+// version's GeoPackage must stay in the bucket for good. An overwritten
+// object is deleted after DATA_NONCURRENT_VERSION_DAYS; a copy under its
+// own key in cache/archive/ is a current object and is never expired.
+test('refresh-reference.yml keeps a copy of each debris-flow layer version', () => {
+  const workflow = workflows()['refresh-reference.yml'];
+  assert.match(
+    workflow,
+    /ARCHIVE="s3:\/\/\$\{DATA_BUCKET\}\/cache\/archive\/debris_flows\/\$\{VERSION\}\/debris_flows\.gpkg"/,
+    'the copy is named for its layer version, under cache/archive/'
+  );
+  assert.ok(
+    s3Commands(workflow).includes(
+      'aws s3 cp cache/debris_flows.gpkg "$ARCHIVE"'
+    ),
+    'the GeoPackage is copied there'
+  );
+});
+
+test('refresh-reference.yml keeps a copy of each fire district layer version', () => {
+  const workflow = workflows()['refresh-reference.yml'];
+  assert.match(
+    workflow,
+    /ARCHIVE="s3:\/\/\$\{DATA_BUCKET\}\/cache\/archive\/fire_districts\/\$\{VERSION\}\/fire_districts_wnc\.geojson"/,
+    'the copy is named for its layer version, under cache/archive/'
+  );
+  assert.ok(
+    s3Commands(workflow).some((cmd) =>
+      cmd.startsWith('aws s3 cp cache/fire_districts_wnc.geojson "$ARCHIVE"')
+    ),
+    'the district file is copied there'
+  );
+});
+
+// The NDFD service only serves the current forecast, so the rain polygons
+// a flagged run used must be archived with it or they are gone.
+test('refresh-simple.yml archives the rain polygons a flagged run used', () => {
+  const workflow = workflows()['refresh-simple.yml'];
+  const archiveStep = workflow.split('Archive a run that flagged pathways')[1];
+  assert.match(
+    archiveStep,
+    /for f in [^\n]*rain_input_ndfd_24h_min11\.geojson/
+  );
+});

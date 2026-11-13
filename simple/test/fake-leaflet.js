@@ -158,7 +158,7 @@ function fakeLeaflet(document) {
       const sub = (geojson.features || []).map((feature) => {
         const fl = layer({
           feature,
-          getBounds: () => ({ of: feature.properties.OBJECTID }),
+          getBounds: () => ({ of: feature.properties.pathway_id }),
           openPopup() {
             this.popupOpen = true;
           },

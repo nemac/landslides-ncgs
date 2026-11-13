@@ -146,7 +146,10 @@ jobs:
           if [ "$(python3 simple/pipeline/archive_decision.py --out out)" = "true" ]; then
             STAMP=$(python3 -c "import json; print(json.load(open('out/status.json'))['generated_at'][:19].replace(':', '') + 'Z')")
             DEST="s3://landslidesncgs-data/simple/archive/${STAMP}"
-            for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson status.json; do
+            # The rain input file is kept only here, never published. NDFD
+            # serves only the current forecast, so this is the one copy of
+            # the rain polygons the flagging used.
+            for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson status.json rain_input_ndfd_24h_min11.geojson; do
               aws s3 cp "out/$f" "$DEST/$f" --content-type application/json
             done
             echo "Archived this run to $DEST"

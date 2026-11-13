@@ -48,8 +48,9 @@ export const PREVIEW_ROLE_NAME = 'landslides-github-preview';
 export const BUILDINGS_PREFIX = 'alerts/data/buildings/';
 
 // Old versions in the versioned data bucket are kept this long. Runs that
-// flagged pathways are copied to simple/archive/ as current objects, which
-// this does not touch.
+// flagged pathways are copied to simple/archive/, and each version of the
+// debris-flow GeoPackage and the fire district file to cache/archive/, as
+// current objects, which this does not touch.
 export const DATA_NONCURRENT_VERSION_DAYS = 30;
 
 // A one-time schedule fires at REMINDER_AT, a month before the GitHub token
