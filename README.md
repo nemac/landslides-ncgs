@@ -49,7 +49,7 @@ only in S3.
   `*.landslidesncgs.org` for all of them; the named hostnames take
   precedence over the wildcard.
 - **Data refreshes** run as GitHub Actions workflows dispatched by
-  EventBridge: DFENS Simple every ten minutes, and a daily check of the two
+  EventBridge: DFENS Simple every ten minutes, and a daily check of the three
   slow-changing reference datasets that rebuilds only what changed. They
   write only to the data bucket. See the next section.
 - **Infrastructure deploys** run from a developer machine with
@@ -73,8 +73,8 @@ stored in GitHub. Nothing any workflow produces is committed to git.
 | `deploy-prod.yml` | Push to `master` | The same for production. |
 | `pr-preview.yml` | Pull request into `development` opened, pushed to, reopened or closed | Deploys the merge result into the preview bucket's `pr-<number>/` folder via `deploy-site.yml`, served at `pr-<number>.landslidesncgs.org`, and deletes the folder when the pull request closes. Skips pull requests from forks. |
 | `deploy-site.yml` | Called by the three above | Syncs pages, CSS and JS with `no-cache` and `assets/` with a one-day cache, deleting files that left the repo, then invalidates CloudFront. Pipelines, infra, docs and data folders are excluded. |
-| `refresh-simple.yml` | Every 10 minutes (EventBridge) | The DFENS Simple pipeline. A stdlib check asks NDFD whether the forecast changed; if not, only `status.json` is re-uploaded as a heartbeat. If it did, the forecast and flagged files are rebuilt, downloading the debris-flow GeoPackage from the bucket only when rain at or above the threshold is forecast. Any run that flags pathways is also copied to `simple/archive/<timestamp>/` in the data bucket and kept for good. A `force` input rebuilds regardless. |
-| `refresh-reference.yml` | Daily at 05:00 UTC (EventBridge) | Keeps the building footprints and the debris-flow GeoPackage current. `scripts/reference_check.py` reads Overture's latest release id and the NCGS layer's edit date, logs both next to the values recorded at the last build, and rebuilds a dataset only when its marker changed, when its last build is 90 days old, or when `force` is set. What was built is recorded in `alerts/data/reference_state.json`. |
+| `refresh-simple.yml` | Every 10 minutes (EventBridge) | The DFENS Simple pipeline. A stdlib check asks NDFD whether the forecast changed; if not, only `status.json` is re-uploaded as a heartbeat. If it did, the forecast and flagged files are rebuilt, downloading the debris-flow GeoPackage and the fire district file from the bucket only when rain at or above the threshold is forecast. Any run that flags pathways is also copied to `simple/archive/<timestamp>/` in the data bucket and kept for good. A `force` input rebuilds regardless. |
+| `refresh-reference.yml` | Daily at 05:00 UTC (EventBridge) | Keeps the building footprints, the debris-flow GeoPackage and the WNC fire district file (`cache/fire_districts_wnc.geojson` in the data bucket) current. `scripts/reference_check.py` reads Overture's latest release id and the edit dates of the NCGS debris-flow layer and the State Fire Marshal fire district layer, logs each next to the value recorded at the last build, and rebuilds a dataset only when its marker changed, when its last build is 90 days old, or when `force` is set. What was built is recorded in `alerts/data/reference_state.json`. |
 | `refresh-data.yml` | Manual only | The full alerts pipeline for the offline SIREN dashboard. Off the schedule since 2026-10-27; run it from the Actions tab to regenerate that dashboard's files. |
 | `token-expiry-reminder.yml` | Once, a month before the GitHub token expires (EventBridge) | Opens an issue with the renewal steps. A `dry_run` input prints the issue instead. |
 

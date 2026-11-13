@@ -12,7 +12,7 @@
  *   init()
  *   setForecastPeriod(meta) / setForecastVisible(bool)
  *   setRadarVisible(bool)
- *   setAlerts(geojson) / setAlertsVisible(bool) / zoomToAlert(objectid)
+ *   setAlerts(geojson) / setAlertsVisible(bool) / zoomToAlert(objectid) / zoomToAlerts([ids])
  *   setReferenceVisible(bool)  -> Promise
  *   setParcelsVisible(bool)
  *   setBuildingsVisible(bool)
@@ -58,7 +58,7 @@ window.DFS_MAP = (function () {
     // the `parcels` pane has clickable parcels for attribute popups.
     // All other panes are visual-only and should let clicks through to
     // whichever clickable layer is under the cursor.
-    const CLICKABLE_PANES = new Set(['alerts', 'parcels']);
+    const CLICKABLE_PANES = new Set(['alerts', 'parcels', 'fire_districts']);
     Object.entries(CFG.PANE_ZINDEX).forEach(([name, z]) => {
       const pane = map.createPane(name + 'Pane');
       pane.style.zIndex = z;
@@ -436,10 +436,29 @@ window.DFS_MAP = (function () {
             '<dt>Watershed</dt><dd>' +
             _escape(p.watershed || '--') +
             '</dd>' +
+            '<dt>Fire district</dt><dd>' +
+            _escape(_fireDistrictText(p)) +
+            '</dd>' +
             '</dl></div>'
         );
       },
     }).addTo(map);
+  }
+
+  // The popup only repeats what the pipeline wrote for this pathway. With
+  // no status (an older file, or a failed lookup) it says so plainly.
+  function _fireDistrictText(p) {
+    if (p.fire_district_status === 'district') {
+      const name = p.fire_department || 'Unnamed fire district';
+      return p.fdid ? name + ' (FDID ' + p.fdid + ')' : name;
+    }
+    if (p.fire_district_status === 'no_district') {
+      return 'No District (state fire district data)';
+    }
+    if (p.fire_district_status === 'outside_nc') {
+      return 'Outside North Carolina';
+    }
+    return 'Not available';
   }
 
   function zoomToAlert(objectid) {
@@ -453,6 +472,27 @@ window.DFS_MAP = (function () {
     if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
     map.fitBounds(target.getBounds(), { padding: [60, 60], maxZoom: 15 });
     target.openPopup();
+  }
+
+  // Fit the map to a set of pathways (one fire district's group).
+  function zoomToAlerts(objectids) {
+    if (!layers.alerts || !objectids || !objectids.length) return;
+    if (objectids.length === 1) {
+      zoomToAlert(objectids[0]);
+      return;
+    }
+    const want = new Set(objectids.map(String));
+    let bounds = null;
+    layers.alerts.eachLayer(function (l) {
+      if (!want.has(String(l.feature.properties.OBJECTID))) return;
+      bounds = bounds
+        ? bounds.extend(l.getBounds())
+        : L.latLngBounds(l.getBounds());
+    });
+    if (!bounds) return;
+    if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
+    map.closePopup();
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
   }
 
   function setAlertsVisible(visible) {
@@ -584,6 +624,51 @@ window.DFS_MAP = (function () {
       })
       .bindPopup(_buildParcelPopup);
     layers.parcels.addTo(map);
+  }
+
+  // ---- NC fire districts (reference outlines, no fill) ---------------------
+  // Service default symbology: 1 px #A83800 outline, transparent fill.
+  // Click an outline for the department name and FDID.
+  function setFireDistrictsVisible(visible) {
+    if (!visible) {
+      if (layers.fire) {
+        map.removeLayer(layers.fire);
+        layers.fire = null;
+      }
+      return;
+    }
+    if (layers.fire || typeof L.esri === 'undefined') return;
+    layers.fire = L.esri
+      .featureLayer({
+        url: CFG.FIRE_DISTRICTS_URL,
+        pane: 'fire_districtsPane',
+        fields: ['OBJECTID', 'FDID', 'firedepartment', 'fdcounty'],
+        simplifyFactor: 0.5,
+        precision: 5,
+        style: {
+          color: CFG.FIRE_DISTRICTS_COLOR,
+          weight: 1.3,
+          opacity: 1,
+          fill: false,
+        },
+        attribution: 'NC Office of State Fire Marshal',
+      })
+      .bindPopup(function (layer) {
+        const p = layer.feature.properties || {};
+        return (
+          '<div class="alert-popup"><strong>' +
+          _escape(p.firedepartment || 'Fire district') +
+          '</strong><dl>' +
+          '<dt>FDID</dt><dd>' +
+          _escape(p.FDID || '--') +
+          '</dd>' +
+          '<dt>County</dt><dd>' +
+          _escape(p.fdcounty || '--') +
+          '</dd>' +
+          '</dl></div>'
+        );
+      });
+    layers.fire.addTo(map);
   }
 
   // Build the HTML content for a parcel popup. Handles missing/null fields
@@ -1065,8 +1150,10 @@ window.DFS_MAP = (function () {
     setAlerts,
     setAlertsVisible,
     zoomToAlert,
+    zoomToAlerts,
     setReferenceVisible,
     setParcelsVisible,
+    setFireDistrictsVisible,
     setBuildingsVisible,
     _internalMap: () => map,
     // Private helpers, exposed for simple/test/map.test.js only.
@@ -1076,6 +1163,7 @@ window.DFS_MAP = (function () {
       parseOwnerName: _parseOwnerName,
       buildParcelPopup: _buildParcelPopup,
       escape: _escape,
+      fireDistrictText: _fireDistrictText,
     },
   };
 })();

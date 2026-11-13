@@ -33,10 +33,12 @@ REPO = HERE.parent.parent  # .../landslides-ncgs
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "scripts"))  # shared main-pipeline modules
 
+import fire_districts  # noqa: E402
 import geopandas as gpd  # noqa: E402
 import ndfd_check  # noqa: E402
 import requests  # noqa: E402
 import settings as S  # noqa: E402
+from fire_district_join import assign_fire_districts, empty_fire_columns  # noqa: E402
 from shapely.geometry import box  # noqa: E402
 from shapely.ops import unary_union  # noqa: E402
 
@@ -94,17 +96,50 @@ def _polygonal(geom):
 
 
 def repair_polygons(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """NDFD contour polygons are occasionally self-intersecting, which makes
-    GEOS overlay operations (clip, intersection) throw a TopologyException
-    ("side location conflict"). Repair invalid ones with make_valid and drop
-    anything that isn't polygonal afterwards."""
+    """Service polygons (NDFD contours, fire districts) are occasionally
+    self-intersecting, which makes GEOS overlay operations (clip,
+    intersection) throw a TopologyException ("side location conflict").
+    Repair invalid ones with make_valid and drop anything that isn't
+    polygonal afterwards."""
     bad = ~gdf.geometry.is_valid
     if bad.any():
-        log(f"repairing {int(bad.sum())} invalid NDFD polygon(s)")
+        log(f"repairing {int(bad.sum())} invalid polygon(s)")
         fixed = gdf.geometry.make_valid().apply(_polygonal)
         gdf = gdf.set_geometry(fixed)
         gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
     return gdf
+
+
+# ---------------------------------------------------------------------------
+# Fire districts (NC OSFM) - primary district per flagged pathway
+# ---------------------------------------------------------------------------
+def load_fire_districts() -> gpd.GeoDataFrame:
+    """The WNC fire districts from cache/. In production a workflow step
+    has already placed the file there; on a developer machine, or before
+    the data bucket has a copy, it is downloaded here first."""
+    path = REPO / S.FIRE_DISTRICTS_CACHE
+    if not path.exists():
+        log("no local fire district file; downloading the WNC districts")
+        collection = fire_districts.fetch_wnc_districts()
+        fire_districts.write_districts(path, collection)
+    districts = gpd.read_file(path)
+    return repair_polygons(districts)
+
+
+def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str]:
+    """Add the fire district columns. Returns the tagged pathways and the
+    lookup result for meta.fire_districts."""
+    try:
+        districts = load_fire_districts()
+        tagged = assign_fire_districts(flagged, districts, INTERSECTION_CRS)
+    # Deliberately broad: a fire district failure must never stop the
+    # flagged pathways from being published.
+    except Exception as e:
+        log(f"WARNING: fire district lookup failed ({type(e).__name__}: {e})")
+        return empty_fire_columns(flagged), fire_districts.LOOKUP_UNAVAILABLE
+    in_district = int((tagged["fire_district_status"] == fire_districts.STATUS_DISTRICT).sum())
+    log(f"fire districts: {in_district} of {len(tagged)} flagged pathways in a fire district")
+    return tagged, fire_districts.LOOKUP_OK
 
 
 def round_coords(geom_json: dict, nd: int) -> None:
@@ -173,8 +208,10 @@ def build(out: Path) -> int:
         log(f"flagged: {len(flagged):,} ({time.time() - t0:.0f}s)")
 
     features = []
+    fire_district_lookup = fire_districts.LOOKUP_NOT_RUN
     if flagged is not None and not flagged.empty:
         flagged = flagged.rename(columns={"category": "max_category"})
+        flagged, fire_district_lookup = tag_fire_districts(flagged)
         proj = flagged.to_crs(INTERSECTION_CRS)
         proj["geometry"] = proj.geometry.simplify(S.SIMPLIFY_METERS, preserve_topology=True)
         flagged = proj.to_crs(DISPLAY_CRS)
@@ -189,6 +226,7 @@ def build(out: Path) -> int:
 
     now = datetime.now(UTC)
     meta = ndfd_check.build_meta(state, len(features), now)
+    meta["fire_districts"] = fire_district_lookup
     ndfd_check.write_json(
         out / S.FLAGGED_FILENAME, {"type": "FeatureCollection", "features": features, "meta": meta}
     )

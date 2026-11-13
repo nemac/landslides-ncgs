@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Decide whether the two reference datasets need rebuilding.
+"""Decide whether the three reference datasets need rebuilding.
 
 Run daily by refresh-reference.yml, before any heavy work. Standard library
 only, so it runs in seconds on a plain Python.
 
-Both upstreams say when they last changed, so the expensive rebuilds happen
-only when they did:
+Every upstream says when it last changed, so the expensive rebuilds happen
+only when it did:
 
   * Overture Maps publishes numbered releases; the STAC catalog names the
     latest one. The building footprints are rebuilt when it differs from
@@ -13,14 +13,19 @@ only when they did:
   * The NCGS debris-flow layer reports a data-last-edit date through its
     ArcGIS metadata. The cached debris-flow GeoPackage is rebuilt when it
     moves.
+  * The NC fire district layer reports the same kind of date. The cached
+    WNC fire district GeoJSON is rebuilt when it moves.
 
-Either dataset is also rebuilt when its last build is older than
+Any dataset is also rebuilt when its last build is older than
 REBUILD_AFTER_DAYS, in case an upstream republishes without moving its
-marker, and whenever FORCE=true. Every run logs both upstream values next
-to the recorded ones so a stale marker is visible in the Actions log.
+marker, and whenever FORCE=true. A state file with no entry for a dataset
+counts as no previous build, so a newly added dataset is built on its first
+run. Every run logs each upstream value next to the recorded one so a stale
+marker is visible in the Actions log.
 
-Outputs, for the workflow: `buildings` and `debris` ("true"/"false"),
-`overture_release`, `debris_last_edit`, and the reasons. Writes
+Outputs, for the workflow: `buildings`, `debris` and `fire_districts`
+("true"/"false"), `any`, `overture_release`, `debris_last_edit` and
+`fire_districts_last_edit`. Writes
 <out>/reference_state.json, the state to upload once the rebuilds succeed,
 and <out>/check.json for the job summary.
 """
@@ -40,12 +45,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import DEBRIS_FLOW_SERVICE_URL  # noqa: E402
+from config import DEBRIS_FLOW_SERVICE_URL, FIRE_DISTRICTS_SERVICE_URL  # noqa: E402
 
 OVERTURE_CATALOG_URL = "https://stac.overturemaps.org/catalog.json"
 PUBLIC_STATE_URL = "https://landslidesncgs.org/alerts/data/reference_state.json"
 REBUILD_AFTER_DAYS = 90
-DATASETS = ("buildings", "debris")
+DATASETS = ("buildings", "debris", "fire_districts")
 
 # The NCGS ArcGIS server sometimes stalls past the 30-second timeout and
 # answers fine a few seconds later (run 42165821205, 2026-11-06). So a
@@ -127,14 +132,25 @@ def latest_overture_release(fetch=_get_json) -> str:
     return str(latest)
 
 
-def debris_last_edit(fetch=_get_json) -> str:
-    """The NCGS layer's data-last-edit date as an ISO string (UTC)."""
-    info = fetch(DEBRIS_FLOW_SERVICE_URL + "?f=json")
+def _layer_last_edit(url: str, label: str, fetch) -> str:
+    """An ArcGIS layer's data-last-edit date as an ISO string (UTC).
+    `label` names the layer in the error when it reports no date."""
+    info = fetch(url + "?f=json")
     edit = info.get("editingInfo") or {}
     ms = edit.get("dataLastEditDate") or edit.get("lastEditDate")
     if not ms:
-        raise RuntimeError("NCGS debris-flow layer reports no edit date")
+        raise RuntimeError(f"{label} reports no edit date")
     return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).isoformat()
+
+
+def debris_last_edit(fetch=_get_json) -> str:
+    """The NCGS debris-flow layer's data-last-edit date (UTC, ISO)."""
+    return _layer_last_edit(DEBRIS_FLOW_SERVICE_URL, "NCGS debris-flow layer", fetch)
+
+
+def fire_districts_last_edit(fetch=_get_json) -> str:
+    """The NC fire district layer's data-last-edit date (UTC, ISO)."""
+    return _layer_last_edit(FIRE_DISTRICTS_SERVICE_URL, "NC fire district layer", fetch)
 
 
 def previous_state(fetch=_get_json, url: str | None = None, *, force: bool = False) -> dict:
@@ -224,12 +240,15 @@ def main() -> int:
     upstream = {
         "buildings": latest_overture_release(),
         "debris": debris_last_edit(),
+        "fire_districts": fire_districts_last_edit(),
     }
     previous = previous_state(force=force)
     log(f"Overture latest release:        {upstream['buildings']}")
     log(f"Overture release last built:    {(previous.get('buildings') or {}).get('value')}")
     log(f"NCGS debris layer last edited:  {upstream['debris']}")
     log(f"NCGS edit date last built:      {(previous.get('debris') or {}).get('value')}")
+    log(f"Fire district layer edited:     {upstream['fire_districts']}")
+    log(f"Fire district edit last built:  {(previous.get('fire_districts') or {}).get('value')}")
 
     rebuild: dict[str, bool] = {}
     reasons: dict[str, str] = {}
@@ -247,8 +266,10 @@ def main() -> int:
         {
             "buildings": str(rebuild["buildings"]).lower(),
             "debris": str(rebuild["debris"]).lower(),
+            "fire_districts": str(rebuild["fire_districts"]).lower(),
             "overture_release": upstream["buildings"],
             "debris_last_edit": upstream["debris"],
+            "fire_districts_last_edit": upstream["fire_districts"],
             "any": str(any(rebuild.values())).lower(),
         }
     )

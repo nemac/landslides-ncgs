@@ -30,8 +30,9 @@
     statusChecked: $('status-checked'),
     statusNext: $('status-next'),
     staleBanner: $('stale-banner'),
-    tbody: $('alerts-tbody'),
+    table: $('alerts-table'),
     tableSummary: $('table-summary'),
+    districtNotice: $('district-notice'),
     exportBtn: $('export-csv'),
     sourceLink: $('source-link'),
     layerNdfd: $('layer-ndfd'),
@@ -40,6 +41,9 @@
     layerAlerts: $('layer-alerts'),
     layerReference: $('layer-reference'),
     layerParcels: $('layer-parcels'),
+    layerFire: $('layer-fire'),
+    toggleTable: $('toggle-table'),
+    tableWrapper: $('table-wrapper'),
     layerBuildings: $('layer-buildings'),
   };
 
@@ -241,12 +245,47 @@
         if (on) _setLoading(false);
       });
     });
+    els.layerFire.addEventListener('change', function () {
+      MAP.setFireDistrictsVisible(this.checked);
+    });
+    els.toggleTable.addEventListener('click', function () {
+      _setTableOpen(els.toggleTable.getAttribute('aria-expanded') !== 'true');
+    });
+    let tableOpen = true;
+    try {
+      tableOpen = localStorage.getItem('siren.tableOpen') !== '0';
+    } catch (_e) {
+      /* ignore */
+    }
+    _setTableOpen(tableOpen);
     els.layerParcels.addEventListener('change', function () {
       MAP.setParcelsVisible(this.checked);
     });
     els.layerBuildings.addEventListener('change', function () {
       MAP.setBuildingsVisible(this.checked);
     });
+  }
+
+  // Hide/show the attribute table; the map takes the freed space.
+  function _setTableOpen(open) {
+    els.toggleTable.setAttribute('aria-expanded', String(open));
+    const label = open ? 'Hide table' : 'Show table';
+    els.toggleTable.setAttribute('aria-label', label);
+    els.toggleTable.title = label;
+    els.tableWrapper.hidden = !open;
+    document
+      .querySelector('.table-section')
+      .classList.toggle('is-collapsed', !open);
+    try {
+      localStorage.setItem('siren.tableOpen', open ? '1' : '0');
+    } catch (_e) {
+      /* ignore */
+    }
+    const m = MAP._internalMap && MAP._internalMap();
+    if (m)
+      setTimeout(function () {
+        m.invalidateSize();
+      }, 50);
   }
 
   // ---- Data ----------------------------------------------------------------
@@ -310,7 +349,7 @@
     const m = state.meta;
     const n = state.features.length;
 
-    els.statusCount.textContent = String(n);
+    els.statusCount.textContent = n.toLocaleString('en-US');
     els.statusCard.classList.toggle('has-alerts', n > 0);
     els.statusCard.classList.toggle('is-zero', n === 0);
 
@@ -321,8 +360,19 @@
     MAP.setAlerts({ type: 'FeatureCollection', features: state.features });
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    TABLE.render(state.features, els.tbody, els.tableSummary, MAP.zoomToAlert);
+    TABLE.render(state.features, m, _tableElements(), {
+      onSelect: MAP.zoomToAlert,
+      onZoomGroup: MAP.zoomToAlerts,
+    });
     els.exportBtn.disabled = n === 0;
+  }
+
+  function _tableElements() {
+    return {
+      table: els.table,
+      summary: els.tableSummary,
+      notice: els.districtNotice,
+    };
   }
 
   function _renderWindow(m) {
@@ -433,23 +483,17 @@
     els.staleBanner.textContent =
       'Forecast data could not be loaded. Try again in a few minutes, and ' +
       'check current NWS forecasts at weather.gov.';
-    els.tableSummary.textContent = 'Data unavailable.';
+    els.tableSummary.textContent = 'Data unavailable';
     els.tableSummary.classList.remove('is-none');
     els.statusCard.classList.remove('is-zero');
-    els.tbody.innerHTML =
-      '<tr><td colspan="5" class="empty-row">Forecast data could not be loaded.</td></tr>';
+    TABLE.renderMessage('Forecast data could not be loaded.', _tableElements());
     els.exportBtn.disabled = true;
   }
 
   // ---- CSV -----------------------------------------------------------------
   function _exportCsv() {
     if (!state.features.length) return;
-    const m = state.meta;
-    const csv = TABLE.toCSV(state.features, {
-      windowStart: m.window_start,
-      windowEnd: m.window_end,
-      issued: m.issued,
-    });
+    const csv = TABLE.toCSV(state.features, state.meta);
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const url = URL.createObjectURL(
       new Blob([csv], { type: 'text/csv;charset=utf-8' })

@@ -77,14 +77,14 @@
       <dd class="card-note" id="status-window-note"></dd>
     </dl>
     <dl class="card">
-      <dt>Last Update</dt>
+      <dt>Last Updated</dt>
       <dd class="card-value" id="status-issued">--</dd>
       <dd class="card-note" id="status-checked"></dd>
       <dd class="card-note" id="status-next"></dd>
     </dl>
     <dl class="card">
       <dt>Precipitation Threshold</dt>
-      <dd class="card-value">5&Prime; precipitation in 24 hours</dd>
+      <dd class="card-value">At least 5&Prime; precipitation in 24 hours</dd>
     </dl>
   </section>
 
@@ -163,11 +163,18 @@
             Potential channelized debris flow pathways
           </label>
         </div>
+        <div class="layer-row">
+          <input type="checkbox" id="layer-fire" />
+          <label for="layer-fire">
+            <span class="key key-fire" aria-hidden="true"></span>
+            NC fire districts
+          </label>
+        </div>
         <div class="layer-row zoom-gated" id="row-parcels" title="Zoom in to see parcels">
           <input type="checkbox" id="layer-parcels" />
           <label for="layer-parcels">
             <span class="key key-parcels" aria-hidden="true"></span>
-            NC Parcels
+            NC parcels
           </label>
         </div>
         <div class="layer-row zoom-gated" id="row-buildings" title="Zoom in to see building footprints">
@@ -186,7 +193,7 @@
         <table class="refresh-table">
           <caption class="sr-only">How often the forecast data and this map update</caption>
           <thead>
-            <tr><th scope="col">Update</th><th scope="col">How often</th></tr>
+            <tr><th scope="col">Data</th><th scope="col">How often</th></tr>
           </thead>
           <tbody>
             <tr>
@@ -209,7 +216,8 @@
           <li><a href="https://mtarchive.geol.iastate.edu/" target="_blank" rel="noopener">NOAA MRMS observed precipitation via Iowa Environmental Mesonet</a></li>
           <li><a href="https://services1.arcgis.com/PwLrOgCfU0cYShcG/arcgis/rest/services/CDF_Landslides_Model/FeatureServer" target="_blank" rel="noopener">NC Geological Survey channelized debris flow model</a></li>
           <li><a href="https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer/1" target="_blank" rel="noopener">NC OneMap parcels</a></li>
-          <li><a href="https://docs.overturemaps.org/guides/buildings/#14/32.58453/-117.05154/0/60" target="_blank" rel="noopener">Overture Maps buildings</a></li>
+          <li><a href="https://www.nconemap.gov/datasets/abc2d489a9484854b21ffb029eb45a98_0/about" target="_blank" rel="noopener">NC fire districts (Office of State Fire Marshal) via NC OneMap</a></li>
+          <li><a href="https://docs.overturemaps.org/guides/buildings/" target="_blank" rel="noopener">Overture Maps buildings</a></li>
         </ul>
       </details>
 
@@ -225,12 +233,22 @@
 
     <main class="content" id="main-content">
       <section class="map-section" aria-label="Map">
-        <div id="map" role="img"
+        <!-- A region, not an image: Leaflet puts buttons and links inside. -->
+        <div id="map" role="region"
              aria-label="Map of Western North Carolina showing flagged debris flow pathways.
                         The same pathways are listed in the table below."></div>
       </section>
 
       <section class="table-section" aria-labelledby="table-heading">
+        <!-- Tab on the map's bottom edge; chevron points the way it will move. -->
+        <button type="button" id="toggle-table" class="table-tab"
+                aria-expanded="true" aria-controls="table-wrapper"
+                aria-label="Hide table" title="Hide table">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+            <path d="M3 6l5 5 5-5" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <div class="table-head">
           <h2 id="table-heading">Flagged pathways</h2>
           <p id="table-summary" class="table-summary" aria-live="polite">Loading&hellip;</p>
@@ -238,12 +256,16 @@
             Download CSV
           </button>
         </div>
-        <div class="table-wrapper" tabindex="0" aria-label="Scrollable table of flagged pathways">
+        <!-- table.js writes the fire district notice in here. The region
+             stays in the page so screen readers announce the text. -->
+        <div id="district-notice" class="district-notice-region" role="status"></div>
+        <div class="table-wrapper" id="table-wrapper" tabindex="0" aria-label="Scrollable table of flagged pathways">
           <table id="alerts-table">
+            <!-- table.js rewrites the caption to match how rows are listed. -->
             <caption class="sr-only">
               Debris flow pathways forecast to receive 5 inches or more of
-              rain in 24 hours, highest rain first. Select a row to show it
-              on the map.
+              rain in 24 hours, highest rain first. Select a row to show
+              that pathway on the map.
             </caption>
             <thead>
               <tr>
@@ -254,7 +276,7 @@
                 <th scope="col" class="num">Pathway ID</th>
               </tr>
             </thead>
-            <tbody id="alerts-tbody">
+            <tbody>
               <tr><td colspan="5" class="empty-row">Loading&hellip;</td></tr>
             </tbody>
           </table>

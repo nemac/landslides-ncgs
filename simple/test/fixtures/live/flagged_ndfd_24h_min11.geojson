@@ -9,7 +9,8 @@
   "min_category_shipped": 11,
   "n_flagged": 3,
   "generated_at": "2026-10-27T18:20:44+00:00",
-  "ndfd_key": "2026-10-27T18:00:00+00:00|2026-10-27T18:11:16+00:00"
+  "ndfd_key": "2026-10-27T18:00:00+00:00|2026-10-27T18:11:16+00:00",
+  "fire_districts": "ok"
  },
  "features": [
   {
@@ -46,7 +47,13 @@
     "county": "Buncombe",
     "watershed": "Swannanoa River",
     "max_category": 11,
-    "area_acres": 0.42
+    "area_acres": 0.42,
+    "fdid": "11101",
+    "fire_department": "Asheville Fire Department",
+    "fd_county": "Buncombe",
+    "fd_address": "100 Court Plaza, Asheville, NC 28801",
+    "district_updated": "2024-03-01",
+    "fire_district_status": "district"
    }
   },
   {
@@ -83,7 +90,13 @@
     "county": "Haywood",
     "watershed": "Pigeon River, East Fork",
     "max_category": 12,
-    "area_acres": 3.75
+    "area_acres": 3.75,
+    "fdid": "44104",
+    "fire_department": "Cruso Fire Department",
+    "fd_county": "Haywood",
+    "fd_address": "13 Cruso Rd, Canton, NC 28716",
+    "district_updated": "2023-07-15",
+    "fire_district_status": "district"
    }
   },
   {
@@ -120,7 +133,13 @@
     "county": "Buncombe",
     "watershed": "French Broad River",
     "max_category": 11,
-    "area_acres": 12.0
+    "area_acres": 12.0,
+    "fdid": "11101",
+    "fire_department": "Asheville Fire Department",
+    "fd_county": "Buncombe",
+    "fd_address": "100 Court Plaza, Asheville, NC 28801",
+    "district_updated": "2024-03-01",
+    "fire_district_status": "district"
    }
   },
   {
@@ -157,7 +176,13 @@
     "county": "Madison",
     "watershed": "Ivy Creek",
     "max_category": 10,
-    "area_acres": 2.0
+    "area_acres": 2.0,
+    "fdid": "57102",
+    "fire_department": "Mars Hill Fire Department",
+    "fd_county": "Madison",
+    "fd_address": "280 N Main St, Mars Hill, NC 28754",
+    "district_updated": "2022-09-30",
+    "fire_district_status": "district"
    }
   }
  ]
