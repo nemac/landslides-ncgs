@@ -35,15 +35,15 @@ import settings as S
 
 T = TypeVar("T")
 
-# The hosted NDFD service stalls for about a minute and then answers a
-# generic 400 ("Cannot perform query. Invalid query parameters.") while
-# Esri reloads the layer each hour. Those answers, timeouts and 5xx are
-# retried; a real client error such as a 404 on status.json is not.
 # What meta.fire_districts says when the lookup failed. It is spelled out
 # here because fire_districts.py imports this module (a test keeps the
 # two in step).
 FIRE_DISTRICTS_UNAVAILABLE = "unavailable"
 
+# The hosted NDFD service stalls for about a minute and then answers a
+# generic 400 ("Cannot perform query. Invalid query parameters.") while
+# Esri reloads the layer each hour. Those answers, timeouts and 5xx are
+# retried; a real client error such as a 404 on status.json is not.
 RETRY_ATTEMPTS = 3
 RETRY_DELAYS = (5, 15)  # seconds to wait before attempts 2 and 3
 
@@ -232,20 +232,29 @@ def build_status(meta: dict, now: datetime, result: str) -> dict:
     return st
 
 
-def is_up_to_date(prev: dict | None, state: dict) -> bool:
-    """True when the last published run already covers this NDFD update."""
+def covers_this_update(prev: dict | None, state: dict) -> bool:
+    """True when the last published run was built from this NDFD update
+    by this version of the pipeline."""
     if not prev:
         return False
     if prev.get("ndfd_key") != state["ndfd_key"]:
         return False
-    if prev.get("pipeline_version") != S.PIPELINE_VERSION:
+    return prev.get("pipeline_version") == S.PIPELINE_VERSION
+
+
+def is_fire_district_retry(prev: dict | None, state: dict) -> bool:
+    """True when the last run covered this NDFD update but its fire
+    district lookup failed. The run is built again so the lookup gets
+    another try. Without this, the failure would stay published until
+    NDFD itself changes."""
+    if not covers_this_update(prev, state):
         return False
-    # A failed fire district lookup is tried again on the next check.
-    # Without this it would stay published until NDFD itself changes.
-    if prev.get("fire_districts") == FIRE_DISTRICTS_UNAVAILABLE:
-        print("[check] the last run had no fire districts; building again")
-        return False
-    return True
+    return prev.get("fire_districts") == FIRE_DISTRICTS_UNAVAILABLE
+
+
+def is_up_to_date(prev: dict | None, state: dict) -> bool:
+    """True when there is nothing to build."""
+    return covers_this_update(prev, state) and not is_fire_district_retry(prev, state)
 
 
 def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
@@ -263,6 +272,9 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
         f"polygons in WNC: {state['n_precip_polygons']}"
     )
 
+    retry = is_fire_district_retry(prev, state)
+    if retry:
+        print("[check] the last run had no fire districts; building again")
     if is_up_to_date(prev, state) and not force:
         action = "skip"
         status = dict(prev)
@@ -280,6 +292,9 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
             "heavy": heavy,
             **{k: (_iso(v) if isinstance(v, datetime) else v) for k, v in state.items()},
             "previous_key": prev.get("ndfd_key") if prev else None,
+            # The workflow reads this so that it does not archive the same
+            # failed result again on every retry.
+            "fire_district_retry": retry,
         },
     )
     print(f"[check] action={action} heavy={str(heavy).lower()}")

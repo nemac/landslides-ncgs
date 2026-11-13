@@ -158,6 +158,41 @@ class MatchFireDistrictsTest(unittest.TestCase):
         match = self.match_one(CASES[8][0])
         self.assertTrue(fd.is_no_district(match))
 
+    def test_a_pathway_that_crosses_itself_does_not_break_the_lookup(self):
+        # A "bowtie": its outline crosses itself, so it is not a valid
+        # polygon. It lies across the edge between a real district and
+        # "No District" land. Before shapes were repaired, this raised a
+        # GEOSException and every pathway in the file lost its district.
+        districts = make_districts(
+            [
+                ("Alpha", "100", box(-82.60, 35.50, -82.50, 35.70)),
+                (fd.NO_DISTRICT_NAME, None, box(-82.50, 35.50, -82.40, 35.70)),
+            ]
+        )
+        bowtie = Polygon([(-82.505, 35.59), (-82.465, 35.61), (-82.465, 35.59), (-82.505, 35.61)])
+        self.assertFalse(bowtie.is_valid)
+        pathways = make_pathways([bowtie, small_square(-82.55, 35.60)])
+        matches = join.match_fire_districts(pathways, districts, METRIC_CRS)
+        # Which of the two the bowtie gets depends on where its inner point
+        # falls. What matters is that it gets an answer and so does the
+        # ordinary pathway beside it.
+        self.assertIsNotNone(matches[0])
+        self.assertEqual(matches[1]["firedepartment"], "Alpha")
+
+    def test_a_district_that_crosses_itself_does_not_break_the_lookup(self):
+        bowtie = Polygon([(-82.52, 35.58), (-82.48, 35.62), (-82.48, 35.58), (-82.52, 35.62)])
+        districts = make_districts(
+            [
+                ("Bowtie", "100", bowtie),
+                (fd.NO_DISTRICT_NAME, None, box(-82.60, 35.50, -82.40, 35.70)),
+            ]
+        )
+        # The pathway's point is in "No District" land only, so it is
+        # compared with both districts by overlap.
+        pathways = make_pathways([box(-82.53, 35.5995, -82.515, 35.6005)])
+        matches = join.match_fire_districts(pathways, districts, METRIC_CRS)
+        self.assertTrue(fd.is_no_district(matches[0]))
+
     def test_results_follow_input_order(self):
         geometries = [geometry for geometry, _, _ in CASES]
         expected = []
@@ -220,6 +255,25 @@ class RefreshSimpleFireDistrictTest(unittest.TestCase):
                 tagged, lookup = self.refresh.tag_fire_districts(self.pathways)
         self.assertEqual(lookup, fd.LOOKUP_OK)
         self.assertEqual(list(tagged["fire_department"]), ["Alpha"])
+
+    def test_tag_warns_when_a_pathway_matches_no_district(self):
+        pathways = make_pathways([small_square(-82.60, 35.60), small_square(-82.30, 35.60)])
+        output = io.StringIO()
+        with mock.patch.object(self.refresh, "load_fire_districts", return_value=all_districts()):
+            with redirect_stdout(output):
+                tagged, lookup = self.refresh.tag_fire_districts(pathways)
+        self.assertEqual(lookup, fd.LOOKUP_OK)
+        self.assertEqual(list(tagged["fire_district_status"])[1], fd.STATUS_OUTSIDE_NC)
+        warnings = [line for line in output.getvalue().splitlines() if "::warning::" in line]
+        self.assertEqual(len(warnings), 1)
+        self.assertTrue(warnings[0].startswith("::warning::1 flagged pathway(s)"))
+
+    def test_tag_does_not_warn_when_every_pathway_matches(self):
+        output = io.StringIO()
+        with mock.patch.object(self.refresh, "load_fire_districts", return_value=all_districts()):
+            with redirect_stdout(output):
+                self.refresh.tag_fire_districts(self.pathways)
+        self.assertNotIn("::warning::", output.getvalue())
 
     def test_tag_failure_leaves_columns_empty_and_warns(self):
         failure = RuntimeError("service down")

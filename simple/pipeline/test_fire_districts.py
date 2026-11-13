@@ -204,27 +204,31 @@ class FetchWncDistrictsTest(unittest.TestCase):
             [
                 {"features": [feature("A"), feature("B")], "exceededTransferLimit": True},
                 {"features": [feature("C")]},
+                {"count": 3},
             ]
         )
         result = fd.fetch_wnc_districts(get_json=getter)
         self.assertEqual(result["type"], "FeatureCollection")
         names = [f["properties"]["firedepartment"] for f in result["features"]]
         self.assertEqual(names, ["A", "B", "C"])
-        self.assertEqual([c["params"]["resultOffset"] for c in getter.calls], [0, 2])
+        # Two pages of districts, then the count.
+        self.assertEqual([c["params"]["resultOffset"] for c in getter.calls[:2]], [0, 2])
+        self.assertEqual(getter.calls[2]["params"]["returnCountOnly"], "true")
 
     def test_limit_flag_under_properties(self):
         getter = FakeGetter(
             [
                 {"features": [feature("A")], "properties": {"exceededTransferLimit": True}},
                 {"features": [feature("B")], "properties": {}},
+                {"count": 2},
             ]
         )
         result = fd.fetch_wnc_districts(get_json=getter)
         self.assertEqual(len(result["features"]), 2)
-        self.assertEqual(len(getter.calls), 2)
+        self.assertEqual(len(getter.calls), 3)
 
     def test_query_parameters(self):
-        getter = FakeGetter([{"features": [feature("A")]}])
+        getter = FakeGetter([{"features": [feature("A")]}, {"count": 1}])
         fd.fetch_wnc_districts(get_json=getter)
         call = getter.calls[0]
         self.assertEqual(call["url"], S.FIRE_DISTRICTS_URL + "/query")
@@ -249,6 +253,34 @@ class FetchWncDistrictsTest(unittest.TestCase):
         # A partial answer must never replace a good copy of the file.
         getter = FakeGetter([{"features": [feature("A"), feature("B")]}])
         with mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", 3):
+            with self.assertRaises(RuntimeError):
+                fd.fetch_wnc_districts(get_json=getter)
+
+    def test_count_query_asks_for_the_same_area(self):
+        getter = FakeGetter([{"features": [feature("A")]}, {"count": 1}])
+        fd.fetch_wnc_districts(get_json=getter)
+        districts, count = getter.calls[0]["params"], getter.calls[1]["params"]
+        for name in ("where", "geometry", "geometryType", "inSR", "spatialRel"):
+            self.assertEqual(count[name], districts[name])
+        self.assertEqual(count["f"], "json")
+
+    def test_fewer_districts_than_the_service_reports_is_an_error(self):
+        # Above the fixed minimum, but two short of what the service has.
+        getter = FakeGetter([{"features": [feature("A"), feature("B")]}, {"count": 4}])
+        with self.assertRaises(RuntimeError) as raised:
+            fd.fetch_wnc_districts(get_json=getter)
+        self.assertIn("downloaded 2", str(raised.exception))
+        self.assertIn("service has 4", str(raised.exception))
+
+    def test_more_districts_than_the_service_reports_is_an_error(self):
+        # What a query that ignored the WNC box would look like.
+        getter = FakeGetter([{"features": [feature("A"), feature("B")]}, {"count": 1}])
+        with self.assertRaises(RuntimeError):
+            fd.fetch_wnc_districts(get_json=getter)
+
+    def test_missing_count_is_an_error(self):
+        for answer in ({}, {"count": None}, {"count": True}, {"count": "2"}):
+            getter = FakeGetter([{"features": [feature("A"), feature("B")]}, answer])
             with self.assertRaises(RuntimeError):
                 fd.fetch_wnc_districts(get_json=getter)
 

@@ -140,16 +140,18 @@ jobs:
       - name: Archive a run that flagged pathways
         if: steps.check.outputs.action == 'build'
         run: |
-          N=$(python3 -c "import json; print(json.load(open('out/status.json')).get('n_flagged', 0))")
-          if [ "$N" -gt 0 ]; then
+          # archive_decision.py says no when nothing was flagged, and when
+          # this build was a repeat of a failed fire district lookup that
+          # failed again (the first run for that forecast is already kept).
+          if [ "$(python3 simple/pipeline/archive_decision.py --out out)" = "true" ]; then
             STAMP=$(python3 -c "import json; print(json.load(open('out/status.json'))['generated_at'][:19].replace(':', '') + 'Z')")
             DEST="s3://landslidesncgs-data/simple/archive/${STAMP}"
             for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson status.json; do
               aws s3 cp "out/$f" "$DEST/$f" --content-type application/json
             done
-            echo "Archived a run with $N flagged pathway(s) to $DEST"
+            echo "Archived this run to $DEST"
           else
-            echo "No flagged pathways; nothing archived."
+            echo "Nothing archived: no flagged pathways, or a repeat of a failed fire district lookup."
           fi
 
       - name: Summary
