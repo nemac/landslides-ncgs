@@ -67,6 +67,13 @@ class SettingsMatchFrontend(unittest.TestCase):
         url = "".join(re.findall(r"'([^']*)'", m.group(1)))
         self.assertEqual(url, S.NDFD_LAYER_URL)
 
+    def test_fire_districts_service_url(self):
+        # Written in the JS as adjacent string literals joined with +.
+        m = re.search(r"const FIRE_DISTRICTS_URL\s*=\s*((?:'[^']*'\s*\+?\s*)+);", JS)
+        self.assertIsNotNone(m)
+        url = "".join(re.findall(r"'([^']*)'", m.group(1)))
+        self.assertEqual(url, S.FIRE_DISTRICTS_URL)
+
     def test_precip_label_table_covers_every_category(self):
         keys = js_object_keys("PRECIP_LABELS")
         self.assertEqual(keys, list(range(len(alerts_config.MRMS_CATEGORY_CUTOFFS_INCHES) + 1)))
@@ -79,6 +86,9 @@ class SettingsMatchAlertsPipeline(unittest.TestCase):
 
     def test_same_ndfd_service(self):
         self.assertEqual(S.NDFD_LAYER_URL, alerts_config.NDFD_PRECIP_SERVICE_URL)
+
+    def test_same_fire_districts_service(self):
+        self.assertEqual(S.FIRE_DISTRICTS_URL, alerts_config.FIRE_DISTRICTS_SERVICE_URL)
 
     def test_same_output_geometry_tuning(self):
         self.assertEqual(S.SIMPLIFY_METERS, alerts_config.FLAGGED_SIMPLIFY_METERS)

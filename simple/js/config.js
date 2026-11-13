@@ -159,6 +159,12 @@ window.DFS_CONFIG = (function () {
     'NC1Map_Parcels/MapServer/1';
   const NCONEMAP_PARCELS_ATTRIBUTION = 'NC OneMap statewide parcels';
   const NCONEMAP_PARCELS_MIN_ZOOM = 14;
+  // NC Office of State Fire Marshal fire districts (reference layer; the
+  // pipeline also tags each flagged pathway with its district).
+  const FIRE_DISTRICTS_URL =
+    'https://services5.arcgis.com/yCv672AxcRF0kngG/arcgis/rest/services/' +
+    'NC_Fire_Districts/FeatureServer/0';
+  const FIRE_DISTRICTS_COLOR = '#A83800'; // the service's own outline color
   const ESRI_GEOCODER_URL =
     'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer';
 
@@ -175,6 +181,7 @@ window.DFS_CONFIG = (function () {
     forecast: 400,
     observed: 405,
     radar: 410,
+    fire_districts: 415,
     ncgs_reference: 420,
     alerts: 430,
   };
@@ -223,6 +230,8 @@ window.DFS_CONFIG = (function () {
     NCONEMAP_PARCELS_ATTRIBUTION,
     NCONEMAP_PARCELS_MIN_ZOOM,
     ESRI_GEOCODER_URL,
+    FIRE_DISTRICTS_URL,
+    FIRE_DISTRICTS_COLOR,
     BUILDINGS_MANIFEST_FILE,
     BUILDINGS_ATTRIBUTION,
     BUILDINGS_MIN_ZOOM,

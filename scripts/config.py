@@ -27,6 +27,13 @@ NDFD_PRECIP_SERVICE_URL = (
     "NDFD_Precipitation_v1/FeatureServer/1"
 )
 
+# NC Office of State Fire Marshal fire districts, read by reference_check.py.
+# Must match simple/pipeline/settings.py (test_config_sync.py checks it).
+FIRE_DISTRICTS_SERVICE_URL = (
+    "https://services5.arcgis.com/yCv672AxcRF0kngG/arcgis/rest/services/"
+    "NC_Fire_Districts/FeatureServer/0"
+)
+
 
 # -----------------------------------------------------------------------------
 # Geographic scope

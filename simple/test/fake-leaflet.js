@@ -96,6 +96,12 @@ function fakeLeaflet(document) {
       fitBounds(bounds, opts) {
         this.fitted = { bounds, opts };
       },
+      closePopup() {
+        this.popupClosed = true;
+      },
+      invalidateSize() {
+        this.resized = (this.resized || 0) + 1;
+      },
       setView(latlng, zoom) {
         this.view = { latlng, zoom };
       },
@@ -150,9 +156,18 @@ function fakeLeaflet(document) {
     },
     geoJSON(geojson, options) {
       const sub = (geojson.features || []).map((feature) => {
+        // Like real Leaflet, a layer hands out its own stored bounds, the
+        // same object every time. Growing that object changes the layer.
+        const ownBounds = {
+          of: feature.properties.OBJECTID,
+          extend(more) {
+            this.grownBy = more;
+            return this;
+          },
+        };
         const fl = layer({
           feature,
-          getBounds: () => ({ of: feature.properties.OBJECTID }),
+          getBounds: () => ownBounds,
           openPopup() {
             this.popupOpen = true;
           },
@@ -170,6 +185,20 @@ function fakeLeaflet(document) {
       });
       created.geoJsonLayers.push(l);
       return l;
+    },
+    // Records each bounds it grows by, so a test can see which pathways
+    // a group zoom covered. Like real Leaflet, it returns a bounds object
+    // it is given instead of copying it, and makes a new empty one when
+    // it is given nothing.
+    latLngBounds(first) {
+      if (first && typeof first.extend === 'function') return first;
+      return {
+        extended: first === undefined ? [] : [first],
+        extend(more) {
+          this.extended.push(more);
+          return this;
+        },
+      };
     },
     canvas(options) {
       return { canvas: true, options };

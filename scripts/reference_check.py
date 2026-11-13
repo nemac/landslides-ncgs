@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Decide whether the two reference datasets need rebuilding.
+"""Decide whether the three reference datasets need rebuilding.
 
 Run daily by refresh-reference.yml, before any heavy work. Standard library
 only, so it runs in seconds on a plain Python.
 
-Both upstreams say when they last changed, so the expensive rebuilds happen
-only when they did:
+Every upstream says when it last changed, so the expensive rebuilds happen
+only when it did:
 
   * Overture Maps publishes numbered releases; the STAC catalog names the
     latest one. The building footprints are rebuilt when it differs from
@@ -13,16 +13,26 @@ only when they did:
   * The NCGS debris-flow layer reports a data-last-edit date through its
     ArcGIS metadata. The cached debris-flow GeoPackage is rebuilt when it
     moves.
+  * The NC fire district layer reports the same kind of date. The cached
+    WNC fire district GeoJSON is rebuilt when it moves.
 
-Either dataset is also rebuilt when its last build is older than
+Any dataset is also rebuilt when its last build is older than
 REBUILD_AFTER_DAYS, in case an upstream republishes without moving its
-marker, and whenever FORCE=true. Every run logs both upstream values next
-to the recorded ones so a stale marker is visible in the Actions log.
+marker, and whenever FORCE=true. A state file with no entry for a dataset
+counts as no previous build, so a newly added dataset is built on its first
+run. Every run logs each upstream value next to the recorded one so a stale
+marker is visible in the Actions log.
 
-Outputs, for the workflow: `buildings` and `debris` ("true"/"false"),
-`overture_release`, `debris_last_edit`, and the reasons. Writes
-<out>/reference_state.json, the state to upload once the rebuilds succeed,
-and <out>/check.json for the job summary.
+Each dataset is checked on its own. When one upstream cannot be read, that
+dataset is left alone, the other two are still checked, and the script
+exits 1 after writing its outputs so the run shows as failed.
+
+Outputs, for the workflow: `buildings`, `debris` and `fire_districts`
+("true"/"false"), `any`, `overture_release`, `debris_last_edit` and
+`fire_districts_last_edit`. Writes <out>/check.json for the job summary and
+<out>/reference_state.json, which starts as the previous state.
+reference_record.py updates one dataset's entry in it after that dataset's
+rebuild succeeds, and the workflow uploads it at the end.
 """
 
 from __future__ import annotations
@@ -40,12 +50,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import DEBRIS_FLOW_SERVICE_URL  # noqa: E402
+from config import DEBRIS_FLOW_SERVICE_URL, FIRE_DISTRICTS_SERVICE_URL  # noqa: E402
 
 OVERTURE_CATALOG_URL = "https://stac.overturemaps.org/catalog.json"
 PUBLIC_STATE_URL = "https://landslidesncgs.org/alerts/data/reference_state.json"
 REBUILD_AFTER_DAYS = 90
-DATASETS = ("buildings", "debris")
+DATASETS = ("buildings", "debris", "fire_districts")
 
 # The NCGS ArcGIS server sometimes stalls past the 30-second timeout and
 # answers fine a few seconds later (run 42165821205, 2026-11-06). So a
@@ -127,14 +137,25 @@ def latest_overture_release(fetch=_get_json) -> str:
     return str(latest)
 
 
-def debris_last_edit(fetch=_get_json) -> str:
-    """The NCGS layer's data-last-edit date as an ISO string (UTC)."""
-    info = fetch(DEBRIS_FLOW_SERVICE_URL + "?f=json")
+def _layer_last_edit(url: str, label: str, fetch) -> str:
+    """An ArcGIS layer's data-last-edit date as an ISO string (UTC).
+    `label` names the layer in the error when it reports no date."""
+    info = fetch(url + "?f=json")
     edit = info.get("editingInfo") or {}
     ms = edit.get("dataLastEditDate") or edit.get("lastEditDate")
     if not ms:
-        raise RuntimeError("NCGS debris-flow layer reports no edit date")
+        raise RuntimeError(f"{label} reports no edit date")
     return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).isoformat()
+
+
+def debris_last_edit(fetch=_get_json) -> str:
+    """The NCGS debris-flow layer's data-last-edit date (UTC, ISO)."""
+    return _layer_last_edit(DEBRIS_FLOW_SERVICE_URL, "NCGS debris-flow layer", fetch)
+
+
+def fire_districts_last_edit(fetch=_get_json) -> str:
+    """The NC fire district layer's data-last-edit date (UTC, ISO)."""
+    return _layer_last_edit(FIRE_DISTRICTS_SERVICE_URL, "NC fire district layer", fetch)
 
 
 def previous_state(fetch=_get_json, url: str | None = None, *, force: bool = False) -> dict:
@@ -189,18 +210,73 @@ def decide(
     return False, f"unchanged ({upstream}), built {age.days} days ago"
 
 
-def next_state(
-    previous: dict, upstream: dict[str, str], rebuild: dict[str, bool], now: datetime
-) -> dict:
-    """The state to record after this run: rebuilt datasets take the new
-    upstream marker and timestamp, the others carry their previous entry."""
+def starting_state(previous: dict, now: datetime) -> dict:
+    """The state before any rebuild in this run: every dataset keeps its
+    previous entry. reference_record.py updates one entry after that
+    dataset's rebuild succeeds, so a failed rebuild is never recorded."""
     state = {"checked_at": now.isoformat()}
     for name in DATASETS:
-        if rebuild[name]:
-            state[name] = {"value": upstream[name], "built_at": now.isoformat()}
-        else:
-            state[name] = dict(previous.get(name) or {})
+        state[name] = dict(previous.get(name) or {})
     return state
+
+
+def record_build(state: dict, name: str, value: str, now: datetime) -> dict:
+    """A copy of `state` where dataset `name` was just built from the
+    upstream marker `value`."""
+    if name not in DATASETS:
+        raise ValueError(f"unknown dataset: {name}")
+    if not value:
+        raise ValueError(f"no upstream marker to record for {name}")
+    recorded = dict(state)
+    recorded[name] = {"value": value, "built_at": now.isoformat()}
+    return recorded
+
+
+def read_upstream() -> tuple[dict[str, str | None], dict[str, str]]:
+    """Each dataset's upstream marker, and the error for each one that
+    could not be read. The three sources are separate servers, so one
+    being down must not stop the other two from being checked."""
+    # Built here, not at import, so a test can swap any reader.
+    readers = {
+        "buildings": latest_overture_release,
+        "debris": debris_last_edit,
+        "fire_districts": fire_districts_last_edit,
+    }
+    upstream: dict[str, str | None] = {}
+    errors: dict[str, str] = {}
+    for name in DATASETS:
+        try:
+            upstream[name] = readers[name]()
+        # Deliberately broad: whatever went wrong with one source, the
+        # other datasets still get checked.
+        except Exception as error:
+            upstream[name] = None
+            errors[name] = f"{type(error).__name__}: {error}"
+    return upstream, errors
+
+
+def decide_all(
+    upstream: dict[str, str | None],
+    errors: dict[str, str],
+    previous: dict,
+    now: datetime,
+    *,
+    force: bool = False,
+) -> tuple[dict[str, bool], dict[str, str]]:
+    """decide() for every dataset. A dataset whose upstream could not be
+    read is left alone, even on a forced run: with no marker there is
+    nothing to record for the rebuild."""
+    rebuild: dict[str, bool] = {}
+    reasons: dict[str, str] = {}
+    for name in DATASETS:
+        if name in errors:
+            rebuild[name] = False
+            reasons[name] = f"upstream check failed ({errors[name]})"
+        else:
+            rebuild[name], reasons[name] = decide(
+                upstream[name], previous.get(name), now, force=force
+            )
+    return rebuild, reasons
 
 
 def write_outputs(values: dict) -> None:
@@ -221,37 +297,41 @@ def main() -> int:
     now = datetime.now(UTC)
     force = os.environ.get("FORCE", "false").lower() == "true"
 
-    upstream = {
-        "buildings": latest_overture_release(),
-        "debris": debris_last_edit(),
-    }
+    # Without the previous state nothing can be decided, so this one
+    # failure still stops the whole check.
     previous = previous_state(force=force)
-    log(f"Overture latest release:        {upstream['buildings']}")
-    log(f"Overture release last built:    {(previous.get('buildings') or {}).get('value')}")
-    log(f"NCGS debris layer last edited:  {upstream['debris']}")
-    log(f"NCGS edit date last built:      {(previous.get('debris') or {}).get('value')}")
-
-    rebuild: dict[str, bool] = {}
-    reasons: dict[str, str] = {}
+    upstream, errors = read_upstream()
+    rebuild, reasons = decide_all(upstream, errors, previous, now, force=force)
     for name in DATASETS:
-        rebuild[name], reasons[name] = decide(upstream[name], previous.get(name), now, force=force)
+        last_built = (previous.get(name) or {}).get("value")
+        log(f"{name}: upstream {upstream[name]}, last built from {last_built}")
         log(f"{name}: {'REBUILD' if rebuild[name] else 'skip'} - {reasons[name]}")
 
-    state = next_state(previous, upstream, rebuild, now)
+    state = starting_state(previous, now)
     (out / "reference_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
     (out / "check.json").write_text(
-        json.dumps({"upstream": upstream, "rebuild": rebuild, "reasons": reasons}, indent=2),
+        json.dumps(
+            {"upstream": upstream, "rebuild": rebuild, "reasons": reasons, "errors": errors},
+            indent=2,
+        ),
         encoding="utf-8",
     )
     write_outputs(
         {
             "buildings": str(rebuild["buildings"]).lower(),
             "debris": str(rebuild["debris"]).lower(),
-            "overture_release": upstream["buildings"],
-            "debris_last_edit": upstream["debris"],
+            "fire_districts": str(rebuild["fire_districts"]).lower(),
+            "overture_release": upstream["buildings"] or "",
+            "debris_last_edit": upstream["debris"] or "",
+            "fire_districts_last_edit": upstream["fire_districts"] or "",
             "any": str(any(rebuild.values())).lower(),
         }
     )
+    # The outputs are written first, so the workflow can still rebuild the
+    # datasets that were checked. The failure then marks the run as failed.
+    if errors:
+        log(f"could not check: {', '.join(sorted(errors))}")
+        return 1
     return 0
 
 

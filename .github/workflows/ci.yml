@@ -56,6 +56,11 @@ jobs:
       - name: Test the alerts pipeline modules
         shell: bash -el {0}
         run: python -m unittest discover -s scripts -p "test_*.py" -v
+      # The fire district join tests need geopandas, so the infra job's
+      # plain Python skips them. Here they run.
+      - name: Test the DFENS Simple pipeline modules (with geopandas)
+        shell: bash -el {0}
+        run: python -m unittest discover -s simple/pipeline -p "test_*.py" -v
 
   lint:
     name: Lint and format

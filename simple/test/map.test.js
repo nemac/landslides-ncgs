@@ -87,12 +87,13 @@ test('init creates the map at the configured view with one pane per layer', () =
   assert.equal(m.created.maps.length, 1);
 });
 
-test('each layer gets a pane at its configured z-index; only alerts and parcels are clickable', () => {
+test('each layer gets a pane at its configured z-index; only alerts, parcels and fire districts are clickable', () => {
   const m = mapModule();
   const panes = m.map.panes;
   assert.deepEqual(Object.keys(panes).sort(), [
     'alertsPane',
     'buildingsPane',
+    'fire_districtsPane',
     'forecastPane',
     'ncgs_referencePane',
     'observedPane',
@@ -101,9 +102,11 @@ test('each layer gets a pane at its configured z-index; only alerts and parcels 
   ]);
   assert.equal(panes.alertsPane.style.zIndex, '430');
   assert.equal(panes.buildingsPane.style.zIndex, '380');
+  assert.equal(panes.fire_districtsPane.style.zIndex, '415');
+  const clickable = ['alertsPane', 'parcelsPane', 'fire_districtsPane'];
   for (const [name, el] of Object.entries(panes)) {
-    const clickable = name === 'alertsPane' || name === 'parcelsPane';
-    assert.equal(el.style.pointerEvents, clickable ? '' : 'none', name);
+    const want = clickable.includes(name) ? '' : 'none';
+    assert.equal(el.style.pointerEvents, want, name);
   }
 });
 
@@ -208,6 +211,17 @@ test('a hidden forecast layer stays hidden across a new period', () => {
   assert.ok(!m.map.hasLayer(m.created.featureLayers[1]));
 });
 
+// The status region that says the map notices to screen readers.
+function noticeRegion(m) {
+  return m.document.getElementById('map-notices');
+}
+
+test('the map notice region is on the page, empty, before anything fails', () => {
+  const m = mapModule();
+  assert.equal(noticeRegion(m).getAttribute('role'), 'status');
+  assert.equal(noticeRegion(m).textContent, '');
+});
+
 test('an NDFD request error shows the map notice; success clears it', () => {
   const m = mapModule();
   m.MAP.setForecastPeriod(LIVE_META);
@@ -216,15 +230,19 @@ test('an NDFD request error shows the map notice; success clears it', () => {
   assert.equal(m.map.controls.size, 1);
   const notice = Array.from(m.map.controls)[0];
   assert.equal(notice.el.className, 'map-notice');
-  assert.equal(notice.el.getAttribute('role'), 'status');
   assert.match(
     notice.el.textContent,
     /could not be loaded from the NWS service/
   );
+  // The box is not the status region; the permanent one says the words.
+  assert.equal(notice.el.getAttribute('role'), null);
+  assert.equal(noticeRegion(m).getAttribute('role'), 'status');
+  assert.equal(noticeRegion(m).textContent, notice.el.textContent);
   fl.fire('requesterror', { error: new Error('again') });
   assert.equal(m.map.controls.size, 1, 'one notice, not two');
   fl.fire('requestsuccess');
   assert.equal(m.map.controls.size, 0);
+  assert.equal(noticeRegion(m).textContent, '');
   assert.ok(m.warnings.some((w) => /503/.test(w)));
 });
 
@@ -283,6 +301,146 @@ test('setAlerts draws the pathways in the alerts pane with escaped popups', () =
   assert.match(gl.sub[3].popup, /<dd>4\.00–5\.00″<\/dd>/);
 });
 
+for (const [label, fire, want] of [
+  [
+    'a district with an FDID',
+    {
+      fire_district_status: 'district',
+      fire_department: 'Asheville <Fire> Department',
+      fdid: '11101',
+    },
+    'Asheville &lt;Fire&gt; Department (FDID 11101)',
+  ],
+  [
+    'a district without an FDID',
+    {
+      fire_district_status: 'district',
+      fire_department: 'Maggie Valley FD',
+      fdid: null,
+    },
+    'Maggie Valley FD',
+  ],
+  [
+    'no district',
+    { fire_district_status: 'no_district', fire_department: null },
+    'No District (state fire district data)',
+  ],
+  [
+    'outside NC',
+    { fire_district_status: 'outside_nc' },
+    'Outside North Carolina',
+  ],
+  ['a missing status', {}, 'Not available'],
+  [
+    'a name but no status',
+    { fire_department: 'Asheville Fire Department', fdid: '11101' },
+    'Not available',
+  ],
+]) {
+  test('the pathway popup fire district row for ' + label, () => {
+    const m = mapModule();
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: null,
+          properties: { OBJECTID: 1, max_category: 11, ...fire },
+        },
+      ],
+    };
+    m.MAP.setAlerts(fc, true);
+    const popup = m.created.geoJsonLayers[0].sub[0].popup;
+    assert.ok(
+      popup.includes('<dt>Fire district</dt><dd>' + want + '</dd>'),
+      popup
+    );
+  });
+}
+
+for (const [label, args] of [
+  ['the page says districts are not known', [false]],
+  ['the page does not say', []],
+]) {
+  test('the pathway popup hides a district when ' + label, () => {
+    const m = mapModule();
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: null,
+          properties: {
+            OBJECTID: 1,
+            max_category: 11,
+            fire_district_status: 'district',
+            fire_department: 'Asheville FD',
+            fdid: '11101',
+          },
+        },
+      ],
+    };
+    m.MAP.setAlerts(fc, ...args);
+    const popup = m.created.geoJsonLayers[0].sub[0].popup;
+    assert.ok(
+      popup.includes('<dt>Fire district</dt><dd>Not available</dd>'),
+      popup
+    );
+    assert.ok(!popup.includes('Asheville'), popup);
+  });
+}
+
+test('zoomToAlerts fits every listed pathway and closes any open popup', () => {
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.setAlertsVisible(false);
+  m.MAP.zoomToAlerts([205, '301']);
+  assert.ok(m.map.hasLayer(m.created.geoJsonLayers[0]), 're-shown');
+  assert.equal(m.map.popupClosed, true);
+  assert.deepEqual(plain(m.map.fitted), {
+    bounds: { extended: [{ of: 301 }, { of: 205 }] }, // the file's order
+    opts: { padding: [60, 60], maxZoom: 14 },
+  });
+});
+
+test('zoomToAlerts leaves each pathway its own bounds', () => {
+  // Growing the first pathway's own bounds to cover the group would make
+  // a later zoom to that one pathway show the whole group instead.
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.zoomToAlerts([205, 301]);
+  const gl = m.created.geoJsonLayers[0];
+  for (const pathway of gl.sub) {
+    assert.equal(
+      pathway.getBounds().grownBy,
+      undefined,
+      'pathway ' + pathway.feature.properties.OBJECTID
+    );
+  }
+  m.MAP.zoomToAlert(301);
+  assert.deepEqual(plain(m.map.fitted).bounds, { of: 301 });
+});
+
+test('zoomToAlerts with one pathway zooms to it and opens its popup', () => {
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.zoomToAlerts([102]);
+  assert.equal(plain(m.map.fitted).opts.maxZoom, 15);
+  const gl = m.created.geoJsonLayers[0];
+  assert.ok(
+    gl.sub.find((l) => l.feature.properties.OBJECTID === 102).popupOpen
+  );
+});
+
+test('zoomToAlerts does nothing without pathways or matches', () => {
+  const m = mapModule();
+  m.MAP.zoomToAlerts([205, 301]);
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.zoomToAlerts([]);
+  m.MAP.zoomToAlerts([998, 999]);
+  assert.equal(m.map.fitted, undefined);
+});
+
 test('setAlerts with nothing removes the layer', () => {
   const m = mapModule();
   m.MAP.setAlerts(FLAGGED);
@@ -325,6 +483,79 @@ test('setAlertsVisible toggles the drawn layer', () => {
   assert.ok(!m.map.hasLayer(gl));
   m.MAP.setAlertsVisible(true);
   assert.ok(m.map.hasLayer(gl));
+});
+
+// ---- Fire districts -------------------------------------------------------
+test('the fire district layer draws outlines in its own pane with a popup', () => {
+  const m = mapModule();
+  m.MAP.setFireDistrictsVisible(true);
+  m.MAP.setFireDistrictsVisible(true);
+  assert.equal(m.created.featureLayers.length, 1);
+  const fl = m.created.featureLayers[0];
+  assert.match(fl.options.url, /NC_Fire_Districts\/FeatureServer\/0$/);
+  assert.equal(fl.options.pane, 'fire_districtsPane');
+  assert.equal(fl.options.style.color, '#A83800');
+  assert.equal(fl.options.style.fill, false);
+  assert.match(
+    fl.popup({
+      feature: { properties: { firedepartment: 'A&B FD', FDID: '1' } },
+    }),
+    /<strong>A&amp;B FD<\/strong>.*<dd>1<\/dd>.*<dd>--<\/dd>/
+  );
+  m.MAP.setFireDistrictsVisible(false);
+  assert.ok(!m.map.hasLayer(fl));
+});
+
+test('a fire district request error shows a map notice; success clears it', () => {
+  const m = mapModule();
+  m.MAP.setFireDistrictsVisible(true);
+  const fl = m.created.featureLayers[0];
+  fl.fire('requesterror', { error: new Error('503') });
+  assert.equal(m.map.controls.size, 1);
+  const notice = Array.from(m.map.controls)[0];
+  assert.equal(notice.el.className, 'map-notice');
+  assert.match(
+    notice.el.textContent,
+    /fire districts layer could not be loaded/
+  );
+  assert.equal(noticeRegion(m).textContent, notice.el.textContent);
+  assert.ok(m.warnings.some((w) => /Fire districts.*503/.test(w)));
+  fl.fire('requesterror', { error: new Error('again') });
+  assert.equal(m.map.controls.size, 1, 'one notice, not two');
+  fl.fire('requestsuccess');
+  assert.equal(m.map.controls.size, 0);
+});
+
+test('hiding the fire district layer clears its notice', () => {
+  const m = mapModule();
+  m.MAP.setFireDistrictsVisible(true);
+  m.created.featureLayers[0].fire('requesterror', { error: new Error('x') });
+  m.MAP.setFireDistrictsVisible(false);
+  assert.equal(m.map.controls.size, 0);
+  assert.equal(noticeRegion(m).textContent, '');
+});
+
+test('the fire district and forecast notices do not replace each other', () => {
+  const m = mapModule();
+  m.MAP.setForecastPeriod(LIVE_META);
+  m.MAP.setFireDistrictsVisible(true);
+  m.created.featureLayers[0].fire('requesterror', { error: new Error('a') });
+  m.created.featureLayers[1].fire('requesterror', { error: new Error('b') });
+  assert.equal(m.map.controls.size, 2);
+  assert.match(noticeRegion(m).textContent, /NWS service.* fire districts/);
+  m.created.featureLayers[1].fire('requestsuccess');
+  assert.equal(m.map.controls.size, 1);
+  assert.doesNotMatch(noticeRegion(m).textContent, /fire districts/);
+  assert.match(noticeRegion(m).textContent, /NWS service/);
+  assert.match(Array.from(m.map.controls)[0].el.textContent, /NWS service/);
+});
+
+test('the fire district layer warns when esri-leaflet is missing', () => {
+  const m = mapModule();
+  delete m.L.esri;
+  m.MAP.setFireDistrictsVisible(true);
+  assert.equal(m.created.featureLayers.length, 0);
+  assert.ok(m.warnings.some((w) => /fire districts layer unavailable/.test(w)));
 });
 
 // ---- NCGS reference layer -------------------------------------------------

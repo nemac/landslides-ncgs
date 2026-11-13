@@ -35,6 +35,11 @@ import settings as S
 
 T = TypeVar("T")
 
+# What meta.fire_districts says when the lookup failed. It is spelled out
+# here because fire_districts.py imports this module (a test keeps the
+# two in step).
+FIRE_DISTRICTS_UNAVAILABLE = "unavailable"
+
 # The hosted NDFD service stalls for about a minute and then answers a
 # generic 400 ("Cannot perform query. Invalid query parameters.") while
 # Esri reloads the layer each hour. Those answers, timeouts and 5xx are
@@ -113,7 +118,7 @@ def retry(fn: Callable[[], T], *, label: str = "request") -> T:
     raise AssertionError("unreachable")
 
 
-def _get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
+def get_json(url: str, params: dict | None = None, timeout: int = 60) -> dict:
     """GET JSON, retrying transient failures up to RETRY_ATTEMPTS times."""
     if params:
         url = url + "?" + urllib.parse.urlencode(params)
@@ -130,12 +135,12 @@ def _from_ms(ms) -> datetime:
 
 def ndfd_state() -> dict:
     """Read cycle start, last data edit, and the >= threshold count."""
-    info = _get_json(S.NDFD_LAYER_URL, {"f": "json"})
+    info = get_json(S.NDFD_LAYER_URL, {"f": "json"})
     edit = info.get("editingInfo") or {}
     last_edit_ms = edit.get("dataLastEditDate") or edit.get("lastEditDate")
     issued = _from_ms(last_edit_ms) if last_edit_ms else None
 
-    first = _get_json(
+    first = get_json(
         S.NDFD_LAYER_URL + "/query",
         {
             "where": "1=1",
@@ -152,7 +157,7 @@ def ndfd_state() -> dict:
     cycle_start = _from_ms(feats[0]["attributes"]["fromdate"])
     window_end = cycle_start + timedelta(hours=S.WINDOW_HOURS)
 
-    count = _get_json(
+    count = get_json(
         S.NDFD_LAYER_URL + "/query",
         {
             "where": S.period_where(cycle_start, S.WINDOW_HOURS, S.THRESHOLD_CATEGORY),
@@ -183,7 +188,7 @@ def previous_status() -> dict | None:
         # status.json is served with max-age=30 and the cache policy ignores
         # query strings, so a copy up to 30 s old is the best available and
         # is fine for a check that runs every 10 minutes.
-        return _get_json(url, timeout=20)
+        return get_json(url, timeout=20)
     except Exception as e:
         print(f"[check] no previous status ({type(e).__name__}: {e})")
         return None
@@ -217,6 +222,7 @@ def build_status(meta: dict, now: datetime, result: str) -> dict:
         "n_flagged",
         "generated_at",
         "ndfd_key",
+        "fire_districts",
     )
     st = {k: meta.get(k) for k in keep}
     st["checked_at"] = _iso(now)
@@ -224,6 +230,31 @@ def build_status(meta: dict, now: datetime, result: str) -> dict:
     st["pipeline_version"] = S.PIPELINE_VERSION
     st["result"] = result
     return st
+
+
+def covers_this_update(prev: dict | None, state: dict) -> bool:
+    """True when the last published run was built from this NDFD update
+    by this version of the pipeline."""
+    if not prev:
+        return False
+    if prev.get("ndfd_key") != state["ndfd_key"]:
+        return False
+    return prev.get("pipeline_version") == S.PIPELINE_VERSION
+
+
+def is_fire_district_retry(prev: dict | None, state: dict) -> bool:
+    """True when the last run covered this NDFD update but its fire
+    district lookup failed. The run is built again so the lookup gets
+    another try. Without this, the failure would stay published until
+    NDFD itself changes."""
+    if not covers_this_update(prev, state):
+        return False
+    return prev.get("fire_districts") == FIRE_DISTRICTS_UNAVAILABLE
+
+
+def is_up_to_date(prev: dict | None, state: dict) -> bool:
+    """True when there is nothing to build."""
+    return covers_this_update(prev, state) and not is_fire_district_retry(prev, state)
 
 
 def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
@@ -241,12 +272,10 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
         f"polygons in WNC: {state['n_precip_polygons']}"
     )
 
-    up_to_date = (
-        prev
-        and prev.get("ndfd_key") == state["ndfd_key"]
-        and prev.get("pipeline_version") == S.PIPELINE_VERSION
-    )
-    if up_to_date and not force:
+    retry = is_fire_district_retry(prev, state)
+    if retry:
+        print("[check] the last run had no fire districts; building again")
+    if is_up_to_date(prev, state) and not force:
         action = "skip"
         status = dict(prev)
         status["checked_at"] = _iso(now)
@@ -263,6 +292,9 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
             "heavy": heavy,
             **{k: (_iso(v) if isinstance(v, datetime) else v) for k, v in state.items()},
             "previous_key": prev.get("ndfd_key") if prev else None,
+            # The workflow reads this so that it does not archive the same
+            # failed result again on every retry.
+            "fire_district_retry": retry,
         },
     )
     print(f"[check] action={action} heavy={str(heavy).lower()}")

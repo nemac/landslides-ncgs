@@ -45,12 +45,15 @@ Nothing under `simple/data/` is committed to git.
 .github/workflows/refresh-simple.yml   (cron: every 10 min)
   simple/pipeline/ndfd_check.py        stdlib only, ~5 s
       NDFD unchanged since last status.json?  -> skip (re-upload status only)
+      last run had no fire districts?         -> build (try the lookup again)
       otherwise                                -> build
   simple/pipeline/refresh_simple.py    geopandas, only on "build"
       fetch all categories for the 24 h period, clip to WNC -> forecast_24h.geojson
       any >= 5" polygons? download cache/debris_flows.gpkg from the data
       bucket (kept current by refresh-reference.yml), bbox prefilter,
       find_alerts() on candidates
+      any flagged pathways? tag each with its fire district from
+      cache/fire_districts_wnc.geojson (also from the data bucket)
   -> s3://landslidesncgs-data/simple/data/
         forecast_24h.geojson             (map layer, Cache-Control max-age=60)
         flagged_ndfd_24h_min11.geojson   (max-age=60)
@@ -63,6 +66,93 @@ watershed tagging, and the intersection), so results match the full
 dashboard. The debris-flow GeoPackage (`cache/debris_flows.gpkg`) is
 rebuilt by `refresh-reference.yml` when the NCGS layer changes and shared
 through the data bucket.
+
+### Fire districts
+
+Each flagged pathway is tagged with its NC fire district from the NC
+Office of State Fire Marshal layer. The WNC districts are kept in
+`cache/fire_districts_wnc.geojson`, which `refresh-reference.yml` rebuilds
+and shares through the data bucket when the layer's data-last-edit date
+changes (or after 90 days, or when forced). If the file is missing, the
+pipeline downloads the districts from the service itself
+(`simple/pipeline/fire_districts.py`). The match is done in
+`simple/pipeline/fire_district_join.py`.
+
+Each pathway in the flagged file carries six fields:
+
+| Field | Meaning |
+|-------|---------|
+| `fdid` | The fire department's id |
+| `fire_department` | The fire department's name |
+| `fd_county` | The district's county |
+| `fd_address` | The fire department's address |
+| `district_updated` | When the state last updated the district (YYYY-MM-DD) |
+| `fire_district_status` | `district`; `no_district` for land the state marks "No District"; `outside_nc` when no district polygon matches |
+
+The flagged file's `meta.fire_districts` says how the lookup went for the
+whole file: `ok`; `unavailable` when the lookup failed, in which case the
+six fields are empty; or `not_run` when nothing was flagged.
+
+A district file with polygons missing would publish the pathways inside
+them as `outside_nc`, so three checks guard against it:
+
+- A download is saved only when it holds exactly as many districts as
+  the service itself counts for the WNC box.
+- A copy with fewer than `FIRE_DISTRICTS_MIN_COUNT` (`settings.py`)
+  polygons counts as a failed lookup, and a download that short is
+  never saved.
+- A run that marks any pathway `outside_nc` prints a `::warning::` line,
+  which shows on the Actions run page. The state layer covers all of
+  NC, so that answer should be rare and is worth a look.
+
+`status.json` carries the same `fire_districts` value. While it reads
+`unavailable`, `ndfd_check.py` builds again on every 10-minute check
+instead of waiting for the next NDFD update, so a short outage clears
+itself. The first run for a forecast is archived as usual; a repeat that
+fails again is not (`archive_decision.py`), so a long outage does not
+fill the archive with copies.
+
+A pathway is matched by a point inside it. When that point is not in a
+real district (it fell in one of the thin "No District" strips the state
+layer puts between districts, or in a gap with no polygon), the pathway
+takes whichever polygon covers most of it, "No District" included.
+Pathway and district shapes that cross themselves are repaired first
+(`make_valid`); one unrepaired shape would make the overlap step fail
+and cost every pathway in the file its district.
+
+### How the page shows fire districts
+
+The page shows only what the flagged file says and never guesses a
+district. It trusts the districts only when `meta.fire_districts` is `ok`
+and every pathway has one of the three statuses.
+
+- **Districts known:** the table is grouped. Real districts come first
+  (highest forecast rain, then most pathways, then name), then a
+  "No District" group and an "Outside North Carolina" group, each shown
+  only when it has pathways. Each heading can be collapsed, and has a
+  "Show on map" button that fits the map to that group. The summary reads
+  like `12 pathways in 3 fire districts (2 with no district, 1 outside
+  North Carolina)`.
+- **Districts not known** (the lookup failed, or a file from before the
+  fire district fields): the table is a plain list sorted by rain, county
+  and pathway ID, and a notice says that fire district information is
+  unavailable right now.
+
+The page reloads its data every few minutes. The status cards are redrawn
+on every reload, but the map's pathways and the table are redrawn only
+when the pathways or the `meta.fire_districts` marker changed, so an open
+popup stays open and keyboard focus stays where it was. After a real
+redraw, focus returns to the same row or group button, or to the table's
+heading when that row or group is gone.
+
+The pathway popup on the map and the CSV follow the same rule as the
+table. The popup shows the district, "No District (state fire district
+data)" or "Outside North Carolina", and "Not available" when the
+districts are not known. The CSV starts with the pathway's own columns
+(`pathway_id` first), then `fire_district_status` (`district`,
+`no_district`, `outside_nc`, or `unavailable` when the districts are not
+known) right before the five fire district columns it explains, which are
+blank when it is `unavailable`, and ends with the times.
 
 ### Expected freshness
 
@@ -122,14 +212,16 @@ from the repo root with `npm ci` done once.
 
 | Command | What it covers |
 |---------|----------------|
-| `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table and CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
-| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Needs `npx playwright install chromium` once |
-| `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py` |
+| `npm run test:simple` | `simple/test/`: config overrides and tables; the flagged table in both fire district modes, and the CSV; the page contract (every id and asset the scripts use is in `index.html`); app.js in jsdom with a mocked `fetch` and a fixed clock (threshold filter, status cards, stale banner, error state, overlapping loads, toggles, download); map.js against a Leaflet stand-in (NDFD period filter and notice, MRMS and radar tiles, pathway popups and zoom, reference and parcels layers, owner-name parsing, per-county buildings cache); the CDN integrity hashes (downloads from unpkg) |
+| `npm run test:e2e` | `simple/e2e/`: the real page in Chromium, served by the same Python server as the launch config, reading `simple/test/fixtures/` through `?data=`; every outside host but unpkg, which serves Leaflet, is blocked. Includes an axe scan for WCAG 2.2 A and AA problems in the grouped, plain and empty states. Needs `npx playwright install chromium` once |
+| `python3 -m unittest discover -s simple/pipeline -p "test_*.py"` | The pipeline's check script, the fire district fields and download, the fire district join, and the sync of shared values between `settings.py`, `config.js` and `scripts/config.py`. The join tests need geopandas and are skipped without it; run them in the `defns-refresh` environment |
 
 The fixtures in `simple/test/fixtures/` are three data folders (`live`,
 `stale`, `empty`) whose timestamps sit around 2026-10-27T18:40Z, the
 fixed clock both JavaScript suites use. `live` has four pathways, one of
-them category 10, so the threshold filter has something to drop.
+them category 10, so the threshold filter has something to drop, and
+fire districts for each. `stale` has no fire district fields, like a file
+from the older pipeline, so it shows the plain list and the notice.
 
 In CI these are the "Simple dashboard tests" and "Simple dashboard
 browser test" jobs in `ci.yml`, kept apart so a browser problem never

@@ -1,0 +1,138 @@
+diff --git b/simple/css/styles.css a/simple/css/styles.css
+index acfc986..da471cf 100644
+--- b/simple/css/styles.css
++++ a/simple/css/styles.css
+@@ -290,6 +290,16 @@ a:hover {
+   font-weight: 600;
+   line-height: 1.3;
+ }
++.stale-banner.is-simulated {
++  background: repeating-linear-gradient(
++    -45deg,
++    #5c1f00 0 14px,
++    #6e2600 14px 28px
++  );
++  border: 2px solid var(--accent-text);
++  text-align: center;
++  letter-spacing: 0.02em;
++}
+ 
+ /* ---------------- Body layout ---------------- */
+ .app-body {
+diff --git b/simple/js/app.js a/simple/js/app.js
+index 7375679..8400fe3 100644
+--- b/simple/js/app.js
++++ a/simple/js/app.js
+@@ -322,7 +322,8 @@
+       if (seq !== _loadSeq) return; // superseded by a newer load
+       // Map layer: full NDFD coverage straight from the service, for the
+       // same 24-h period as the flagged pathways.
+-      MAP.setForecastPeriod(fc && fc.meta);
++      if (fc && fc.meta && fc.meta.simulated) MAP.setForecastLocal(forecast);
++      else MAP.setForecastPeriod(fc && fc.meta);
+       MAP.refreshObserved();
+       if (!fc || fc.type !== 'FeatureCollection')
+         throw new Error('flagged file is not GeoJSON');
+@@ -437,6 +438,14 @@
+ 
+   function _renderStale(m, status) {
+     const now = new Date();
++    els.staleBanner.classList.toggle('is-simulated', !!m.simulated);
++    if (m.simulated) {
++      els.staleBanner.hidden = false;
++      els.staleBanner.textContent =
++        'SIMULATED STORM: sample data for testing only. ' +
++        'This is not a real National Weather Service forecast.';
++      return;
++    }
+     const msgs = [];
+     const checked = (status && status.checked_at) || m.generated_at;
+     if (checked) {
+@@ -490,6 +499,7 @@
+       windowStart: m.window_start,
+       windowEnd: m.window_end,
+       issued: m.issued,
++      simulated: !!m.simulated,
+     });
+     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+     const url = URL.createObjectURL(
+@@ -497,7 +507,11 @@
+     );
+     const a = document.createElement('a');
+     a.href = url;
+-    a.download = 'dfens-flagged-24h-5in-' + ts + 'Z.csv';
++    a.download =
++      (m.simulated ? 'SIMULATED-' : '') +
++      'dfens-flagged-24h-5in-' +
++      ts +
++      'Z.csv';
+     document.body.appendChild(a);
+     a.click();
+     document.body.removeChild(a);
+diff --git b/simple/js/map.js a/simple/js/map.js
+index 2c99584..72c45e3 100644
+--- b/simple/js/map.js
++++ a/simple/js/map.js
+@@ -348,6 +348,32 @@ window.DFS_MAP = (function () {
+     const cb = document.getElementById('layer-ndfd');
+     if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
+   }
++  // Simulated storms (pipeline/simulate_storm.py) draw their own rings
++  // from forecast_24h.geojson instead of the live NWS layer.
++  function setForecastLocal(geojson) {
++    const wasOn = !layers.forecast || map.hasLayer(layers.forecast);
++    if (layers.forecast) map.removeLayer(layers.forecast);
++    _forecastKey = null;
++    layers.forecast = L.geoJSON(
++      geojson || { type: 'FeatureCollection', features: [] },
++      {
++        pane: 'forecastPane',
++        style: function (feature) {
++          const c = CFG.PRECIP_COLORS[feature.properties.category] || '#888';
++          return {
++            fillColor: c,
++            color: c,
++            weight: 0.5,
++            fillOpacity: 0.45,
++            opacity: 0.6,
++          };
++        },
++        attribution: 'SIMULATED storm (not an NWS forecast)',
++      }
++    );
++    const cb = document.getElementById('layer-ndfd');
++    if ((cb ? cb.checked : true) && wasOn) layers.forecast.addTo(map);
++  }
+   function setForecastVisible(visible) {
+     if (!layers.forecast) return;
+     if (visible && !map.hasLayer(layers.forecast)) layers.forecast.addTo(map);
+@@ -1131,6 +1157,7 @@ window.DFS_MAP = (function () {
+   return {
+     init,
+     setForecastPeriod,
++    setForecastLocal,
+     setForecastVisible,
+     setRadarVisible,
+     setObservedVisible,
+diff --git b/simple/js/table.js a/simple/js/table.js
+index 49e9099..6d88ae6 100644
+--- b/simple/js/table.js
++++ a/simple/js/table.js
+@@ -284,6 +284,7 @@ window.DFS_TABLE = (function () {
+       'window_end_utc',
+       'nws_updated_utc',
+       'exported_utc',
++      'forecast_source',
+     ];
+     const exported = new Date().toISOString();
+     const rows = [header.join(',')];
+@@ -307,6 +308,9 @@ window.DFS_TABLE = (function () {
+             ctx.windowEnd || '',
+             ctx.issued || '',
+             exported,
++            ctx.simulated
++              ? 'SIMULATED (test data, not an NWS forecast)'
++              : 'NWS NDFD',
+           ]
+             .map(_csvEscape)
+             .join(',')

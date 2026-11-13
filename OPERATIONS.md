@@ -10,7 +10,7 @@ AWS setup is in `infra/README.md`.
 |---|---|---|---|
 | Main site and both dashboards (static files) | `deploy-prod.yml` on push to `master`; `deploy-dev.yml` on push to `development` | site bucket, dev-site bucket | `https://landslidesncgs.org`, `https://dev.landslidesncgs.org` (basic auth) |
 | DFENS Simple pipeline (`simple/pipeline/`) | `refresh-simple.yml`, dispatched every 10 minutes by EventBridge Scheduler | `s3://landslidesncgs-data/simple/data/` | `/simple/data/` on both hosts |
-| Reference data: building footprints and the debris-flow GeoPackage | `refresh-reference.yml`, dispatched daily at 05:00 UTC by EventBridge Scheduler; rebuilds only on upstream change, after 90 days, or on `force` | `alerts/data/buildings/`, `cache/debris_flows.gpkg` and `alerts/data/reference_state.json` in the data bucket | `/alerts/data/` on both hosts (`cache/` is not served) |
+| Reference data: building footprints, the debris-flow GeoPackage and the WNC fire districts | `refresh-reference.yml`, dispatched daily at 05:00 UTC by EventBridge Scheduler; rebuilds only on upstream change, after 90 days, or on `force` | `alerts/data/buildings/`, `cache/debris_flows.gpkg`, `cache/fire_districts_wnc.geojson` and `alerts/data/reference_state.json` in the data bucket | `/alerts/data/` on both hosts (`cache/` is not served) |
 | Alerts pipeline (`scripts/refresh.py`) | `refresh-data.yml`, by hand only since 2026-10-27 | `s3://landslidesncgs-data/alerts/data/` | `/alerts/data/` on both hosts |
 | Pull request previews | `pr-preview.yml` on every pull request into `development` | one folder per pull request in the preview bucket | `https://pr-<number>.landslidesncgs.org` (basic auth) |
 | AWS resources (`infra/cdk/`) | by hand from a developer machine | CloudFormation stacks | |
@@ -104,7 +104,10 @@ if NDFD has not changed), `--warm` (load the debris-flow cache first),
 The first build that finds rain at or above the threshold loads the
 debris-flow layer into `cache/debris_flows.gpkg` (about 560 MB, kept for 30
 days). That one-time load takes 15 to 20 minutes; later builds take one to
-two minutes. Details of the pipeline are in `simple/README.md`.
+two minutes. The first build that flags a pathway also downloads the WNC
+fire districts into `cache/fire_districts_wnc.geojson` (about 52 MB) and
+reuses that file after that. Details of the pipeline are in
+`simple/README.md`.
 
 ## Alerts pipeline locally
 
@@ -130,6 +133,7 @@ To rebuild only the reference datasets, as the daily workflow does:
 ```bash
 python scripts/refresh.py --debris-cache                        # re-fetch the NCGS layer into cache/
 OVERTURE_RELEASE=2026-10-21.0 python scripts/refresh.py --buildings   # re-extract footprints from that release
+python simple/pipeline/fire_districts.py --out cache/fire_districts_wnc.geojson  # re-fetch the WNC fire districts
 python scripts/reference_check.py --out out                     # see what the daily check would decide
 ```
 
@@ -185,6 +189,7 @@ These files were read only by the offline alerts dashboard.
 | DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
 | Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
+| Fire district cache | `cache/fire_districts_wnc.geojson` (never committed) |
 | Python environment | `defns-refresh`, from `environment.yml` |
 | Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |
 | Dev | `https://dev.landslidesncgs.org` (basic auth; credentials are held by the site maintainers) |
@@ -218,7 +223,11 @@ load only what is in view.
 The debris-flow GeoPackage is handled the same way by the same workflow,
 keyed on the NCGS layer's data-last-edit date, and stored in the bucket
 under `cache/` where CloudFront does not serve it. The Simple pipeline
-downloads it when heavy rain is forecast.
+downloads it when heavy rain is forecast. The WNC fire district file
+(`cache/fire_districts_wnc.geojson`) follows the same pattern, keyed on the
+State Fire Marshal layer's data-last-edit date; the Simple pipeline
+downloads it in the same case and uses it to tag flagged pathways with
+their fire district.
 
 Output under `alerts/data/buildings/`: `manifest.json` (generated time,
 bbox, county list with counts and sizes) and one `{GEOID}.geojson` per

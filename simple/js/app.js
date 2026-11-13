@@ -30,8 +30,10 @@
     statusChecked: $('status-checked'),
     statusNext: $('status-next'),
     staleBanner: $('stale-banner'),
-    tbody: $('alerts-tbody'),
+    table: $('alerts-table'),
+    tableHeading: $('table-heading'),
     tableSummary: $('table-summary'),
+    districtNotice: $('district-notice'),
     exportBtn: $('export-csv'),
     sourceLink: $('source-link'),
     layerNdfd: $('layer-ndfd'),
@@ -40,6 +42,9 @@
     layerAlerts: $('layer-alerts'),
     layerReference: $('layer-reference'),
     layerParcels: $('layer-parcels'),
+    layerFire: $('layer-fire'),
+    toggleTable: $('toggle-table'),
+    tableWrapper: $('table-wrapper'),
     layerBuildings: $('layer-buildings'),
   };
 
@@ -241,12 +246,47 @@
         if (on) _setLoading(false);
       });
     });
+    els.layerFire.addEventListener('change', function () {
+      MAP.setFireDistrictsVisible(this.checked);
+    });
+    els.toggleTable.addEventListener('click', function () {
+      _setTableOpen(els.toggleTable.getAttribute('aria-expanded') !== 'true');
+    });
+    let tableOpen = true;
+    try {
+      tableOpen = localStorage.getItem('siren.tableOpen') !== '0';
+    } catch (_e) {
+      /* ignore */
+    }
+    _setTableOpen(tableOpen);
     els.layerParcels.addEventListener('change', function () {
       MAP.setParcelsVisible(this.checked);
     });
     els.layerBuildings.addEventListener('change', function () {
       MAP.setBuildingsVisible(this.checked);
     });
+  }
+
+  // Hide/show the attribute table; the map takes the freed space.
+  function _setTableOpen(open) {
+    els.toggleTable.setAttribute('aria-expanded', String(open));
+    const label = open ? 'Hide table' : 'Show table';
+    els.toggleTable.setAttribute('aria-label', label);
+    els.toggleTable.title = label;
+    els.tableWrapper.hidden = !open;
+    document
+      .querySelector('.table-section')
+      .classList.toggle('is-collapsed', !open);
+    try {
+      localStorage.setItem('siren.tableOpen', open ? '1' : '0');
+    } catch (_e) {
+      /* ignore */
+    }
+    const m = MAP._internalMap && MAP._internalMap();
+    if (m)
+      setTimeout(function () {
+        m.invalidateSize();
+      }, 50);
   }
 
   // ---- Data ----------------------------------------------------------------
@@ -310,7 +350,7 @@
     const m = state.meta;
     const n = state.features.length;
 
-    els.statusCount.textContent = String(n);
+    els.statusCount.textContent = n.toLocaleString('en-US');
     els.statusCard.classList.toggle('has-alerts', n > 0);
     els.statusCard.classList.toggle('is-zero', n === 0);
 
@@ -318,11 +358,69 @@
     _renderIssued(m, state.status);
     _renderStale(m, state.status);
 
-    MAP.setAlerts({ type: 'FeatureCollection', features: state.features });
+    _renderPathways();
+    els.exportBtn.disabled = n === 0;
+  }
+
+  // The pathways the map and table were last drawn from, as text. null
+  // means they are not showing pathways (before the first load, or in the
+  // error state).
+  let _drawnPathways = null;
+
+  // Everything the map layer and the table are built from. Two loads with
+  // the same text here would draw exactly the same thing.
+  function _pathwaysAsText() {
+    return JSON.stringify({
+      fire_districts: state.meta.fire_districts,
+      features: state.features,
+    });
+  }
+
+  // Most reloads bring the same pathways: the forecast changes about once
+  // an hour and the page reloads every few minutes. Redrawing anyway would
+  // close an open map popup and take keyboard focus out of the table, so
+  // the map layer and the table are redrawn only when the pathways changed.
+  // The status cards above are redrawn on every load either way.
+  function _renderPathways() {
+    const pathwaysAsText = _pathwaysAsText();
+    if (pathwaysAsText === _drawnPathways) return;
+    _drawnPathways = pathwaysAsText;
+
+    MAP.setAlerts(
+      { type: 'FeatureCollection', features: state.features },
+      TABLE.districtsKnown(state.features, state.meta)
+    );
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    TABLE.render(state.features, els.tbody, els.tableSummary, MAP.zoomToAlert);
-    els.exportBtn.disabled = n === 0;
+    TABLE.render(state.features, state.meta, _tableElements(), {
+      onSelect: function (objectid) {
+        _showPathwaysLayer();
+        MAP.zoomToAlert(objectid);
+      },
+      onZoomGroup: function (objectids) {
+        _showPathwaysLayer();
+        MAP.zoomToAlerts(objectids);
+      },
+    });
+  }
+
+  // Zooming to a pathway is no use while the pathways layer is hidden.
+  // Ticking its box keeps the box and the map in step, so the next
+  // reload does not hide the layer again.
+  function _showPathwaysLayer() {
+    if (els.layerAlerts.checked) return;
+    els.layerAlerts.checked = true;
+    MAP.setAlertsVisible(true);
+  }
+
+  function _tableElements() {
+    return {
+      table: els.table,
+      summary: els.tableSummary,
+      notice: els.districtNotice,
+      // Where focus goes when the focused row is gone after a redraw.
+      focusFallback: els.tableHeading,
+    };
   }
 
   function _renderWindow(m) {
@@ -424,32 +522,36 @@
     // The map must agree with the table: drop any pathways drawn by the
     // last successful load.
     state.features = [];
+    _drawnPathways = null;
     MAP.setAlerts(null);
+    // Forget the last good forecast too. The 30-second timer redraws the
+    // status cards from state.meta, and would otherwise put the old
+    // forecast window back beside the "could not be loaded" banner.
+    state.meta = {};
+    state.status = null;
     els.statusCount.textContent = '--';
     els.statusWindow.textContent = 'Unavailable';
     els.windowNote.textContent = '';
+    els.statusIssued.textContent = 'Unavailable';
+    els.statusChecked.textContent = '';
     els.statusNext.textContent = '';
+    els.statusNext.classList.remove('is-checking');
     els.staleBanner.hidden = false;
     els.staleBanner.textContent =
       'Forecast data could not be loaded. Try again in a few minutes, and ' +
       'check current NWS forecasts at weather.gov.';
-    els.tableSummary.textContent = 'Data unavailable.';
+    els.tableSummary.textContent = 'Data unavailable';
     els.tableSummary.classList.remove('is-none');
     els.statusCard.classList.remove('is-zero');
-    els.tbody.innerHTML =
-      '<tr><td colspan="5" class="empty-row">Forecast data could not be loaded.</td></tr>';
+    els.statusCard.classList.remove('has-alerts');
+    TABLE.renderMessage('Forecast data could not be loaded.', _tableElements());
     els.exportBtn.disabled = true;
   }
 
   // ---- CSV -----------------------------------------------------------------
   function _exportCsv() {
     if (!state.features.length) return;
-    const m = state.meta;
-    const csv = TABLE.toCSV(state.features, {
-      windowStart: m.window_start,
-      windowEnd: m.window_end,
-      issued: m.issued,
-    });
+    const csv = TABLE.toCSV(state.features, state.meta);
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const url = URL.createObjectURL(
       new Blob([csv], { type: 'text/csv;charset=utf-8' })
