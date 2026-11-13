@@ -39,6 +39,11 @@ T = TypeVar("T")
 # generic 400 ("Cannot perform query. Invalid query parameters.") while
 # Esri reloads the layer each hour. Those answers, timeouts and 5xx are
 # retried; a real client error such as a 404 on status.json is not.
+# What meta.fire_districts says when the lookup failed. It is spelled out
+# here because fire_districts.py imports this module (a test keeps the
+# two in step).
+FIRE_DISTRICTS_UNAVAILABLE = "unavailable"
+
 RETRY_ATTEMPTS = 3
 RETRY_DELAYS = (5, 15)  # seconds to wait before attempts 2 and 3
 
@@ -217,6 +222,7 @@ def build_status(meta: dict, now: datetime, result: str) -> dict:
         "n_flagged",
         "generated_at",
         "ndfd_key",
+        "fire_districts",
     )
     st = {k: meta.get(k) for k in keep}
     st["checked_at"] = _iso(now)
@@ -224,6 +230,22 @@ def build_status(meta: dict, now: datetime, result: str) -> dict:
     st["pipeline_version"] = S.PIPELINE_VERSION
     st["result"] = result
     return st
+
+
+def is_up_to_date(prev: dict | None, state: dict) -> bool:
+    """True when the last published run already covers this NDFD update."""
+    if not prev:
+        return False
+    if prev.get("ndfd_key") != state["ndfd_key"]:
+        return False
+    if prev.get("pipeline_version") != S.PIPELINE_VERSION:
+        return False
+    # A failed fire district lookup is tried again on the next check.
+    # Without this it would stay published until NDFD itself changes.
+    if prev.get("fire_districts") == FIRE_DISTRICTS_UNAVAILABLE:
+        print("[check] the last run had no fire districts; building again")
+        return False
+    return True
 
 
 def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
@@ -241,12 +263,7 @@ def run(out: Path, force: bool = False, prev: dict | None = None) -> dict:
         f"polygons in WNC: {state['n_precip_polygons']}"
     )
 
-    up_to_date = (
-        prev
-        and prev.get("ndfd_key") == state["ndfd_key"]
-        and prev.get("pipeline_version") == S.PIPELINE_VERSION
-    )
-    if up_to_date and not force:
+    if is_up_to_date(prev, state) and not force:
         action = "skip"
         status = dict(prev)
         status["checked_at"] = _iso(now)

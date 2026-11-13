@@ -122,8 +122,10 @@ def load_fire_districts() -> gpd.GeoDataFrame:
         log("no local fire district file; downloading the WNC districts")
         collection = fire_districts.fetch_wnc_districts()
         fire_districts.write_districts(path, collection)
-    districts = gpd.read_file(path)
-    return repair_polygons(districts)
+    districts = repair_polygons(gpd.read_file(path))
+    # Counted after the repair, which drops polygons it cannot fix.
+    fire_districts.require_enough_districts(len(districts))
+    return districts
 
 
 def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str]:

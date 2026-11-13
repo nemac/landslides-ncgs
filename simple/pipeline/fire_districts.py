@@ -101,6 +101,22 @@ def choose_district(candidates: list[dict]) -> dict | None:
     return min(candidates, key=_choice_order)
 
 
+def _overlap_order(candidate: dict) -> tuple:
+    """Sort key: lowest rank first, so the largest overlap wins. A real
+    department and then the names only break exact ties."""
+    department = clean_text(candidate.get("firedepartment")) or ""
+    fdid = clean_text(candidate.get("FDID")) or ""
+    return (candidate["rank"], is_no_district(candidate), department, fdid)
+
+
+def choose_largest_overlap(candidates: list[dict]) -> dict | None:
+    """Like choose_district, but "No District" land competes on overlap.
+    A pathway that is mostly "No District" land stays "No District"."""
+    if not candidates:
+        return None
+    return min(candidates, key=_overlap_order)
+
+
 def _outside_nc_fields() -> dict:
     fields = {}
     for column in PATHWAY_COLUMNS:
@@ -141,6 +157,15 @@ def pathway_fields(record: dict | None) -> dict:
     return _department_fields(record)
 
 
+def require_enough_districts(count: int) -> None:
+    """Raise RuntimeError when a set of districts is too small to be all
+    of WNC. Used on the download and again on the file the lookup reads."""
+    if count < S.FIRE_DISTRICTS_MIN_COUNT:
+        raise RuntimeError(
+            f"only {count} WNC fire districts; expected at least {S.FIRE_DISTRICTS_MIN_COUNT}"
+        )
+
+
 def _query_params(offset: int) -> dict:
     return {
         "where": "1=1",
@@ -167,7 +192,7 @@ def _has_more_pages(page: dict) -> bool:
 
 def fetch_wnc_districts(get_json=ndfd_check.get_json) -> dict:
     """Every district that touches the WNC box, as a GeoJSON
-    FeatureCollection. Raises RuntimeError if the answer is empty."""
+    FeatureCollection. Raises RuntimeError if the answer is too short."""
     features = []
     offset = 0
     while True:
@@ -182,9 +207,8 @@ def fetch_wnc_districts(get_json=ndfd_check.get_json) -> dict:
             break
         offset += len(batch)
 
-    # An empty answer must never replace a good copy of the file.
-    if not features:
-        raise RuntimeError("fire district service returned no features for WNC")
+    # An empty or partial answer must never replace a good copy of the file.
+    require_enough_districts(len(features))
     return {"type": "FeatureCollection", "features": features}
 
 

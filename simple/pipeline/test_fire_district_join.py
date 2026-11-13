@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 import fire_districts as fd
+import settings as S
 
 HAS_GEOPANDAS = importlib.util.find_spec("geopandas") is not None
 
@@ -84,6 +85,11 @@ def all_districts():
             # A district with a hole, and the hole's own district.
             ("Notched", "400", notched_square()),
             ("Hole", "401", box(-82.3505, 35.5995, -82.3495, 35.6005)),
+            # Two districts with a thin "No District" strip between them.
+            # The state layer fills the gaps between districts this way.
+            ("West", "500", box(-82.22, 35.59, -82.2003, 35.61)),
+            (fd.NO_DISTRICT_NAME, None, box(-82.2003, 35.59, -82.1997, 35.61)),
+            ("East", "501", box(-82.1997, 35.59, -82.18, 35.61)),
         ]
     )
 
@@ -100,6 +106,10 @@ if HAS_GEOPANDAS:
         (small_square(-82.30, 35.60), None, fd.STATUS_OUTSIDE_NC),
         (box(-82.402, 35.599, -82.398, 35.601), "Right", fd.STATUS_DISTRICT),
         (box(-82.352, 35.599, -82.348, 35.601), "Hole", fd.STATUS_DISTRICT),
+        # Point in the strip, but most of the pathway is in East.
+        (box(-82.2012, 35.599, -82.1984, 35.601), "East", fd.STATUS_DISTRICT),
+        # Point in the strip, and most of the pathway is in the strip.
+        (box(-82.2004, 35.599, -82.1996, 35.601), None, fd.STATUS_NO_DISTRICT),
     ]
 
 
@@ -138,8 +148,15 @@ class MatchFireDistrictsTest(unittest.TestCase):
     def test_point_in_a_gap_uses_the_largest_overlap(self):
         self.assertEqual(self.match_one(CASES[5][0])["firedepartment"], "Right")
 
-    def test_overlap_is_only_used_when_the_point_matches_nothing(self):
+    def test_overlap_is_not_used_when_the_point_is_in_a_real_district(self):
         self.assertEqual(self.match_one(CASES[6][0])["firedepartment"], "Hole")
+
+    def test_point_in_a_no_district_strip_uses_the_largest_overlap(self):
+        self.assertEqual(self.match_one(CASES[7][0])["firedepartment"], "East")
+
+    def test_pathway_mostly_in_a_no_district_strip_stays_no_district(self):
+        match = self.match_one(CASES[8][0])
+        self.assertTrue(fd.is_no_district(match))
 
     def test_results_follow_input_order(self):
         geometries = [geometry for geometry, _, _ in CASES]
@@ -192,6 +209,10 @@ class RefreshSimpleFireDistrictTest(unittest.TestCase):
 
         self.refresh = refresh_simple
         self.pathways = make_pathways([small_square(-82.60, 35.60)])
+        # The test districts are a handful of boxes, far fewer than WNC has.
+        patcher = mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_tag_reports_ok(self):
         with mock.patch.object(self.refresh, "load_fire_districts", return_value=all_districts()):
@@ -221,6 +242,30 @@ class RefreshSimpleFireDistrictTest(unittest.TestCase):
                         self.refresh.load_fire_districts()
         self.assertEqual(fetch.call_count, 1)
         self.assertEqual(len(districts), len(all_districts()))
+
+    def write_district_file(self, folder, districts):
+        path = Path(folder) / S.FIRE_DISTRICTS_CACHE
+        fd.write_districts(path, districts.to_geo_dict())
+
+    def test_load_rejects_a_file_with_too_few_districts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.write_district_file(folder, all_districts())
+            too_many = len(all_districts()) + 1
+            with mock.patch.object(self.refresh, "REPO", Path(folder)):
+                with mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", too_many):
+                    with self.assertRaises(RuntimeError):
+                        self.refresh.load_fire_districts()
+
+    def test_tag_is_unavailable_when_the_file_is_short(self):
+        # Without the count check every pathway here would be published
+        # as "outside_nc" under an "ok" marker.
+        with tempfile.TemporaryDirectory() as folder:
+            self.write_district_file(folder, all_districts().iloc[0:0])
+            with mock.patch.object(self.refresh, "REPO", Path(folder)):
+                with redirect_stdout(io.StringIO()):
+                    tagged, lookup = self.refresh.tag_fire_districts(self.pathways)
+        self.assertEqual(lookup, fd.LOOKUP_UNAVAILABLE)
+        self.assertEqual(list(tagged["fire_district_status"]), [None])
 
 
 if __name__ == "__main__":
