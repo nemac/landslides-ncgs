@@ -6,6 +6,7 @@ Run: python3 -m unittest scripts/test_reference_check.py
 import io
 import json
 import sys
+import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -47,32 +48,51 @@ class DecideTest(unittest.TestCase):
         self.assertEqual(rc.decide("x", recorded("x", 1), NOW, force=True), (True, "forced"))
 
 
-class NextStateTest(unittest.TestCase):
-    def test_rebuilt_takes_new_marker_and_others_carry_over(self):
-        previous = {
-            "buildings": recorded("2026-09-23.1", 40),
-            "debris": recorded("2026-03-03", 40),
-            "fire_districts": recorded("2025-07-25", 40),
-        }
-        upstream = {
-            "buildings": "2026-10-21.0",
-            "debris": "2026-03-03",
-            "fire_districts": "2025-07-25",
-        }
-        rebuild = {"buildings": True, "debris": False, "fire_districts": False}
-        state = rc.next_state(previous, upstream, rebuild, NOW)
-        self.assertEqual(state["buildings"], {"value": "2026-10-21.0", "built_at": NOW.isoformat()})
-        self.assertEqual(state["debris"], previous["debris"])
-        self.assertEqual(state["fire_districts"], previous["fire_districts"])
+PREVIOUS = {
+    "buildings": recorded("2026-09-23.1", 40),
+    "debris": recorded("2026-03-03", 40),
+    "fire_districts": recorded("2025-07-25", 40),
+}
+UNCHANGED = {
+    "buildings": "2026-09-23.1",
+    "debris": "2026-03-03",
+    "fire_districts": "2025-07-25",
+}
+
+
+class StartingStateTest(unittest.TestCase):
+    def test_every_dataset_keeps_its_previous_entry(self):
+        state = rc.starting_state(PREVIOUS, NOW)
+        for name in rc.DATASETS:
+            self.assertEqual(state[name], PREVIOUS[name])
         self.assertEqual(state["checked_at"], NOW.isoformat())
 
-    def test_rebuilt_fire_districts_take_new_marker(self):
-        previous = {"fire_districts": recorded("2025-07-25", 40)}
-        upstream = {"buildings": "b", "debris": "d", "fire_districts": "2026-11-01"}
-        rebuild = {"buildings": False, "debris": False, "fire_districts": True}
-        state = rc.next_state(previous, upstream, rebuild, NOW)
-        expected = {"value": "2026-11-01", "built_at": NOW.isoformat()}
-        self.assertEqual(state["fire_districts"], expected)
+    def test_dataset_missing_from_an_older_state_is_empty(self):
+        previous = {"buildings": PREVIOUS["buildings"], "debris": PREVIOUS["debris"]}
+        self.assertEqual(rc.starting_state(previous, NOW)["fire_districts"], {})
+
+
+class RecordBuildTest(unittest.TestCase):
+    def test_one_dataset_takes_the_new_marker_and_the_others_carry_over(self):
+        start = rc.starting_state(PREVIOUS, NOW)
+        state = rc.record_build(start, "buildings", "2026-10-21.0", NOW)
+        self.assertEqual(state["buildings"], {"value": "2026-10-21.0", "built_at": NOW.isoformat()})
+        self.assertEqual(state["debris"], PREVIOUS["debris"])
+        self.assertEqual(state["fire_districts"], PREVIOUS["fire_districts"])
+
+    def test_the_state_passed_in_is_not_changed(self):
+        start = rc.starting_state(PREVIOUS, NOW)
+        rc.record_build(start, "debris", "2026-11-01", NOW)
+        self.assertEqual(start["debris"], PREVIOUS["debris"])
+
+    def test_unknown_dataset_is_an_error(self):
+        with self.assertRaises(ValueError):
+            rc.record_build({}, "parcels", "x", NOW)
+
+    def test_missing_marker_is_an_error(self):
+        # A dataset whose upstream could not be read has no marker.
+        with self.assertRaises(ValueError):
+            rc.record_build({}, "debris", None, NOW)
 
 
 class OlderStateTest(unittest.TestCase):
@@ -84,13 +104,98 @@ class OlderStateTest(unittest.TestCase):
         rebuild, reason = rc.decide("2025-07-25", previous.get("fire_districts"), NOW)
         self.assertEqual((rebuild, reason), (True, "no previous build recorded"))
 
-    def test_new_state_records_fire_districts_after_rebuild(self):
-        previous = {"buildings": recorded("2026-10-21.0", 1), "debris": recorded("2026-03-03", 1)}
-        upstream = {"buildings": "2026-10-21.0", "debris": "2026-03-03", "fire_districts": "f"}
-        rebuild = {"buildings": False, "debris": False, "fire_districts": True}
-        state = rc.next_state(previous, upstream, rebuild, NOW)
-        self.assertEqual(state["fire_districts"]["value"], "f")
-        self.assertEqual(state["debris"], previous["debris"])
+
+class ReadUpstreamTest(unittest.TestCase):
+    """One source being down must not stop the others being read."""
+
+    def patch_readers(self, **readers):
+        for name, reader in readers.items():
+            patcher = mock.patch.object(rc, name, reader)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_all_three_are_read(self):
+        self.patch_readers(
+            latest_overture_release=lambda: "2026-09-23.1",
+            debris_last_edit=lambda: "2026-03-03",
+            fire_districts_last_edit=lambda: "2025-07-25",
+        )
+        self.assertEqual(rc.read_upstream(), (UNCHANGED, {}))
+
+    def test_one_failure_leaves_the_other_two(self):
+        self.patch_readers(
+            latest_overture_release=lambda: "2026-09-23.1",
+            debris_last_edit=lambda: "2026-03-03",
+            fire_districts_last_edit=mock.Mock(side_effect=RuntimeError("layer is down")),
+        )
+        upstream, errors = rc.read_upstream()
+        self.assertEqual(upstream["buildings"], "2026-09-23.1")
+        self.assertEqual(upstream["debris"], "2026-03-03")
+        self.assertIsNone(upstream["fire_districts"])
+        self.assertEqual(errors, {"fire_districts": "RuntimeError: layer is down"})
+
+
+class DecideAllTest(unittest.TestCase):
+    def test_nothing_changed(self):
+        rebuild, _ = rc.decide_all(UNCHANGED, {}, PREVIOUS, NOW)
+        self.assertEqual(rebuild, {"buildings": False, "debris": False, "fire_districts": False})
+
+    def test_failed_dataset_is_left_alone_and_the_others_are_decided(self):
+        upstream = dict(UNCHANGED, buildings="2026-10-21.0", fire_districts=None)
+        errors = {"fire_districts": "RuntimeError: layer is down"}
+        rebuild, reasons = rc.decide_all(upstream, errors, PREVIOUS, NOW)
+        self.assertEqual(rebuild, {"buildings": True, "debris": False, "fire_districts": False})
+        self.assertIn("layer is down", reasons["fire_districts"])
+
+    def test_forced_run_still_skips_a_dataset_it_could_not_check(self):
+        upstream = dict(UNCHANGED, debris=None)
+        errors = {"debris": "TimeoutError: timed out"}
+        rebuild, _ = rc.decide_all(upstream, errors, PREVIOUS, NOW, force=True)
+        self.assertEqual(rebuild, {"buildings": True, "debris": False, "fire_districts": True})
+
+
+class MainTest(unittest.TestCase):
+    """main() end to end, with the network calls replaced."""
+
+    def run_main(self, fire_reader, folder):
+        output_file = Path(folder) / "github_output.txt"
+        patches = [
+            mock.patch.object(rc, "latest_overture_release", lambda: "2026-10-21.0"),
+            mock.patch.object(rc, "debris_last_edit", lambda: "2026-03-03"),
+            mock.patch.object(rc, "fire_districts_last_edit", fire_reader),
+            mock.patch.object(rc, "previous_state", lambda force=False: PREVIOUS),
+            mock.patch.object(rc, "log", lambda message: None),
+            mock.patch.object(rc.sys, "argv", ["reference_check.py", "--out", folder]),
+            mock.patch.dict(rc.os.environ, {"GITHUB_OUTPUT": str(output_file), "FORCE": "false"}),
+        ]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        exit_code = rc.main()
+        outputs = dict(line.split("=", 1) for line in output_file.read_text().splitlines())
+        return exit_code, outputs
+
+    def test_all_upstreams_readable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            exit_code, outputs = self.run_main(lambda: "2025-07-25", folder)
+            state = json.loads((Path(folder) / "reference_state.json").read_text())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(outputs["buildings"], "true")
+        self.assertEqual(outputs["debris"], "false")
+        self.assertEqual(outputs["fire_districts"], "false")
+        self.assertEqual(outputs["any"], "true")
+        # Nothing is recorded as built until reference_record.py says so.
+        self.assertEqual(state["buildings"], PREVIOUS["buildings"])
+
+    def test_one_upstream_down_still_writes_outputs_and_fails_the_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            exit_code, outputs = self.run_main(mock.Mock(side_effect=RuntimeError("down")), folder)
+            check = json.loads((Path(folder) / "check.json").read_text())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(outputs["buildings"], "true")
+        self.assertEqual(outputs["fire_districts"], "false")
+        self.assertEqual(outputs["fire_districts_last_edit"], "")
+        self.assertEqual(check["errors"], {"fire_districts": "RuntimeError: down"})
 
 
 class UpstreamParsingTest(unittest.TestCase):

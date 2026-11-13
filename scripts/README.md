@@ -21,6 +21,9 @@ scripts/
                   release and the edit dates of the NCGS debris-flow layer
                   and the NC fire district layer with what was last built,
                   applies the 90-day floor and FORCE, logs all three.
+  reference_record.py  Records one dataset as rebuilt (stdlib): copies its
+                  upstream marker into out/reference_state.json after
+                  that dataset's rebuild and upload succeed.
   data.py         Fetchers: NDFD forecast, MRMS observed, Stage IV hindcast,
                   NCGS debris-flow pathways (cached in cache/debris_flows.gpkg),
                   county and watershed tagging, Overture building footprints.
@@ -62,8 +65,13 @@ then does the job assume the OIDC role, create the pinned environment, run
 footprints to `alerts/data/buildings/` (mirrored with `--delete`), and
 record the new markers in `alerts/data/reference_state.json`. A state file
 written before the fire districts were tracked has no entry for them, so
-the first run after that change builds them. A failed rebuild is retried
-the next day because the state is written only after success. The buildings
+the first run after that change builds them.
+
+The three datasets are independent. When one upstream cannot be read, the
+check leaves that dataset alone, still decides the other two, and exits 1
+so the run shows as failed. Each rebuild records itself with
+`reference_record.py` right after its own upload, so a failed rebuild is
+retried the next day without repeating the ones that worked. The buildings
 rebuild fails rather than writes a partial set when one state's counties
 cannot be fetched, since the mirror would otherwise delete that state's
 files. Only a missing state file (HTTP 404) counts as a first run; a 403,
