@@ -66,6 +66,20 @@ details belong in an issue or PR once someone picks it up.
     lacks an FDID (only the four "No District" rows do), so this cannot
     happen with today's data. Add the county to the fallback key, and
     change the test that expects the merge.
+- **Stop the browser tests from using another checkout's server.** Found
+  on 2026-11-13: `simple/e2e/playwright.config.js` serves the page on port
+  8000, the same port as the `static-site` preview, with
+  `reuseExistingServer: true`. When a server from another checkout or
+  worktree is already on that port, `npm run test:e2e` tests that
+  checkout's files and still passes. To fix:
+  - Set `reuseExistingServer: false`, so Playwright always starts its own
+    server from this checkout and fails loudly when the port is taken.
+  - Move the tests off port 8000, and read the port from an environment
+    variable with a default, so a preview can stay open and two checkouts
+    can run the tests at once.
+  - Before the tests run, write a random token to a file the server can
+    serve, fetch it back, and fail if it does not match. This catches a
+    server on the right port that was started from the wrong folder.
 
 ## From the October 2026 audit, not yet decided
 
