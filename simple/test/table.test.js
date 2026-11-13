@@ -203,6 +203,7 @@ function tableParts() {
   const dom = new JSDOM(
     '<table id="t"><caption>Loading</caption><thead><tr><th>x</th></tr></thead>' +
       '<tbody><tr><td>Loading</td></tr></tbody></table>' +
+      '<h2 id="heading" tabindex="-1">Flagged pathways</h2>' +
       '<p id="summary"></p><div id="notice" role="status"></div>'
   );
   const doc = dom.window.document;
@@ -214,6 +215,7 @@ function tableParts() {
     table: doc.getElementById('t'),
     summary: doc.getElementById('summary'),
     notice: doc.getElementById('notice'),
+    focusFallback: doc.getElementById('heading'),
   };
   const picked = [];
   const zoomed = [];
@@ -622,6 +624,72 @@ test('a message after a plain render hides the notice', () => {
   assert.equal(t.elements.notice.textContent, '');
 });
 
+// ---- Keyboard focus across a redraw ----------------------------------------
+function rowFor(t, id) {
+  return t.elements.table.querySelector('tr[data-objectid="' + id + '"]');
+}
+
+test('a redraw keeps focus on the same pathway row', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  const before = rowFor(t, 205);
+  before.focus();
+  t.render(LIVE_LIKE, OK_META);
+  const after = rowFor(t, 205);
+  assert.notEqual(after, before, 'the row was rebuilt');
+  assert.equal(t.doc.activeElement, after);
+});
+
+for (const className of ['group-toggle', 'group-zoom']) {
+  test('a redraw keeps focus on the same group ' + className, () => {
+    const t = tableParts();
+    t.render(LIVE_LIKE, OK_META);
+    const bodyIndex = 1;
+    const name =
+      t.elements.table.tBodies[bodyIndex].querySelector(
+        '.group-name'
+      ).textContent;
+    t.elements.table.tBodies[bodyIndex].querySelector('.' + className).focus();
+    t.render(LIVE_LIKE, OK_META);
+    const focused = t.doc.activeElement;
+    assert.ok(focused.classList.contains(className));
+    assert.equal(
+      focused.closest('tbody').querySelector('.group-name').textContent,
+      name
+    );
+  });
+}
+
+test('focus moves to the heading when the focused pathway is gone', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  rowFor(t, 205).focus();
+  const without205 = LIVE_LIKE.filter((f) => f.properties.OBJECTID !== 205);
+  t.render(without205, OK_META);
+  assert.equal(t.doc.activeElement, t.elements.focusFallback);
+});
+
+test('focus moves to the heading when the table empties or shows a message', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  rowFor(t, 205).focus();
+  t.render([], OK_META);
+  assert.equal(t.doc.activeElement, t.elements.focusFallback);
+
+  t.render(LIVE_LIKE, OK_META);
+  rowFor(t, 205).focus();
+  t.TABLE.renderMessage('Forecast data could not be loaded.', t.elements);
+  assert.equal(t.doc.activeElement, t.elements.focusFallback);
+});
+
+test('a redraw leaves focus alone when it was outside the table', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  assert.equal(t.doc.activeElement, t.doc.body);
+  t.render(LIVE_LIKE, OK_META);
+  assert.equal(t.doc.activeElement, t.doc.body);
+});
+
 // ---- toCSV ----------------------------------------------------------------
 const META = {
   fire_districts: 'ok',
@@ -630,10 +698,27 @@ const META = {
   issued: '2026-10-27T18:11:16+00:00',
 };
 const HEADER =
-  'fdid,fire_department,fd_county,fd_address,district_updated,' +
-  'county,watershed,forecast_rain,ndfd_category,area_acres,pathway_id,' +
-  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc,' +
-  'fire_district_status';
+  'pathway_id,county,watershed,forecast_rain,ndfd_category,area_acres,' +
+  'fire_district_status,fire_department,fdid,fd_county,fd_address,' +
+  'district_updated,' +
+  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc';
+
+// Column name -> position, so the tests below do not depend on the order.
+const COL = {};
+HEADER.split(',').forEach((name, i) => {
+  COL[name] = i;
+});
+const DISTRICT_COLUMNS = [
+  'fire_department',
+  'fdid',
+  'fd_county',
+  'fd_address',
+  'district_updated',
+];
+
+function districtCells(fields) {
+  return DISTRICT_COLUMNS.map((name) => fields[COL[name]]);
+}
 
 // Splits one CSV line into its fields, keeping quoted fields whole.
 function csvFields(line) {
@@ -652,7 +737,7 @@ test('toCSV writes the header, one CRLF row per pathway and a trailing CRLF', ()
   assert.ok(!csv.includes('\n\n'));
 });
 
-test('toCSV rows follow the grouped order and end with the district status', () => {
+test('toCSV rows follow the grouped order and carry the district status', () => {
   const features = [
     pathway(3, 'Cocke', 'C', 13, 1, OUTSIDE_NC),
     pathway(2, 'Swain', 'B', 12, 1, NO_DISTRICT),
@@ -661,25 +746,25 @@ test('toCSV rows follow the grouped order and end with the district status', () 
   const lines = TABLE.toCSV(features, META).split('\r\n').slice(1, -1);
   const fields = lines.map(csvFields);
   assert.deepEqual(
-    fields.map((f) => f[10]),
+    fields.map((f) => f[COL.pathway_id]),
     ['102', '205', '301', '2', '3']
   );
   assert.deepEqual(
-    fields.map((f) => f[15]),
+    fields.map((f) => f[COL.fire_district_status]),
     ['district', 'district', 'district', 'no_district', 'outside_nc']
   );
   const asheville = fields[1];
-  assert.deepEqual(asheville.slice(0, 5), [
-    '11101',
+  assert.deepEqual(districtCells(asheville), [
     'Asheville Fire Department',
+    '11101',
     'Buncombe',
     '"100 Court Plaza, Asheville, NC 28801"',
     '2024-03-01',
   ]);
-  assert.equal(asheville[11], META.window_start);
-  assert.equal(asheville[12], META.window_end);
-  assert.equal(asheville[13], META.issued);
-  assert.match(asheville[14], /^\d{4}-\d{2}-\d{2}T.*Z$/);
+  assert.equal(asheville[COL.window_start_utc], META.window_start);
+  assert.equal(asheville[COL.window_end_utc], META.window_end);
+  assert.equal(asheville[COL.nws_updated_utc], META.issued);
+  assert.match(asheville[COL.exported_utc], /^\d{4}-\d{2}-\d{2}T.*Z$/);
 });
 
 test('toCSV marks every row "unavailable" and uses the plain sort when not known', () => {
@@ -689,14 +774,32 @@ test('toCSV marks every row "unavailable" and uses the plain sort when not known
     .slice(1, -1);
   const fields = lines.map(csvFields);
   assert.deepEqual(
-    fields.map((f) => f[10]),
+    fields.map((f) => f[COL.pathway_id]),
     ['102', '205', '301']
   );
   assert.deepEqual(
-    fields.map((f) => f[15]),
+    fields.map((f) => f[COL.fire_district_status]),
     ['unavailable', 'unavailable', 'unavailable']
   );
-  assert.deepEqual(fields[0].slice(0, 5), ['', '', '', '', '']);
+  assert.deepEqual(districtCells(fields[0]), ['', '', '', '', '']);
+});
+
+test('toCSV leaves the district columns blank when districts are not known', () => {
+  // The marker is missing, so the fields this pathway carries are not
+  // to be trusted. The CSV must say the same thing the table says.
+  const tagged = pathway(9, 'Buncombe', 'Swannanoa River', 11, 1.5, {
+    fire_district_status: 'district',
+    fdid: '11101',
+    fire_department: 'Asheville FD',
+    fd_county: 'Buncombe',
+    fd_address: '1 Main St',
+    district_updated: '2024-03-05',
+  });
+  const row = TABLE.toCSV([tagged], { window_start: 'x' }).split('\r\n')[1];
+  const fields = csvFields(row);
+  assert.deepEqual(districtCells(fields), ['', '', '', '', '']);
+  assert.equal(fields[COL.county], 'Buncombe');
+  assert.equal(fields[COL.fire_district_status], 'unavailable');
 });
 
 test('toCSV quotes fields with commas or quotes', () => {
@@ -709,24 +812,27 @@ test('toCSV quotes fields with commas or quotes', () => {
     {}
   );
   const fields = csvFields(TABLE.toCSV([quoted], {}).split('\r\n')[1]);
-  assert.equal(fields[5], '"Say ""Hi"""');
-  assert.equal(fields[6], '"Pigeon River, East Fork"');
-  assert.equal(fields[7], '6–8″');
-  assert.equal(fields[8], '12');
-  assert.equal(fields[9], '3.8');
-  assert.equal(fields[10], '7');
+  assert.equal(fields[COL.county], '"Say ""Hi"""');
+  assert.equal(fields[COL.watershed], '"Pigeon River, East Fork"');
+  assert.equal(fields[COL.forecast_rain], '6–8″');
+  assert.equal(fields[COL.ndfd_category], '12');
+  assert.equal(fields[COL.area_acres], '3.8');
+  assert.equal(fields[COL.pathway_id], '7');
 });
 
 test('toCSV rounds acres to two places under one acre and one above', () => {
   const rows = TABLE.toCSV([SWANNANOA, FRENCH_BROAD], {}).split('\r\n');
-  assert.equal(rows[1].split(',')[9], '12.0');
-  assert.equal(rows[2].split(',')[9], '0.42');
+  assert.equal(rows[1].split(',')[COL.area_acres], '12.0');
+  assert.equal(rows[2].split(',')[COL.area_acres], '0.42');
 });
 
 test('toCSV leaves unknown values blank and non-numeric acres as dashes', () => {
   const bare = feature({ OBJECTID: 5, max_category: 99, area_acres: 'n/a' });
   const row = TABLE.toCSV([bare], undefined).split('\r\n')[1];
   const fields = row.split(',');
-  assert.equal(fields.slice(0, 14).join(','), ',,,,,,,,99,--,5,,,');
-  assert.equal(fields[15], 'unavailable');
+  assert.equal(
+    fields.slice(0, COL.exported_utc).join(','),
+    '5,,,,99,--,unavailable,,,,,,,,'
+  );
+  assert.match(fields[COL.exported_utc], /Z$/);
 });

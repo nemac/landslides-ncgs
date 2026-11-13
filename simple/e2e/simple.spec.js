@@ -201,6 +201,30 @@ test('selecting a row zooms the map to that pathway and opens its popup', async 
   await expect.poll(() => mapZoom(page)).toBeGreaterThan(zoomBefore);
 });
 
+test('a reload with the same pathways keeps the popup open and the row focused', async ({
+  page,
+}) => {
+  await openLive(page);
+  const row = page.locator('#alerts-table tr[data-objectid="205"]');
+  await row.focus();
+  await page.keyboard.press('Enter');
+  const popup = page.locator('.leaflet-popup .alert-popup');
+  await expect(popup).toContainText('Flagged pathway 205');
+
+  // The page reloads its data when the tab becomes visible again.
+  const reloaded = page.waitForResponse((response) =>
+    response.url().includes('flagged_ndfd_24h_min11.geojson')
+  );
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event('visibilitychange'))
+  );
+  await reloaded;
+  await expect(page.locator('#loading-indicator')).toBeHidden();
+
+  await expect(row).toBeFocused();
+  await expect(popup).toContainText('Flagged pathway 205');
+});
+
 test('the table rows work from the keyboard', async ({ page }) => {
   await openLive(page);
   await page.locator('#alerts-table tr[data-objectid="102"]').focus();
@@ -241,6 +265,24 @@ test('the table tab hides and shows the table and remembers it', async ({
   expect(outline).toBe('solid 3px rgb(255, 209, 102)');
 });
 
+test('the skip link reaches the pathways heading, with the table shown or hidden', async ({
+  page,
+}) => {
+  await openLive(page);
+  for (const hideTable of [false, true]) {
+    if (hideTable) {
+      await page.locator('#toggle-table').click();
+      await expect(page.locator('#table-wrapper')).toBeHidden();
+    }
+    await page.locator('.skip-link').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#table-heading')).toBeFocused();
+    // The next stop is inside the table section, not back at the top.
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#export-csv')).toBeFocused();
+  }
+});
+
 test('the CSV download carries the grouped pathways and their status', async ({
   page,
 }) => {
@@ -253,17 +295,15 @@ test('the CSV download carries the grouped pathways and their status', async ({
   );
   const lines = (await readDownload(download)).split('\r\n');
   expect(lines[0]).toBe(
-    'fdid,fire_department,fd_county,fd_address,district_updated,county,' +
-      'watershed,forecast_rain,ndfd_category,area_acres,pathway_id,' +
-      'window_start_utc,window_end_utc,nws_updated_utc,exported_utc,' +
-      'fire_district_status'
+    'pathway_id,county,watershed,forecast_rain,ndfd_category,area_acres,' +
+      'fire_district_status,fire_department,fdid,fd_county,fd_address,' +
+      'district_updated,' +
+      'window_start_utc,window_end_utc,nws_updated_utc,exported_utc'
   );
   expect(lines[1]).toMatch(
-    /^44104,Cruso Fire Department,Haywood,".*",2023-07-15,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,102,.*,district$/
+    /^102,Haywood,"Pigeon River, East Fork",6–8″,12,3\.8,district,Cruso Fire Department,44104,Haywood,".*",2023-07-15,/
   );
-  expect(lines[2]).toMatch(
-    /^11101,Asheville Fire Department,.*,205,.*,district$/
-  );
+  expect(lines[2]).toMatch(/^205,.*,district,Asheville Fire Department,11101,/);
   expect(lines).toHaveLength(5);
 });
 
@@ -302,7 +342,7 @@ test('an older file without districts shows the plain list and the notice', asyn
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#export-csv').click();
   const lines = (await readDownload(await downloadPromise)).split('\r\n');
-  expect(lines[1]).toMatch(/^,,,,,Haywood,.*,102,.*,unavailable$/);
+  expect(lines[1]).toMatch(/^102,Haywood,.*,unavailable,,,,,,2026-/);
 });
 
 test('the plain list page has no WCAG A or AA problems', async ({ page }) => {

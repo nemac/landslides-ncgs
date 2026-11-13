@@ -31,6 +31,7 @@
     statusNext: $('status-next'),
     staleBanner: $('stale-banner'),
     table: $('alerts-table'),
+    tableHeading: $('table-heading'),
     tableSummary: $('table-summary'),
     districtNotice: $('district-notice'),
     exportBtn: $('export-csv'),
@@ -357,14 +358,59 @@
     _renderIssued(m, state.status);
     _renderStale(m, state.status);
 
-    MAP.setAlerts({ type: 'FeatureCollection', features: state.features });
+    _renderPathways();
+    els.exportBtn.disabled = n === 0;
+  }
+
+  // The pathways the map and table were last drawn from, as text. null
+  // means they are not showing pathways (before the first load, or in the
+  // error state).
+  let _drawnPathways = null;
+
+  // Everything the map layer and the table are built from. Two loads with
+  // the same text here would draw exactly the same thing.
+  function _pathwaysAsText() {
+    return JSON.stringify({
+      fire_districts: state.meta.fire_districts,
+      features: state.features,
+    });
+  }
+
+  // Most reloads bring the same pathways: the forecast changes about once
+  // an hour and the page reloads every few minutes. Redrawing anyway would
+  // close an open map popup and take keyboard focus out of the table, so
+  // the map layer and the table are redrawn only when the pathways changed.
+  // The status cards above are redrawn on every load either way.
+  function _renderPathways() {
+    const pathwaysAsText = _pathwaysAsText();
+    if (pathwaysAsText === _drawnPathways) return;
+    _drawnPathways = pathwaysAsText;
+
+    MAP.setAlerts(
+      { type: 'FeatureCollection', features: state.features },
+      TABLE.districtsKnown(state.features, state.meta)
+    );
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
-    TABLE.render(state.features, m, _tableElements(), {
-      onSelect: MAP.zoomToAlert,
-      onZoomGroup: MAP.zoomToAlerts,
+    TABLE.render(state.features, state.meta, _tableElements(), {
+      onSelect: function (objectid) {
+        _showPathwaysLayer();
+        MAP.zoomToAlert(objectid);
+      },
+      onZoomGroup: function (objectids) {
+        _showPathwaysLayer();
+        MAP.zoomToAlerts(objectids);
+      },
     });
-    els.exportBtn.disabled = n === 0;
+  }
+
+  // Zooming to a pathway is no use while the pathways layer is hidden.
+  // Ticking its box keeps the box and the map in step, so the next
+  // reload does not hide the layer again.
+  function _showPathwaysLayer() {
+    if (els.layerAlerts.checked) return;
+    els.layerAlerts.checked = true;
+    MAP.setAlertsVisible(true);
   }
 
   function _tableElements() {
@@ -372,6 +418,8 @@
       table: els.table,
       summary: els.tableSummary,
       notice: els.districtNotice,
+      // Where focus goes when the focused row is gone after a redraw.
+      focusFallback: els.tableHeading,
     };
   }
 
@@ -474,6 +522,7 @@
     // The map must agree with the table: drop any pathways drawn by the
     // last successful load.
     state.features = [];
+    _drawnPathways = null;
     MAP.setAlerts(null);
     els.statusCount.textContent = '--';
     els.statusWindow.textContent = 'Unavailable';

@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest import mock
 
 import fire_districts as fd
 import settings as S
@@ -100,6 +101,21 @@ class ChooseDistrictTest(unittest.TestCase):
         self.assertIs(fd.choose_district([third, first, second]), second)
 
 
+class ChooseLargestOverlapTest(unittest.TestCase):
+    def test_empty_list_gives_none(self):
+        self.assertIsNone(fd.choose_largest_overlap([]))
+
+    def test_largest_overlap_wins_even_over_a_real_department(self):
+        # rank is minus the overlap area, so the lowest rank overlaps most.
+        barely = district("Asheville", rank=-1)
+        mostly = no_district(rank=-99)
+        self.assertEqual(fd.choose_largest_overlap([barely, mostly]), mostly)
+
+    def test_real_department_wins_an_exact_tie(self):
+        real = district("Asheville", rank=-5)
+        self.assertEqual(fd.choose_largest_overlap([no_district(rank=-5), real]), real)
+
+
 class PathwayFieldsTest(unittest.TestCase):
     def test_keys_are_the_pathway_columns(self):
         for record in (None, no_district(), district("X")):
@@ -163,7 +179,26 @@ class FakeGetter:
         return self.pages.pop(0)
 
 
+class RequireEnoughDistrictsTest(unittest.TestCase):
+    def test_full_set_passes(self):
+        fd.require_enough_districts(S.FIRE_DISTRICTS_MIN_COUNT)
+
+    def test_short_set_is_an_error(self):
+        with self.assertRaises(RuntimeError):
+            fd.require_enough_districts(S.FIRE_DISTRICTS_MIN_COUNT - 1)
+
+    def test_empty_set_is_an_error(self):
+        with self.assertRaises(RuntimeError):
+            fd.require_enough_districts(0)
+
+
 class FetchWncDistrictsTest(unittest.TestCase):
+    def setUp(self):
+        # The fake pages hold one to three districts, far fewer than WNC has.
+        patcher = mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_pages_until_the_limit_flag_goes_away(self):
         getter = FakeGetter(
             [
@@ -209,6 +244,13 @@ class FetchWncDistrictsTest(unittest.TestCase):
         getter = FakeGetter([{"features": []}])
         with self.assertRaises(RuntimeError):
             fd.fetch_wnc_districts(get_json=getter)
+
+    def test_short_answer_is_an_error(self):
+        # A partial answer must never replace a good copy of the file.
+        getter = FakeGetter([{"features": [feature("A"), feature("B")]}])
+        with mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", 3):
+            with self.assertRaises(RuntimeError):
+                fd.fetch_wnc_districts(get_json=getter)
 
     def test_missing_features_key_is_an_error(self):
         getter = FakeGetter([{"type": "FeatureCollection"}])

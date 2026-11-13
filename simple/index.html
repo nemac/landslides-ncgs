@@ -25,7 +25,7 @@
 </head>
 <body>
 
-  <a href="#alerts-table" class="skip-link">Skip to flagged pathways table</a>
+  <a href="#table-heading" class="skip-link">Skip to flagged pathways</a>
 
   <!-- ===================== HEADER ===================== -->
   <!-- Banner matches the full DFENS dashboard (logos, links, alt text). -->
@@ -250,7 +250,9 @@
           </svg>
         </button>
         <div class="table-head">
-          <h2 id="table-heading">Flagged pathways</h2>
+          <!-- The skip link lands here. The heading stays on the page when
+               the table is hidden, and tabindex lets it take focus. -->
+          <h2 id="table-heading" tabindex="-1">Flagged pathways</h2>
           <p id="table-summary" class="table-summary" aria-live="polite">Loading&hellip;</p>
           <button type="button" id="export-csv" class="btn" disabled>
             Download CSV

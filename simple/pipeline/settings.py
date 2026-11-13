@@ -35,6 +35,11 @@ FIRE_DISTRICTS_URL = (
     "NC_Fire_Districts/FeatureServer/0"
 )
 FIRE_DISTRICTS_CACHE = "cache/fire_districts_wnc.geojson"  # relative to repo root
+# The WNC box held 355 districts on 2026-11-13. A copy with fewer than
+# this many is treated as broken: with districts missing, pathways inside
+# them would be published as "Outside North Carolina". Lower it only if
+# the state really merges that many districts.
+FIRE_DISTRICTS_MIN_COUNT = 300
 
 # Where the page (and the change check) read the last published status.
 PUBLIC_STATUS_URL = "https://landslidesncgs.org/simple/data/status.json"

@@ -51,13 +51,13 @@ def _point_candidates(pathways, districts, records) -> dict[int, list[dict]]:
     return candidates
 
 
-def _overlap_candidates(pathways, districts, records, unmatched) -> dict[int, list[dict]]:
+def _overlap_candidates(pathways, districts, records, by_overlap) -> dict[int, list[dict]]:
     """Stage 2: districts that overlap the pathway's polygon. The rank is
     minus the overlap area, so the largest overlap wins. A district that
     only touches the pathway's edge has no overlap and is left out."""
     polygons = gpd.GeoDataFrame(
-        {"pathway": unmatched},
-        geometry=pathways.geometry.iloc[unmatched].values,
+        {"pathway": by_overlap},
+        geometry=pathways.geometry.iloc[by_overlap].values,
         crs=pathways.crs,
     )
     pairs = gpd.sjoin(
@@ -74,6 +74,25 @@ def _overlap_candidates(pathways, districts, records, unmatched) -> dict[int, li
     return candidates
 
 
+def _has_real_district(candidates: list[dict]) -> bool:
+    for candidate in candidates:
+        if not fire_districts.is_no_district(candidate):
+            return True
+    return False
+
+
+def _pathways_to_match_by_overlap(pathway_count, point_candidates) -> list[int]:
+    """Pathways whose point did not land in a real district. The state
+    layer fills the thin gaps between districts with "No District" strips,
+    and a few gaps have no polygon at all. A point in either says little
+    about the pathway, so its whole polygon is compared instead."""
+    by_overlap = []
+    for pathway in range(pathway_count):
+        if not _has_real_district(point_candidates.get(pathway, [])):
+            by_overlap.append(pathway)
+    return by_overlap
+
+
 def match_fire_districts(flagged, districts, crs) -> list[dict | None]:
     """One district record (or None outside NC) per pathway, in order."""
     # Plain 0..n-1 row numbers, so sjoin results point straight at rows.
@@ -82,20 +101,19 @@ def match_fire_districts(flagged, districts, crs) -> list[dict | None]:
     records = _district_records(districts)
 
     candidates = _point_candidates(pathways, districts, records)
-
-    # A pathway's point can land in a thin gap between two NC districts.
-    # Its polygon still overlaps them, so it is not really outside NC.
-    unmatched = []
-    for pathway in range(len(pathways)):
-        if pathway not in candidates:
-            unmatched.append(pathway)
-    if unmatched:
-        overlaps = _overlap_candidates(pathways, districts, records, unmatched)
-        candidates.update(overlaps)
+    by_overlap = _pathways_to_match_by_overlap(len(pathways), candidates)
+    if by_overlap:
+        overlaps = _overlap_candidates(pathways, districts, records, by_overlap)
+        for pathway in by_overlap:
+            candidates[pathway] = overlaps.get(pathway, [])
 
     matches = []
     for pathway in range(len(pathways)):
-        matches.append(fire_districts.choose_district(candidates.get(pathway, [])))
+        found = candidates.get(pathway, [])
+        if pathway in by_overlap:
+            matches.append(fire_districts.choose_largest_overlap(found))
+        else:
+            matches.append(fire_districts.choose_district(found))
     return matches
 
 

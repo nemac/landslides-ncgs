@@ -410,6 +410,8 @@ window.DFS_TABLE = (function () {
   function _buildGroupBody(group, handlers) {
     const body = document.createElement('tbody');
     body.className = 'group';
+    // Lets a redraw find this group again (see _findPart).
+    body.dataset.groupKey = group.key;
     const isCollapsed = collapsedGroupKeys.has(group.key);
     const pathwayRows = group.features.map(function (feature) {
       const row = _buildPathwayRow(feature, handlers.onSelect);
@@ -422,6 +424,55 @@ window.DFS_TABLE = (function () {
       body.appendChild(row);
     });
     return body;
+  }
+
+  // ---- Keeping keyboard focus across a redraw -------------------------------
+  // A redraw deletes every row, and the focused row or button with it. The
+  // browser then drops focus to the top of the page. So render() notes
+  // which part had focus first, and focuses its replacement afterwards.
+  function _focusedPart(table) {
+    const focused = document.activeElement;
+    if (!focused || !table.contains(focused)) return null;
+    if (focused.dataset.objectid) {
+      return { objectid: focused.dataset.objectid };
+    }
+    const body = focused.closest('tbody');
+    if (focused.tagName === 'BUTTON' && body && body.dataset.groupKey) {
+      return { groupKey: body.dataset.groupKey, className: focused.className };
+    }
+    return null;
+  }
+
+  function _findRow(table, objectid) {
+    const rows = Array.from(table.querySelectorAll('tr[data-objectid]'));
+    return rows.find(function (row) {
+      return row.dataset.objectid === objectid;
+    });
+  }
+
+  function _findGroupButton(table, groupKey, className) {
+    const body = Array.from(table.tBodies).find(function (candidate) {
+      return candidate.dataset.groupKey === groupKey;
+    });
+    return body ? body.querySelector('button.' + className) : null;
+  }
+
+  function _findPart(table, part) {
+    if (part.objectid) return _findRow(table, part.objectid);
+    return _findGroupButton(table, part.groupKey, part.className);
+  }
+
+  // `part` is what _focusedPart() returned before the redraw. When that
+  // pathway or group is gone, or is now inside a collapsed group, focus
+  // goes to elements.focusFallback (the table's heading) instead.
+  function _restoreFocus(elements, part) {
+    if (!part) return;
+    const target = _findPart(elements.table, part);
+    if (target && !target.hidden) {
+      target.focus();
+    } else if (elements.focusFallback) {
+      elements.focusFallback.focus();
+    }
   }
 
   // ---- Render --------------------------------------------------------------
@@ -454,6 +505,7 @@ window.DFS_TABLE = (function () {
   }
 
   function render(features, meta, elements, handlers) {
+    const focusedPart = _focusedPart(elements.table);
     _clearBodies(elements.table);
     if (!features.length) {
       _renderEmpty(elements);
@@ -462,56 +514,80 @@ window.DFS_TABLE = (function () {
     } else {
       _renderPlain(features, elements, handlers || {});
     }
+    _restoreFocus(elements, focusedPart);
   }
 
   // Replaces every body in the table, grouped or not, with one message row.
   // The caller sets the summary text.
   function renderMessage(text, elements) {
+    const focusedPart = _focusedPart(elements.table);
     _clearBodies(elements.table);
     elements.table.appendChild(_messageBody(text, null));
+    _restoreFocus(elements, focusedPart);
     _setNotice(elements.notice, '');
     _setCaption(elements.table, CAPTION_PLAIN);
   }
 
   // ---- CSV -----------------------------------------------------------------
+  // The pathway's own columns come first. The district status sits right
+  // before the five columns it explains, and the times come last.
   const CSV_HEADER = [
-    'fdid',
-    'fire_department',
-    'fd_county',
-    'fd_address',
-    'district_updated',
+    'pathway_id',
     'county',
     'watershed',
     'forecast_rain',
     'ndfd_category',
     'area_acres',
-    'pathway_id',
+    'fire_district_status',
+    'fire_department',
+    'fdid',
+    'fd_county',
+    'fd_address',
+    'district_updated',
     'window_start_utc',
     'window_end_utc',
     'nws_updated_utc',
     'exported_utc',
-    'fire_district_status',
   ];
 
-  function _csvRow(p, meta, exported, status) {
+  function _csvPathwayCells(p) {
     return [
-      p.fdid || '',
-      p.fire_department || '',
-      p.fd_county || '',
-      p.fd_address || '',
-      p.district_updated || '',
+      p.OBJECTID,
       p.county || '',
       p.watershed || '',
       CFG.PRECIP_LABELS[p.max_category] || '',
       p.max_category,
       _acres(p),
-      p.OBJECTID,
+    ];
+  }
+
+  // The status and the five district columns. The five stay blank unless
+  // districts are known, so the file never names a district the table
+  // would not show.
+  function _csvDistrictCells(p, known) {
+    if (!known) return ['unavailable', '', '', '', '', ''];
+    return [
+      p.fire_district_status,
+      p.fire_department || '',
+      p.fdid || '',
+      p.fd_county || '',
+      p.fd_address || '',
+      p.district_updated || '',
+    ];
+  }
+
+  function _csvTimeCells(meta, exported) {
+    return [
       meta.window_start || '',
       meta.window_end || '',
       meta.issued || '',
       exported,
-      status,
-    ]
+    ];
+  }
+
+  function _csvRow(p, meta, exported, known) {
+    return _csvPathwayCells(p)
+      .concat(_csvDistrictCells(p, known), _csvTimeCells(meta, exported))
       .map(_csvEscape)
       .join(',');
   }
@@ -533,9 +609,7 @@ window.DFS_TABLE = (function () {
     const exported = new Date().toISOString();
     const rows = [CSV_HEADER.join(',')];
     _featuresInTableOrder(features, known).forEach(function (f) {
-      const p = f.properties;
-      const status = known ? p.fire_district_status : 'unavailable';
-      rows.push(_csvRow(p, safeMeta, exported, status));
+      rows.push(_csvRow(f.properties, safeMeta, exported, known));
     });
     return rows.join('\r\n') + '\r\n';
   }

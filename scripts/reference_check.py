@@ -23,11 +23,16 @@ counts as no previous build, so a newly added dataset is built on its first
 run. Every run logs each upstream value next to the recorded one so a stale
 marker is visible in the Actions log.
 
+Each dataset is checked on its own. When one upstream cannot be read, that
+dataset is left alone, the other two are still checked, and the script
+exits 1 after writing its outputs so the run shows as failed.
+
 Outputs, for the workflow: `buildings`, `debris` and `fire_districts`
 ("true"/"false"), `any`, `overture_release`, `debris_last_edit` and
-`fire_districts_last_edit`. Writes
-<out>/reference_state.json, the state to upload once the rebuilds succeed,
-and <out>/check.json for the job summary.
+`fire_districts_last_edit`. Writes <out>/check.json for the job summary and
+<out>/reference_state.json, which starts as the previous state.
+reference_record.py updates one dataset's entry in it after that dataset's
+rebuild succeeds, and the workflow uploads it at the end.
 """
 
 from __future__ import annotations
@@ -205,18 +210,73 @@ def decide(
     return False, f"unchanged ({upstream}), built {age.days} days ago"
 
 
-def next_state(
-    previous: dict, upstream: dict[str, str], rebuild: dict[str, bool], now: datetime
-) -> dict:
-    """The state to record after this run: rebuilt datasets take the new
-    upstream marker and timestamp, the others carry their previous entry."""
+def starting_state(previous: dict, now: datetime) -> dict:
+    """The state before any rebuild in this run: every dataset keeps its
+    previous entry. reference_record.py updates one entry after that
+    dataset's rebuild succeeds, so a failed rebuild is never recorded."""
     state = {"checked_at": now.isoformat()}
     for name in DATASETS:
-        if rebuild[name]:
-            state[name] = {"value": upstream[name], "built_at": now.isoformat()}
-        else:
-            state[name] = dict(previous.get(name) or {})
+        state[name] = dict(previous.get(name) or {})
     return state
+
+
+def record_build(state: dict, name: str, value: str, now: datetime) -> dict:
+    """A copy of `state` where dataset `name` was just built from the
+    upstream marker `value`."""
+    if name not in DATASETS:
+        raise ValueError(f"unknown dataset: {name}")
+    if not value:
+        raise ValueError(f"no upstream marker to record for {name}")
+    recorded = dict(state)
+    recorded[name] = {"value": value, "built_at": now.isoformat()}
+    return recorded
+
+
+def read_upstream() -> tuple[dict[str, str | None], dict[str, str]]:
+    """Each dataset's upstream marker, and the error for each one that
+    could not be read. The three sources are separate servers, so one
+    being down must not stop the other two from being checked."""
+    # Built here, not at import, so a test can swap any reader.
+    readers = {
+        "buildings": latest_overture_release,
+        "debris": debris_last_edit,
+        "fire_districts": fire_districts_last_edit,
+    }
+    upstream: dict[str, str | None] = {}
+    errors: dict[str, str] = {}
+    for name in DATASETS:
+        try:
+            upstream[name] = readers[name]()
+        # Deliberately broad: whatever went wrong with one source, the
+        # other datasets still get checked.
+        except Exception as error:
+            upstream[name] = None
+            errors[name] = f"{type(error).__name__}: {error}"
+    return upstream, errors
+
+
+def decide_all(
+    upstream: dict[str, str | None],
+    errors: dict[str, str],
+    previous: dict,
+    now: datetime,
+    *,
+    force: bool = False,
+) -> tuple[dict[str, bool], dict[str, str]]:
+    """decide() for every dataset. A dataset whose upstream could not be
+    read is left alone, even on a forced run: with no marker there is
+    nothing to record for the rebuild."""
+    rebuild: dict[str, bool] = {}
+    reasons: dict[str, str] = {}
+    for name in DATASETS:
+        if name in errors:
+            rebuild[name] = False
+            reasons[name] = f"upstream check failed ({errors[name]})"
+        else:
+            rebuild[name], reasons[name] = decide(
+                upstream[name], previous.get(name), now, force=force
+            )
+    return rebuild, reasons
 
 
 def write_outputs(values: dict) -> None:
@@ -237,29 +297,23 @@ def main() -> int:
     now = datetime.now(UTC)
     force = os.environ.get("FORCE", "false").lower() == "true"
 
-    upstream = {
-        "buildings": latest_overture_release(),
-        "debris": debris_last_edit(),
-        "fire_districts": fire_districts_last_edit(),
-    }
+    # Without the previous state nothing can be decided, so this one
+    # failure still stops the whole check.
     previous = previous_state(force=force)
-    log(f"Overture latest release:        {upstream['buildings']}")
-    log(f"Overture release last built:    {(previous.get('buildings') or {}).get('value')}")
-    log(f"NCGS debris layer last edited:  {upstream['debris']}")
-    log(f"NCGS edit date last built:      {(previous.get('debris') or {}).get('value')}")
-    log(f"Fire district layer edited:     {upstream['fire_districts']}")
-    log(f"Fire district edit last built:  {(previous.get('fire_districts') or {}).get('value')}")
-
-    rebuild: dict[str, bool] = {}
-    reasons: dict[str, str] = {}
+    upstream, errors = read_upstream()
+    rebuild, reasons = decide_all(upstream, errors, previous, now, force=force)
     for name in DATASETS:
-        rebuild[name], reasons[name] = decide(upstream[name], previous.get(name), now, force=force)
+        last_built = (previous.get(name) or {}).get("value")
+        log(f"{name}: upstream {upstream[name]}, last built from {last_built}")
         log(f"{name}: {'REBUILD' if rebuild[name] else 'skip'} - {reasons[name]}")
 
-    state = next_state(previous, upstream, rebuild, now)
+    state = starting_state(previous, now)
     (out / "reference_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
     (out / "check.json").write_text(
-        json.dumps({"upstream": upstream, "rebuild": rebuild, "reasons": reasons}, indent=2),
+        json.dumps(
+            {"upstream": upstream, "rebuild": rebuild, "reasons": reasons, "errors": errors},
+            indent=2,
+        ),
         encoding="utf-8",
     )
     write_outputs(
@@ -267,12 +321,17 @@ def main() -> int:
             "buildings": str(rebuild["buildings"]).lower(),
             "debris": str(rebuild["debris"]).lower(),
             "fire_districts": str(rebuild["fire_districts"]).lower(),
-            "overture_release": upstream["buildings"],
-            "debris_last_edit": upstream["debris"],
-            "fire_districts_last_edit": upstream["fire_districts"],
+            "overture_release": upstream["buildings"] or "",
+            "debris_last_edit": upstream["debris"] or "",
+            "fire_districts_last_edit": upstream["fire_districts"] or "",
             "any": str(any(rebuild.values())).lower(),
         }
     )
+    # The outputs are written first, so the workflow can still rebuild the
+    # datasets that were checked. The failure then marks the run as failed.
+    if errors:
+        log(f"could not check: {', '.join(sorted(errors))}")
+        return 1
     return 0
 
 

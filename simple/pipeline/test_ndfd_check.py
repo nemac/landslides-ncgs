@@ -1,4 +1,5 @@
-"""Tests for the retry around the ArcGIS requests in ndfd_check.py.
+"""Tests for ndfd_check.py: the retry around the ArcGIS requests, and the
+choice between skipping and building.
 
 Run from the repo root:
     python3 -m unittest discover -s simple/pipeline -p "test_*.py"
@@ -10,7 +11,9 @@ import unittest
 import urllib.error
 from unittest import mock
 
+import fire_districts
 import ndfd_check
+import settings as S
 
 ARCGIS_ERROR = {
     "error": {"code": 400, "message": "Cannot perform query. Invalid query parameters."},
@@ -109,6 +112,63 @@ class RetryTest(unittest.TestCase):
             ndfd_check.retry(fn)
         self.assertEqual(fn.call_count, attempts)
         self.assertEqual(self.sleep.call_count, attempts - 1)
+
+
+STATE = {"ndfd_key": "2026-10-28T12:00:00+00:00|2026-10-28T18:00:00+00:00"}
+
+
+def published(**changes) -> dict:
+    """A status.json from a run that covered STATE."""
+    status = {
+        "ndfd_key": STATE["ndfd_key"],
+        "pipeline_version": S.PIPELINE_VERSION,
+        "fire_districts": fire_districts.LOOKUP_OK,
+    }
+    status.update(changes)
+    return status
+
+
+class IsUpToDateTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch("builtins.print")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_same_ndfd_update_is_up_to_date(self):
+        self.assertTrue(ndfd_check.is_up_to_date(published(), STATE))
+
+    def test_no_previous_status(self):
+        self.assertFalse(ndfd_check.is_up_to_date(None, STATE))
+        self.assertFalse(ndfd_check.is_up_to_date({}, STATE))
+
+    def test_new_ndfd_update(self):
+        self.assertFalse(ndfd_check.is_up_to_date(published(ndfd_key="older"), STATE))
+
+    def test_new_pipeline_version(self):
+        self.assertFalse(ndfd_check.is_up_to_date(published(pipeline_version="0"), STATE))
+
+    def test_failed_fire_district_lookup_is_built_again(self):
+        previous = published(fire_districts=fire_districts.LOOKUP_UNAVAILABLE)
+        self.assertFalse(ndfd_check.is_up_to_date(previous, STATE))
+
+    def test_no_flagged_pathways_is_not_built_again(self):
+        previous = published(fire_districts=fire_districts.LOOKUP_NOT_RUN)
+        self.assertTrue(ndfd_check.is_up_to_date(previous, STATE))
+
+    def test_status_from_before_fire_districts_is_up_to_date(self):
+        previous = published()
+        del previous["fire_districts"]
+        self.assertTrue(ndfd_check.is_up_to_date(previous, STATE))
+
+    def test_unavailable_matches_the_fire_district_module(self):
+        self.assertEqual(ndfd_check.FIRE_DISTRICTS_UNAVAILABLE, fire_districts.LOOKUP_UNAVAILABLE)
+
+
+class BuildStatusTest(unittest.TestCase):
+    def test_carries_the_fire_district_result(self):
+        meta = {"ndfd_key": "k", "fire_districts": fire_districts.LOOKUP_UNAVAILABLE}
+        status = ndfd_check.build_status(meta, ndfd_check.datetime.now(ndfd_check.UTC), "updated")
+        self.assertEqual(status["fire_districts"], fire_districts.LOOKUP_UNAVAILABLE)
 
 
 if __name__ == "__main__":
