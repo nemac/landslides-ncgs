@@ -22,14 +22,18 @@ details belong in an issue or PR once someone picks it up.
   about 13,000. Measure the file size, the page's load time and the
   table and map with a file that large, and decide whether the page
   needs paging, vector tiles or a cap.
-- **Make the archived flagged runs reproducible.** Since 2026-10-27
-  `refresh-simple.yml` copies the three output files of every run that
-  flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,
-  a prefix CloudFront does not serve and the lifecycle rule does not touch.
-  Those files show what was flagged but not how to get there again: the
-  archive still needs the NDFD precipitation input for the window, the
-  thresholds and category cutoffs in force, the debris-flow data version
-  and the code commit. Runs that flag nothing keep nothing but their log.
+- **Prove that an archived flagged run can be rebuilt.** Since 2026-11-13
+  a run that flags a pathway keeps everything needed to work it out
+  again (see "Rebuilding a flagged run" in `simple/README.md`): its rain
+  input, the debris-flow and fire district layer versions, and the code
+  commit. Still to do: a script that takes one archive folder and
+  rebuilds the flagged file from it, run against a real archived storm,
+  so the claim is tested and not just designed. Also consider S3 Object
+  Lock on `simple/archive/` and `cache/archive/`: the workflow role
+  cannot delete there, but it could overwrite a copy, and an overwritten
+  copy is gone after 30 days. Runs that flag nothing keep nothing but
+  their log, and runs archived before 2026-11-13 hold only their three
+  output files.
 - **Run the pipelines on AWS ("Option B").** Decided 2026-10-21 as the end
   state. Done so far: the dedicated account and CDK app (`infra/`), data in
   S3, the debris-flow GeoPackage kept in the data bucket by

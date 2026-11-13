@@ -125,6 +125,31 @@ no version, and the copy kept for them is the first one made after
 the same). And if NCGS republishes twice between two daily checks, the
 version in between is never downloaded.
 
+#### Rebuilding a flagged run
+
+Every run that flags a pathway is copied to
+`s3://landslidesncgs-data/simple/archive/<generated_at>/`, which
+CloudFront does not serve and nothing expires. Since 2026-11-13 the copy
+holds what is needed to work the same pathways out again after the
+forecast has moved on:
+
+| Needed | Where it is kept |
+|---|---|
+| The rain polygons the flagging used | `rain_input_ndfd_24h_min11.geojson` in the run's archive folder: the 5 inch and over polygons, not clipped and not rounded. NDFD only serves the current forecast, so this is the only copy. It is never published. |
+| The debris-flow pathways | `meta.ncgs_layer_version` in the flagged file names the layer version; its GeoPackage (with county and watershed tags) is under `cache/archive/debris_flows/<version>/`. |
+| The fire districts | `meta.fire_district_layer_version` names the state layer's version; its file is under `cache/archive/fire_districts/<version>/`. |
+| The code, thresholds and library versions | `meta.code_commit` is the commit the workflow ran. `settings.py`, `scripts/config.py` and `environment.yml` at that commit hold the rest. |
+| What was published | `flagged_ndfd_24h_min11.geojson`, `forecast_24h.geojson` and `status.json` in the same folder. |
+
+To rebuild: check out `meta.code_commit`, read the rain file and the two
+layer files, and run `find_alerts()` and the fire district match on them.
+There is no script that does this yet (see `BACKLOG.md`).
+
+A version field is `null` when its lookup did not run or failed, and
+until the first reference rebuild after 2026-11-13 gives the shared
+files their version stamps. `code_commit` is `null` for a run outside
+GitHub Actions. Runs that flag nothing keep none of this.
+
 The pipeline refuses to flag pathways from a GeoPackage that has no
 `OBJECTID_1` column. `scripts/data.py` treats such a file as missing and
 fetches the layer again (10 to 20 minutes), so a run that meets an old

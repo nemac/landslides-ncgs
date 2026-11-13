@@ -290,7 +290,9 @@ class RefreshSimpleFireDistrictTest(unittest.TestCase):
         collection = all_districts().to_geo_dict()
         with tempfile.TemporaryDirectory() as folder:
             with mock.patch.object(self.refresh, "REPO", Path(folder)):
-                with mock.patch.object(fd, "fetch_wnc_districts", return_value=collection) as fetch:
+                with mock.patch.object(
+                    fd, "download_wnc_districts", return_value=collection
+                ) as fetch:
                     with redirect_stdout(io.StringIO()):
                         districts = self.refresh.load_fire_districts()
                         self.refresh.load_fire_districts()
@@ -309,6 +311,32 @@ class RefreshSimpleFireDistrictTest(unittest.TestCase):
                 with mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", too_many):
                     with self.assertRaises(RuntimeError):
                         self.refresh.load_fire_districts()
+
+    def write_versioned_district_file(self, folder, version):
+        collection = all_districts().to_geo_dict()
+        collection["layer_version"] = version
+        fd.write_districts(Path(folder) / S.FIRE_DISTRICTS_CACHE, collection)
+
+    def test_the_district_layer_version_comes_from_the_file_the_lookup_read(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.write_versioned_district_file(folder, "2026-03-03T171307Z")
+            with mock.patch.object(self.refresh, "REPO", Path(folder)):
+                version = self.refresh.fire_district_layer_version(fd.LOOKUP_OK)
+        self.assertEqual(version, "2026-03-03T171307Z")
+
+    def test_there_is_no_district_layer_version_when_the_lookup_failed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.write_versioned_district_file(folder, "2026-03-03T171307Z")
+            with mock.patch.object(self.refresh, "REPO", Path(folder)):
+                version = self.refresh.fire_district_layer_version(fd.LOOKUP_UNAVAILABLE)
+        self.assertIsNone(version)
+
+    def test_an_older_district_file_gives_no_layer_version(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.write_district_file(folder, all_districts())
+            with mock.patch.object(self.refresh, "REPO", Path(folder)):
+                version = self.refresh.fire_district_layer_version(fd.LOOKUP_OK)
+        self.assertIsNone(version)
 
     def test_tag_is_unavailable_when_the_file_is_short(self):
         # Without the count check every pathway here would be published

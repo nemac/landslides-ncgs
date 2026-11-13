@@ -130,6 +130,17 @@ jobs:
           python simple/pipeline/fire_districts.py --out cache/fire_districts_wnc.geojson
           aws s3 cp cache/fire_districts_wnc.geojson "s3://${DATA_BUCKET}/cache/fire_districts_wnc.geojson" \
             --content-type application/geo+json
+          # Keep one copy of every version of the state layer for good, so
+          # an archived run's fire districts can be worked out again. The
+          # first copy of a version is the one kept.
+          VERSION=$(python simple/pipeline/fire_districts.py --version-of cache/fire_districts_wnc.geojson)
+          ARCHIVE="s3://${DATA_BUCKET}/cache/archive/fire_districts/${VERSION}/fire_districts_wnc.geojson"
+          if aws s3 ls "$ARCHIVE" > /dev/null 2>&1; then
+            echo "Layer version ${VERSION} is already kept at ${ARCHIVE}"
+          else
+            aws s3 cp cache/fire_districts_wnc.geojson "$ARCHIVE" --content-type application/geo+json
+            echo "Kept layer version ${VERSION} at ${ARCHIVE}"
+          fi
           python scripts/reference_record.py fire_districts --out out
 
       - name: Rebuild the building footprints

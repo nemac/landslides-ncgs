@@ -137,8 +137,8 @@ export class WebStack extends Stack {
     // otherwise; status.json alone is rewritten 144 times a day. Expire old
     // versions after a while. Current objects are untouched. That includes
     // the archive copies: runs that flagged pathways under simple/archive/,
-    // and one debris-flow GeoPackage per NCGS layer version under
-    // cache/archive/.
+    // and one debris-flow GeoPackage and one fire district file per layer
+    // version under cache/archive/.
     if (versioned) {
       rules.push({
         id: 'expire-noncurrent-versions',

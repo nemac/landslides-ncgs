@@ -190,6 +190,8 @@ These files were read only by the offline alerts dashboard.
 | Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
 | Every past version of the debris-flow layer | `s3://landslidesncgs-data/cache/archive/debris_flows/<version>/` (see "Layer versions" in `simple/README.md`) |
+| Every past version of the fire district layer | `s3://landslidesncgs-data/cache/archive/fire_districts/<version>/` |
+| Every run that flagged pathways, with its rain input | `s3://landslidesncgs-data/simple/archive/<generated_at>/` (see "Rebuilding a flagged run" in `simple/README.md`) |
 | Fire district cache | `cache/fire_districts_wnc.geojson` (never committed) |
 | Python environment | `defns-refresh`, from `environment.yml` |
 | Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |

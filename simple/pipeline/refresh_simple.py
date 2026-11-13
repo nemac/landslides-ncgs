@@ -15,6 +15,9 @@ Runs whenever ndfd_check.py found new NDFD data. Steps:
      pipeline's find_alerts() on that subset only.
   4. Simplify + round like the main pipeline; write
      flagged_ndfd_24h_min11.geojson and status.json (status last).
+  5. If pathways were flagged, also write rain_input_ndfd_24h_min11.geojson:
+     the >= 5" polygons exactly as step 3 used them. The workflow keeps it
+     with the archived run and never publishes it.
 
 Run from the repo root:  python simple/pipeline/refresh_simple.py --out out
 """
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -125,7 +129,7 @@ def load_fire_districts() -> gpd.GeoDataFrame:
     path = REPO / S.FIRE_DISTRICTS_CACHE
     if not path.exists():
         log("no local fire district file; downloading the WNC districts")
-        collection = fire_districts.fetch_wnc_districts()
+        collection = fire_districts.download_wnc_districts()
         fire_districts.write_districts(path, collection)
     districts = repair_polygons(gpd.read_file(path))
     # Counted after the repair, which drops polygons it cannot fix.
@@ -167,6 +171,28 @@ def tag_fire_districts(flagged: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, str
     in_district = int((tagged["fire_district_status"] == fire_districts.STATUS_DISTRICT).sum())
     log(f"fire districts: {in_district} of {len(tagged)} flagged pathways in a fire district")
     return tagged, fire_districts.LOOKUP_OK
+
+
+def fire_district_layer_version(lookup: str) -> str | None:
+    """Which version of the state's fire district layer the lookup used.
+    None when the lookup did not work, or for an older district file
+    that does not name its version."""
+    if lookup != fire_districts.LOOKUP_OK:
+        return None
+    return fire_districts.read_layer_version(REPO / S.FIRE_DISTRICTS_CACHE)
+
+
+def write_rain_input(out: Path, precip: gpd.GeoDataFrame, meta: dict) -> None:
+    """Save the rain polygons the flagging used, exactly as it used them.
+    The public forecast file is clipped and rounded, so it would not give
+    the same answer for a pathway right at the edge of the rain."""
+    rain = json.loads(precip[["category", "label", "geometry"]].to_json())
+    for feature in rain["features"]:
+        feature.pop("id", None)
+        feature["properties"]["category"] = int(feature["properties"]["category"])
+    rain["meta"] = meta
+    ndfd_check.write_json(out / S.RAIN_INPUT_FILENAME, rain)
+    log(f"wrote {S.RAIN_INPUT_FILENAME} ({len(rain['features'])} polygons)")
 
 
 def debris_layer_version(debris: gpd.GeoDataFrame) -> str | None:
@@ -272,9 +298,15 @@ def build(out: Path) -> int:
     # A pathway_id is a row number in one version of the NCGS layer. This
     # says which one. It is None when no pathways were looked up.
     meta["ncgs_layer_version"] = ncgs_layer_version
+    meta["fire_district_layer_version"] = fire_district_layer_version(fire_district_lookup)
+    # GitHub Actions sets GITHUB_SHA to the commit it checked out. The
+    # thresholds and library versions all come from that commit.
+    meta["code_commit"] = os.environ.get("GITHUB_SHA") or None
     ndfd_check.write_json(
         out / S.FLAGGED_FILENAME, {"type": "FeatureCollection", "features": features, "meta": meta}
     )
+    if features:
+        write_rain_input(out, precip, meta)
     ndfd_check.write_json(out / "status.json", ndfd_check.build_status(meta, now, "updated"))
     log(f"wrote {S.FLAGGED_FILENAME} ({len(features)} features) in {time.time() - t0:.0f}s total")
     return len(features)

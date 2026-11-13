@@ -17,13 +17,20 @@ WNC_BBOX = (-84.5, 34.8, -81.0, 36.7)  # west, south, east, north
 
 FLAGGED_FILENAME = "flagged_ndfd_24h_min11.geojson"
 FORECAST_FILENAME = "forecast_24h.geojson"  # all categories, for the map layer
+# The rain polygons the flagging used, exactly as used: not clipped and
+# not rounded. Written only by a run that flags pathways, and kept with
+# that run in the archive. It is never published: the NDFD service only
+# serves the current forecast, so without this file the run could not be
+# worked out again later.
+RAIN_INPUT_FILENAME = "rain_input_ndfd_24h_min11.geojson"
 
 # Bump when the set or format of output files changes. A published
 # status.json with a different version forces a rebuild even if NDFD
 # itself hasn't changed (v2 added forecast_24h.geojson).
 # v3 added the fire district fields and the meta.fire_districts marker.
-# v4 added `pathway_id` and meta.ncgs_layer_version, and stopped dropping
-# pathways that share an OBJECTID.
+# v4 added `pathway_id`, stopped dropping pathways that share an OBJECTID,
+# and added what is needed to work a flagged run out again: the rain input
+# file and meta.ncgs_layer_version, fire_district_layer_version, code_commit.
 PIPELINE_VERSION = 4
 
 # NC Office of State Fire Marshal fire district boundaries. The layer
