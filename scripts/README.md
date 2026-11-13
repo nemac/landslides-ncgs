@@ -29,6 +29,7 @@ scripts/
                   county and watershed tagging, Overture building footprints.
   analysis.py     find_alerts(): intersects precipitation polygons with
                   debris-flow pathways. Shared with simple/pipeline/.
+                  Tells pathways apart by OBJECTID_1, never by OBJECTID.
   config.py       Constants: service URLs, bounding box, windows, categories,
                   output size knobs. Shared with simple/pipeline/.
   events.py       Historical events for --hindcast.
@@ -108,6 +109,15 @@ The debris-flow pathways are fetched from the NCGS ArcGIS service on the
 first run and cached in `cache/debris_flows.gpkg`; the local copy is
 reused for 120 days, while production rebuilds it on upstream change.
 Never commit that file.
+
+The file keeps two ID columns from the NCGS layer. `OBJECTID_1` is the
+unique key (`PATHWAY_KEY_FIELD` in `config.py`); `find_alerts()` uses it
+to keep one row per pathway. `OBJECTID` is not unique (it restarts in
+each of the layer's source tiles) and is carried only for older readers
+of the published files. A cache file built before 2026-11-13 has no
+`OBJECTID_1`: `fetch_debris_flows()` fetches the layer again instead of
+using it, and `find_alerts()` raises if it is handed such data. To
+rebuild the local copy, run `python scripts/refresh.py --debris-cache`.
 
 ## Lint
 

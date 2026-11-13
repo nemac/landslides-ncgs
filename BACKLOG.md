@@ -11,8 +11,17 @@ details belong in an issue or PR once someone picks it up.
   `https://dashboard.landslidesncgs.org/`. (The SIREN dashboard at
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
-- **Test the intersections.** Still to write: tests for
-  `scripts/analysis.py` (the intersection logic).
+- **Test the intersections.** `find_alerts` in `scripts/analysis.py` has
+  tests since 2026-11-13 (`scripts/test_analysis.py`). Still to write:
+  tests for `summarize_alerts`.
+- **Check the Simple page with a storm-sized flagged file.** Until
+  2026-11-13 the pipeline kept one pathway per `OBJECTID` and dropped the
+  rest, so the flagged file was never larger than about 15,900 pathways.
+  It now publishes every flagged pathway. Run against the May 2026 storm
+  rain, that is about 52,000 pathways at the 5 inch threshold instead of
+  about 13,000. Measure the file size, the page's load time and the
+  table and map with a file that large, and decide whether the page
+  needs paging, vector tiles or a cap.
 - **Make the archived flagged runs reproducible.** Since 2026-10-27
   `refresh-simple.yml` copies the three output files of every run that
   flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,

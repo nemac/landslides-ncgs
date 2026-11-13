@@ -67,6 +67,37 @@ dashboard. The debris-flow GeoPackage (`cache/debris_flows.gpkg`) is
 rebuilt by `refresh-reference.yml` when the NCGS layer changes and shared
 through the data bucket.
 
+### Pathway IDs
+
+Every flagged pathway is published with two ID fields:
+
+- `pathway_id` is the pathway's `OBJECTID_1` in the NCGS layer, the
+  layer's own row number. It is different for every pathway. The page
+  uses it for everything: the table's "Pathway ID" column, the row and
+  map lookups, the popup title and the CSV's `pathway_id` column. To find
+  a pathway in the NCGS layer, query `OBJECTID_1 = <pathway_id>`. NCGS
+  may renumber the rows when it republishes the layer, so an ID is only
+  good for the layer version it was read from.
+- `OBJECTID` is the layer's plain `OBJECTID` field. It is **not unique**:
+  the layer is a mosaic of about 55 source tiles and the number restarts
+  at 1 in each one, so on 2026-11-13 its 228,870 pathways shared 15,885
+  values (`ORIG_FID` always holds the same number). It is published only
+  so that older readers of the file keep working. Never use it as a key.
+
+Before pipeline version 4 (2026-11-13) the pipeline kept one pathway per
+`OBJECTID` and silently dropped the others that shared it, and the page
+and the CSV showed `OBJECTID` as the pathway ID. Files from before then
+(the archived runs included) have no `pathway_id`; the page falls back
+to `OBJECTID` for those, which is safe because each appears once in them.
+A CSV exported before that date holds `OBJECTID` in its `pathway_id`
+column.
+
+The pipeline refuses to flag pathways from a GeoPackage that has no
+`OBJECTID_1` column. `scripts/data.py` treats such a file as missing and
+fetches the layer again (10 to 20 minutes), so a run that meets an old
+file is slow but never publishes de-duplicated data. To replace the
+shared file, run `refresh-reference.yml` by hand with `force` checked.
+
 ### Fire districts
 
 Each flagged pathway is tagged with its NC fire district from the NC
@@ -149,7 +180,7 @@ The pathway popup on the map and the CSV follow the same rule as the
 table. The popup shows the district, "No District (state fire district
 data)" or "Outside North Carolina", and "Not available" when the
 districts are not known. The CSV starts with the pathway's own columns
-(`pathway_id` first), then `fire_district_status` (`district`,
+(`pathway_id` first, see "Pathway IDs" above), then `fire_district_status` (`district`,
 `no_district`, `outside_nc`, or `unavailable` when the districts are not
 known) right before the five fire district columns it explains, which are
 blank when it is `unavailable`, and ends with the times.

@@ -345,7 +345,7 @@ for (const [label, fire, want] of [
         {
           type: 'Feature',
           geometry: null,
-          properties: { OBJECTID: 1, max_category: 11, ...fire },
+          properties: { pathway_id: 1, max_category: 11, ...fire },
         },
       ],
     };
@@ -371,7 +371,7 @@ for (const [label, args] of [
           type: 'Feature',
           geometry: null,
           properties: {
-            OBJECTID: 1,
+            pathway_id: 1,
             max_category: 11,
             fire_district_status: 'district',
             fire_department: 'Asheville FD',
@@ -410,7 +410,7 @@ test('zoomToAlerts with one pathway zooms to it and opens its popup', () => {
   assert.equal(plain(m.map.fitted).opts.maxZoom, 15);
   const gl = m.created.geoJsonLayers[0];
   assert.ok(
-    gl.sub.find((l) => l.feature.properties.OBJECTID === 102).popupOpen
+    gl.sub.find((l) => l.feature.properties.pathway_id === 102).popupOpen
   );
 });
 
@@ -449,7 +449,7 @@ test('zoomToAlert fits the pathway, re-shows a hidden layer and opens its popup'
     opts: { padding: [60, 60], maxZoom: 15 },
   });
   assert.ok(
-    gl.sub.find((l) => l.feature.properties.OBJECTID === 205).popupOpen
+    gl.sub.find((l) => l.feature.properties.pathway_id === 205).popupOpen
   );
   m.map.fitted = undefined;
   m.MAP.zoomToAlert(999);
@@ -826,3 +826,46 @@ test('the county cache evicts the least recently seen county past its cap', asyn
   m.map.fire('moveend');
   assert.equal(group.members.size, 20);
 });
+
+// ---- Two pathways that share an OBJECTID -----------------------------------
+// In the live fixture pathways 301 and 205 both have OBJECTID 7, as two
+// pathways from different source tiles of the NCGS layer do.
+function alertLayerFor(m, pathwayId) {
+  return m.created.geoJsonLayers[0].sub.find(
+    (l) => l.feature.properties.pathway_id === pathwayId
+  );
+}
+
+test('the fixture has two pathways that share an OBJECTID', () => {
+  const sharing = FLAGGED.features.filter((f) => f.properties.OBJECTID === 7);
+  assert.deepEqual(
+    sharing.map((f) => f.properties.pathway_id),
+    [301, 205]
+  );
+});
+
+test('each popup is titled with its own pathway ID, not the shared OBJECTID', () => {
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  assert.match(alertLayerFor(m, 301).popup, /Flagged pathway 301</);
+  assert.match(alertLayerFor(m, 205).popup, /Flagged pathway 205</);
+});
+
+for (const [picked, other] of [
+  [301, 205],
+  [205, 301],
+]) {
+  test(
+    'zoomToAlert opens pathway ' +
+      picked +
+      ', not the one sharing its OBJECTID',
+    () => {
+      const m = mapModule();
+      m.MAP.setAlerts(FLAGGED);
+      m.MAP.zoomToAlert(picked);
+      assert.deepEqual(plain(m.map.fitted).bounds, { of: picked });
+      assert.ok(alertLayerFor(m, picked).popupOpen);
+      assert.ok(!alertLayerFor(m, other).popupOpen);
+    }
+  );
+}

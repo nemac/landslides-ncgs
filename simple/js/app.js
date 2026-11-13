@@ -331,6 +331,7 @@
       const feats = (fc.features || []).filter(function (f) {
         return Number(f.properties.max_category) >= CFG.THRESHOLD_CATEGORY;
       });
+      feats.forEach(_fillMissingPathwayId);
       state.features = TABLE.sortFeatures(feats);
       state.meta = fc.meta || {};
       state.status = status;
@@ -393,15 +394,27 @@
     MAP.setAlertsVisible(els.layerAlerts.checked);
 
     TABLE.render(state.features, state.meta, _tableElements(), {
-      onSelect: function (objectid) {
+      onSelect: function (pathwayId) {
         _showPathwaysLayer();
-        MAP.zoomToAlert(objectid);
+        MAP.zoomToAlert(pathwayId);
       },
-      onZoomGroup: function (objectids) {
+      onZoomGroup: function (pathwayIds) {
         _showPathwaysLayer();
-        MAP.zoomToAlerts(objectids);
+        MAP.zoomToAlerts(pathwayIds);
       },
     });
+  }
+
+  // The table and the map find a pathway by `pathway_id`, the one value
+  // that is different for every pathway. Files published before
+  // 2026-11-13 have only OBJECTID. Many pathways share an OBJECTID, but
+  // those older files kept just one pathway for each, so inside such a
+  // file it still tells the pathways apart.
+  function _fillMissingPathwayId(feature) {
+    const p = feature.properties;
+    if (p.pathway_id === undefined || p.pathway_id === null) {
+      p.pathway_id = p.OBJECTID;
+    }
   }
 
   // Zooming to a pathway is no use while the pathways layer is hidden.

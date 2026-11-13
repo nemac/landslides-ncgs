@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import geopandas as gpd
 
-from config import DISPLAY_CRS, INTERSECTION_CRS
+from config import DISPLAY_CRS, INTERSECTION_CRS, PATHWAY_KEY_FIELD
 
 
 def find_alerts(
@@ -23,20 +23,33 @@ def find_alerts(
     two contour rings). When that happens we keep the worst-case bin (the
     highest `category`) so the alert reflects the most severe forecast.
 
+    Each pathway is told apart by PATHWAY_KEY_FIELD (OBJECTID_1), never
+    by OBJECTID: many different pathways share one OBJECTID.
+
     Parameters
     ----------
     debris_gdf : GeoDataFrame
-        Debris flow susceptibility polygons (WGS84).
+        Debris flow susceptibility polygons (WGS84). Must have the
+        PATHWAY_KEY_FIELD column; a frame without it raises ValueError.
     precip_gdf : GeoDataFrame
         Precipitation polygons already filtered to >= threshold (WGS84).
 
     Returns
     -------
     GeoDataFrame in WGS84 with columns:
-        OBJECTID, category, label, area_acres, geometry
+        OBJECTID_1, OBJECTID, category, label, area_acres, geometry
     """
+    # Checked first, so an old cache fails even when there is no rain.
+    if PATHWAY_KEY_FIELD not in debris_gdf.columns:
+        raise ValueError(
+            f"The debris-flow pathways have no {PATHWAY_KEY_FIELD} column, so two "
+            "pathways that share an OBJECTID cannot be told apart. The cache file "
+            "was built before that column was kept. Rebuild it: "
+            "python scripts/refresh.py --debris-cache"
+        )
+
     empty = gpd.GeoDataFrame(
-        {"OBJECTID": [], "category": [], "label": [], "area_acres": []},
+        {PATHWAY_KEY_FIELD: [], "OBJECTID": [], "category": [], "label": [], "area_acres": []},
         geometry=[],
         crs=DISPLAY_CRS,
     )
@@ -60,9 +73,10 @@ def find_alerts(
     if joined.empty:
         return empty
 
-    # Keep the highest (worst) category per debris flow polygon.
+    # Keep the highest (worst) category per debris flow polygon. The rows
+    # for one polygon are found by its unique key, not by OBJECTID.
     joined = joined.sort_values("category", ascending=False)
-    deduped = joined.drop_duplicates(subset="OBJECTID", keep="first").copy()
+    deduped = joined.drop_duplicates(subset=PATHWAY_KEY_FIELD, keep="first").copy()
 
     # Area in acres (1 sq meter = 0.000247105 acres).
     deduped["area_acres"] = deduped.geometry.area * 0.000247105
@@ -73,6 +87,7 @@ def find_alerts(
 
     return deduped[
         [
+            PATHWAY_KEY_FIELD,
             "OBJECTID",
             "category",
             "label",

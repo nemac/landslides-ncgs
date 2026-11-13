@@ -44,7 +44,7 @@ from shapely.ops import unary_union  # noqa: E402
 
 import analysis as shared_analysis  # noqa: E402  (scripts/analysis.py)
 import data as shared_data  # noqa: E402  (scripts/data.py)
-from config import DISPLAY_CRS, INTERSECTION_CRS  # noqa: E402
+from config import DISPLAY_CRS, INTERSECTION_CRS, PATHWAY_KEY_FIELD  # noqa: E402
 
 
 def log(msg: str) -> None:
@@ -232,7 +232,11 @@ def build(out: Path) -> int:
     features = []
     fire_district_lookup = fire_districts.LOOKUP_NOT_RUN
     if flagged is not None and not flagged.empty:
-        flagged = flagged.rename(columns={"category": "max_category"})
+        # Published as `pathway_id`: the name the page and the CSV use for
+        # the one value that is different for every pathway.
+        flagged = flagged.rename(
+            columns={"category": "max_category", PATHWAY_KEY_FIELD: "pathway_id"}
+        )
         flagged, fire_district_lookup = tag_fire_districts(flagged)
         proj = flagged.to_crs(INTERSECTION_CRS)
         proj["geometry"] = proj.geometry.simplify(S.SIMPLIFY_METERS, preserve_topology=True)
@@ -243,6 +247,7 @@ def build(out: Path) -> int:
             f.pop("id", None)
             p = f["properties"]
             p["max_category"] = int(p["max_category"])
+            p["pathway_id"] = int(p["pathway_id"])
             p["OBJECTID"] = int(p["OBJECTID"])
         features = fc["features"]
 

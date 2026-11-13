@@ -42,8 +42,8 @@ function isoMinutesBefore(minutes) {
 
 function rowIds(p) {
   return Array.from(
-    p.$('alerts-table').querySelectorAll('tr[data-objectid]')
-  ).map((tr) => tr.dataset.objectid);
+    p.$('alerts-table').querySelectorAll('tr[data-pathway-id]')
+  ).map((tr) => tr.dataset.pathwayId);
 }
 
 function groupNames(p) {
@@ -121,7 +121,7 @@ test('the first load hands the map the window and the flagged pathways', async (
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0][2], true, 'districts are known in this file');
   assert.deepEqual(
-    alerts[0][1].features.map((f) => f.properties.OBJECTID),
+    alerts[0][1].features.map((f) => f.properties.pathway_id),
     [102, 205, 301]
   );
   assert.deepEqual(p.mapCalls('setAlertsVisible'), [
@@ -477,14 +477,14 @@ test('a reload with the same pathways leaves the table, the map and focus alone'
     }),
   };
   const p = await open({ data });
-  const row = p.$('alerts-table').querySelector('tr[data-objectid="205"]');
+  const row = p.$('alerts-table').querySelector('tr[data-pathway-id="205"]');
   row.focus();
   const nextBefore = p.$('status-next').textContent;
 
   checkedMinutesAgo = 0;
   await reload(p);
   assert.equal(
-    p.$('alerts-table').querySelector('tr[data-objectid="205"]'),
+    p.$('alerts-table').querySelector('tr[data-pathway-id="205"]'),
     row,
     'the row was not rebuilt'
   );
@@ -505,18 +505,57 @@ test('a reload with different pathways redraws the table and the map', async () 
     flagged: () => {
       if (!dropOne) return live.flagged;
       const features = live.flagged.features.filter(
-        (f) => f.properties.OBJECTID !== 301
+        (f) => f.properties.pathway_id !== 301
       );
       return { ...live.flagged, features };
     },
   };
   const p = await open({ data });
-  p.$('alerts-table').querySelector('tr[data-objectid="205"]').focus();
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').focus();
   dropOne = true;
   await reload(p);
   assert.deepEqual(rowIds(p), ['102', '205']);
   assert.equal(p.mapCalls('setAlerts').length, 2);
-  assert.equal(p.document.activeElement.dataset.objectid, '205');
+  assert.equal(p.document.activeElement.dataset.pathwayId, '205');
+});
+
+test('an older file without pathway_id is keyed by its OBJECTID', async () => {
+  // Files published before 2026-11-13 have no pathway_id. In those files
+  // each OBJECTID appears once, so it still tells the rows apart.
+  const p = await open({ data: fixture('stale') });
+  assert.deepEqual(rowIds(p), ['102', '205', '301']);
+  assert.deepEqual(
+    p.mapCalls('setAlerts')[0][1].features.map((f) => f.properties.pathway_id),
+    [102, 205, 301]
+  );
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').click();
+  assert.deepEqual(p.mapCalls('zoomToAlert'), [['zoomToAlert', 205]]);
+});
+
+test('two pathways that share an OBJECTID both reach the table, the map and the CSV', async () => {
+  const p = await open();
+  const sharing = p
+    .mapCalls('setAlerts')[0][1]
+    .features.filter((f) => f.properties.OBJECTID === 7);
+  assert.deepEqual(
+    sharing.map((f) => f.properties.pathway_id),
+    [205, 301]
+  );
+  assert.deepEqual(rowIds(p), ['102', '205', '301']);
+
+  p.$('alerts-table').querySelector('tr[data-pathway-id="301"]').click();
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').click();
+  assert.deepEqual(p.mapCalls('zoomToAlert'), [
+    ['zoomToAlert', 301],
+    ['zoomToAlert', 205],
+  ]);
+
+  p.$('export-csv').click();
+  const lines = (await p.blobs[0].text()).split('\r\n');
+  assert.deepEqual(
+    lines.slice(1, 4).map((line) => line.split(',')[0]),
+    ['102', '205', '301']
+  );
 });
 
 test('a change in the fire district marker alone redraws the table', async () => {
@@ -669,7 +708,7 @@ test('parcels and buildings rows grey out below their zoom levels', async () => 
 
 test('selecting a table row zooms the map to that pathway', async () => {
   const p = await open();
-  p.$('alerts-table').querySelector('tr[data-objectid="205"]').click();
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').click();
   assert.deepEqual(p.mapCalls('zoomToAlert'), [['zoomToAlert', 205]]);
 });
 
@@ -687,14 +726,14 @@ test('"Show on map" turns a hidden pathways layer back on and ticks its box', as
 test('selecting a row turns a hidden pathways layer back on too', async () => {
   const p = await open();
   p.$('layer-alerts').click();
-  p.$('alerts-table').querySelector('tr[data-objectid="205"]').click();
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').click();
   assert.equal(p.$('layer-alerts').checked, true);
 });
 
 test('zooming leaves the pathways layer alone when it is already shown', async () => {
   const p = await open();
   const before = p.mapCalls('setAlertsVisible').length;
-  p.$('alerts-table').querySelector('tr[data-objectid="205"]').click();
+  p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').click();
   assert.equal(p.mapCalls('setAlertsVisible').length, before);
 });
 
@@ -717,7 +756,7 @@ test('a collapsed district stays collapsed across the automatic reload', async (
   assert.equal(toggle().getAttribute('aria-expanded'), 'false');
   assert.deepEqual(
     Array.from(p.$('alerts-table').querySelectorAll('tr[hidden]')).map(
-      (tr) => tr.dataset.objectid
+      (tr) => tr.dataset.pathwayId
     ),
     ['205', '301']
   );

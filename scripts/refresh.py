@@ -455,7 +455,8 @@ def _write_flagged(precip_path: Path, out_path: Path, source_label: str) -> None
         _write_empty_flagged(out_path, source_label, carried)
         return
 
-    # find_alerts returns columns: OBJECTID, category, label, area_acres, geometry.
+    # find_alerts returns columns: OBJECTID_1, OBJECTID, category, label,
+    # area_acres, geometry.
     # We need `max_category` as the client-side filter key. Same value,
     # cleaner name for the frontend.
     flagged = flagged.rename(columns={"category": "max_category"})

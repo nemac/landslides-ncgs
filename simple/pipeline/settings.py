@@ -21,7 +21,9 @@ FORECAST_FILENAME = "forecast_24h.geojson"  # all categories, for the map layer
 # Bump when the set or format of output files changes. A published
 # status.json with a different version forces a rebuild even if NDFD
 # itself hasn't changed (v2 added forecast_24h.geojson).
-PIPELINE_VERSION = 3  # v3: fire district fields and the meta.fire_districts marker
+# v3 added the fire district fields and the meta.fire_districts marker.
+# v4 added `pathway_id`, and stopped dropping pathways that share an OBJECTID.
+PIPELINE_VERSION = 4
 
 # NC Office of State Fire Marshal fire district boundaries. The layer
 # covers all of NC; land with no fire district is marked "No District".

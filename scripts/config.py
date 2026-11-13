@@ -74,6 +74,16 @@ CACHE_DIR = "cache"
 DEBRIS_CACHE_FILENAME = "debris_flows.gpkg"
 CACHE_TTL_DAYS = 120
 
+# The one field that is different for every pathway (polygon) in the NCGS
+# layer. It is the layer's own row number (its `objectIdField`).
+#
+# Do NOT use the plain "OBJECTID" field as a key. The layer is a mosaic of
+# about 55 source tiles, and OBJECTID restarts at 1 in each tile. Checked
+# on the live layer on 2026-11-13: 228,870 pathways share only 15,885
+# OBJECTID values, and pathways with the same OBJECTID sit in different
+# tiles, many kilometers apart. (ORIG_FID always equals OBJECTID.)
+PATHWAY_KEY_FIELD = "OBJECTID_1"
+
 
 # -----------------------------------------------------------------------------
 # Overture Maps - building footprints
