@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ | Landslides in Western North Carolina</title>
+  <meta name="description" content="Frequently asked questions about landslides in Western North Carolina, landslide hazard maps and data, reducing your risk, and who to contact." />
+
+  <link rel="icon" type="image/png" href="/assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="/assets/images/shared/ncgs-seal.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root{--clr-bg:#122518;--clr-primary:#C04C00;--clr-accent:#3E8452;--clr-text:#FFFFFF;--clr-text-muted:#D4E8D8;--clr-surface:#1C3521;--clr-surface-2:#243D29;--clr-border:#2E5438;--clr-focus:#FFD166;--font-main:'Source Sans 3','Source Sans Pro',Arial,sans-serif;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{background:var(--clr-bg);color:var(--clr-text);font-family:var(--font-main);font-size:1rem;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;}
+    .skip-nav{position:absolute;top:-100%;left:0;background:var(--clr-focus);color:#000;font-weight:700;padding:0.75rem 1.5rem;z-index:9999;text-decoration:none;border-radius:0 0 4px 0;transition:top 0.2s;}
+    .skip-nav:focus{top:0;}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+    :focus-visible{outline:3px solid var(--clr-focus);outline-offset:3px;}
+    :focus:not(:focus-visible){outline:none;}
+
+    .site-header{background:var(--clr-bg);padding:1.25rem 2rem;display:flex;align-items:center;gap:1.25rem;border-bottom:3px solid var(--clr-accent);flex-shrink:0;}
+    .site-header__logo{width: 100px; height: 100px;flex-shrink:0;border-radius:50%;overflow:hidden;border:2px solid var(--clr-accent);}
+    .site-header__logo img{width:100%;height:100%;object-fit:contain;}
+    
+    .site-header__logo { display: block; text-decoration: none; transition: border-color 0.2s; }
+    .site-header__logo:hover, .site-header__logo:focus-visible { border-color: var(--clr-focus); }
+    .site-header__partner-logo {
+      margin-left: auto; flex-shrink: 0; display: block;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+      border: 2px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .site-header__partner-logo:hover, .site-header__partner-logo:focus-visible {
+      border-color: var(--clr-primary);
+      background: rgba(192, 76, 0, 0.1);
+    }
+    .site-header__partner-logo img { height: 80px; width: auto; display: block; }
+.site-header__text h1{font-size:clamp(1.3rem,3vw,2rem);font-weight:700;color:var(--clr-text);line-height:1.2;}
+    .site-header__text p{font-size:clamp(0.85rem,1.4vw,0.95rem);color:var(--clr-text-muted);max-width:65ch;margin-top:0.3rem;}
+
+    .site-nav{background:var(--clr-surface);border-bottom:1px solid var(--clr-border);position:sticky;top:0;z-index:100;flex-shrink:0;}
+    .site-nav__list{list-style:none;display:flex;flex-wrap:wrap;padding:0 1rem;max-width:1200px;margin:0 auto;}
+    .site-nav__item a{display:block;padding:1rem 1.5rem;color:var(--clr-text-muted);text-decoration:none;font-weight:700;font-size:0.95rem;border-bottom:3px solid transparent;transition:color 0.2s,border-color 0.2s;white-space:nowrap;}
+    .site-nav__item a:hover{color:var(--clr-text);border-bottom-color:var(--clr-accent);}
+    .site-nav__item a[aria-current="page"]{color:var(--clr-text);border-bottom-color:var(--clr-primary);}
+
+    .page-wrapper{max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem;flex:1;width:100%;}
+    .section-heading{font-size:1.6rem;font-weight:700;color:var(--clr-text);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:2px solid var(--clr-border);}
+    .page-intro{color:var(--clr-text-muted);font-size:1rem;line-height:1.7;margin-bottom:2rem;max-width:70ch;}
+    .page-intro a{color:var(--clr-text-muted);text-decoration:underline;}
+    .page-intro a:hover{color:var(--clr-text);}
+
+    .faq-group{margin-bottom:2.5rem;}
+    .faq-group__heading{font-size:1.2rem;font-weight:700;color:var(--clr-accent);margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.04em;}
+    .faq-item{background:var(--clr-surface);border:1px solid var(--clr-border);border-left:4px solid var(--clr-accent);border-radius:0 6px 6px 0;margin-bottom:0.75rem;}
+    .faq-item[open]{border-left-color:var(--clr-primary);}
+    .faq-item summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1rem 1.25rem;font-weight:700;font-size:1.05rem;color:var(--clr-text);}
+    .faq-item summary::-webkit-details-marker{display:none;}
+    .faq-item summary::after{content:"+";flex-shrink:0;font-size:1.4rem;line-height:1;color:var(--clr-text-muted);transition:transform 0.2s;}
+    .faq-item[open] summary::after{content:"\2212";}
+    .faq-item summary:hover{background:var(--clr-surface-2);}
+    .faq-item__answer{padding:0 1.25rem 1.25rem;color:var(--clr-text-muted);font-size:0.975rem;line-height:1.7;}
+    .faq-item__answer p{margin-bottom:0.75rem;}
+    .faq-item__answer p:last-child,.faq-item__answer ul:last-child{margin-bottom:0;}
+    .faq-item__answer ul{margin:0 0 0.75rem 1.25rem;}
+    .faq-item__answer li{margin-bottom:0.35rem;}
+    .faq-item__answer a{color:var(--clr-text-muted);text-decoration:underline;}
+    .faq-item__answer a:hover{color:var(--clr-text);}
+
+    .site-footer{background:var(--clr-surface);border-top:3px solid var(--clr-primary);padding: 1.75rem 2rem 1.75rem calc(2rem + 100px + 1.25rem);flex-shrink:0;}
+    .site-footer__inner { /* full-width; content flushes left, aligning with header edge */ }
+    .site-footer__org{font-size:1rem;font-weight:700;color:var(--clr-accent);}
+    .site-footer__detail{font-size:0.9rem;color:var(--clr-text-muted);margin-top:0.25rem;}
+    .site-footer__detail a{color:var(--clr-text-muted);text-decoration:underline;}
+    .site-footer__detail a:hover{color:var(--clr-text);}
+
+    @media(max-width:768px){
+      .site-header{padding:1rem;}
+      .site-header__logo{width: 72px; height: 72px;}
+      .site-header__partner-logo img { height: 52px; }
+      .site-footer { padding: 1.25rem 1rem 1.25rem calc(1rem + 72px + 1.25rem); }
+      .page-wrapper{padding:1.25rem 1rem 3rem;}
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-nav" href="#main-content">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <a class="site-header__logo" href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer">
+      <img src="/assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
+    </a>
+    <div class="site-header__text">
+      <h1>Landslides in Western North Carolina</h1>
+      <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
+    </div>
+    <a class="site-header__partner-logo" href="https://www.deq.nc.gov/" target="_blank" rel="noopener noreferrer">
+      <img src="/assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
+    </a>
+  </header>
+
+  <nav class="site-nav" aria-label="Main navigation">
+    <ul class="site-nav__list" role="list">
+      <li class="site-nav__item"><a href="/">Home</a></li>
+      <li class="site-nav__item"><a href="/reducing-landslide-risk/">Reducing Landslide Risk</a></li>
+      <li class="site-nav__item"><a href="/learn-more/">Learn More</a></li>
+      <li class="site-nav__item"><a href="/about/">About</a></li>
+      <li class="site-nav__item"><a href="/faq/" aria-current="page">FAQ</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content" class="page-wrapper">
+
+    <h2 class="section-heading">Frequently Asked Questions</h2>
+    <p class="page-intro">Answers to common questions about landslides in Western North Carolina, the maps and data on this site, and what you can do to reduce your risk. Select a question to show its answer. If your question isn't answered here, <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey/contact-us#Geological_Survey_-_Asheville" target="_blank" rel="noopener noreferrer" aria-label="contact the North Carolina Geological Survey — opens in a new tab">contact the North Carolina Geological Survey</a>.</p>
+
+    <section class="faq-group" aria-labelledby="faq-landslides">
+      <h3 class="faq-group__heading" id="faq-landslides">Landslides in Western North Carolina</h3>
+
+      <details class="faq-item" id="where-do-landslides-happen">
+        <summary>Where do landslides happen?</summary>
+        <div class="faq-item__answer">
+          <p>Landslides and debris flows usually occur in areas where they've happened before. That is why mapping where landslides have occurred in the past helps identify areas where they could happen again.</p>
+          <p>To see where landslides have been recorded, explore the <a href="https://inventory.landslidesncgs.org/" target="_blank" rel="noopener noreferrer" aria-label="Landslide Inventory of North Carolina — opens in a new tab">Landslide Inventory of North Carolina</a>.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="weather-and-landslides">
+        <summary>How is weather connected to landslides?</summary>
+        <div class="faq-item__answer">
+          <p>Extreme weather patterns, such as periods of above-normal rainfall or drought, are associated with a changing climate and are already affecting people in western North Carolina. These extreme weather patterns are also linked to landslide events.</p>
+          <p>Heavy or prolonged rainfall is a particular concern: 5 or more inches of rain in 24 hours increases landslide risk significantly.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="why-landslides-matter">
+        <summary>Why do landslides matter to my community?</summary>
+        <div class="faq-item__answer">
+          <p>Landslides pose significant risks to public health and safety, local economies, and home and business owners. Landslide mapping and other resilience planning allow emergency responders, planners, and city and county staff to be better prepared to help protect people and assets from losses associated with landslide events.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="past-landslides">
+        <summary>Where can I learn about past landslide events?</summary>
+        <div class="faq-item__answer">
+          <p>The <a href="/learn-more/">Learn More</a> page has interactive StoryMaps on historical landslides in the region and the Great Flood of 1916, plus handouts on the May 2018 Pacolet River Valley and December 2018 Howard Gap Road landslide events in Polk County.</p>
+        </div>
+      </details>
+    </section>
+
+    <section class="faq-group" aria-labelledby="faq-risk">
+      <h3 class="faq-group__heading" id="faq-risk">Reducing Your Risk</h3>
+
+      <details class="faq-item" id="is-my-property-at-risk">
+        <summary>How can I find out if my property is in a landslide-prone area?</summary>
+        <div class="faq-item__answer">
+          <p>Use the data and maps on this site, starting with the <a href="https://inventory.landslidesncgs.org/" target="_blank" rel="noopener noreferrer" aria-label="Landslide Inventory of North Carolina — opens in a new tab">Landslide Inventory of North Carolina</a>. The NCGS data can also be <a href="https://www.nconemap.gov/search?q=landslide%20ncgs" target="_blank" rel="noopener noreferrer" aria-label="NCGS landslide data on NC OneMap — opens in a new tab">downloaded from NC OneMap</a>.</p>
+          <p>Keep in mind that the maps are for general planning only. See the next question.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="site-assessment">
+        <summary>Can the maps tell me whether a specific site is safe to build on?</summary>
+        <div class="faq-item__answer">
+          <p>No. The maps and other products from this landslide hazard mapping program are intended for general planning purposes only and are provided on an "as is" basis. They are not a substitute for an on-the-ground site assessment by qualified individuals.</p>
+          <p>Avoid modifying slopes with a high or moderate probability of sliding without consulting a geologist.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="warning-signs">
+        <summary>What warning signs should I watch for?</summary>
+        <div class="faq-item__answer">
+          <p>Signs that the ground may be moving include:</p>
+          <ul>
+            <li>unusual sounds</li>
+            <li>tilting trees</li>
+            <li>bulging ground surfaces</li>
+            <li>new cracks in walls</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="faq-item" id="reduce-risk">
+        <summary>What can I do to reduce my landslide risk?</summary>
+        <div class="faq-item__answer">
+          <ul>
+            <li>Learn whether your property is in a landslide-prone area.</li>
+            <li>Watch for warning signs.</li>
+            <li>Stay informed during periods of heavy or prolonged rainfall.</li>
+            <li>Avoid modifying high- or moderate-probability-of-sliding slopes without consulting a geologist.</li>
+            <li>Know your evacuation routes and have an emergency plan ready before severe weather arrives.</li>
+            <li>Contact your local emergency management office to understand county-specific landslide planning and resources.</li>
+          </ul>
+          <p>The <a href="/reducing-landslide-risk/">Reducing Landslide Risk</a> page has more detail and downloadable guides, including the Reducing Landslide Risk brochure and a guide for homeowner safety.</p>
+        </div>
+      </details>
+    </section>
+
+    <section class="faq-group" aria-labelledby="faq-data">
+      <h3 class="faq-group__heading" id="faq-data">Maps, Data and This Site</h3>
+
+      <details class="faq-item" id="who-runs-this-site">
+        <summary>Who produces this site?</summary>
+        <div class="faq-item__answer">
+          <p>The North Carolina Department of Environmental Quality (NCDEQ) and the North Carolina Geological Survey (NCGS) have partnered with UNC Asheville's National Environmental Mapping and Applications Center (NEMAC) to deliver and visualize accurate, useful and current landslide hazard data, and to make it easier for various audiences to access, interact with and understand that data. See the <a href="/about/">About</a> page for more.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="why-mapping">
+        <summary>Why does North Carolina map landslide hazards?</summary>
+        <div class="faq-item__answer">
+          <p>The Hurricane Recovery Act of 2005 (Section 6) directs NCDEQ to ensure that maps showing areas vulnerable to landslides are made available for the 19 counties designated in the Major Disaster Declarations for Hurricanes Frances and Ivan.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="download-data">
+        <summary>Can I download the data or use it in my own maps?</summary>
+        <div class="faq-item__answer">
+          <p>Yes. The data are available for download or for use as web services from <a href="https://www.nconemap.gov/search?q=landslide%20ncgs" target="_blank" rel="noopener noreferrer" aria-label="NC OneMap — opens in a new tab">NC OneMap</a>, and the <a href="https://maps.deq.nc.gov/arcgis/rest/services/DEMLR/NCGS_Landslide_Read_Vector/FeatureServer" target="_blank" rel="noopener noreferrer" aria-label="metadata on the DEQ ArcGIS Server — opens in a new tab">metadata is on the DEQ ArcGIS Server</a>.</p>
+          <p>All electronic and hard copy products (maps, data, text, etc.) produced by this landslide hazard mapping program are public information and may be freely redistributed and copied. Please read the <a href="/about/#heading-disclaimer">disclaimer</a> before using them.</p>
+        </div>
+      </details>
+
+      <details class="faq-item" id="contact">
+        <summary>Who can I contact with questions?</summary>
+        <div class="faq-item__answer">
+          <p>For questions about landslides and landslide hazard data, contact the North Carolina Geological Survey's Asheville Regional Office at <a href="tel:+18282964500">828-296-4500</a> or through the <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey/contact-us#Geological_Survey_-_Asheville" target="_blank" rel="noopener noreferrer" aria-label="NCGS contact page — opens in a new tab">NCGS contact page</a>.</p>
+          <p>For county-specific landslide planning and emergency resources, contact your local emergency management office.</p>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="site-footer__inner">
+      <div class="site-footer__org">
+        <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
+          target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;"
+          aria-label="North Carolina Geological Survey — opens in a new tab">
+          North Carolina Geological Survey
+        </a>
+      </div>
+      <div class="site-footer__detail">Department of Environmental Quality</div>
+      <div class="site-footer__detail">Asheville Regional Office</div>
+      <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
+    </div>
+  </footer>
+</body>
+</html>
