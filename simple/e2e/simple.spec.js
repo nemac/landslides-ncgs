@@ -25,6 +25,12 @@ test.beforeEach(async ({ page }) => {
     const host = new URL(route.request().url()).hostname;
     return ALLOWED_HOSTS.has(host) ? route.continue() : route.abort();
   });
+  // A fixed clock also stops the map from sliding. Leaflet slides the map
+  // to fit a popup, and it measures that slide by the clock, so here the
+  // slide starts and never moves. A popup near the map's edge then stays
+  // partly off the map. That is this test setup, not the page: with a
+  // real clock the map slides and the popup fits (checked 2026-11-16).
+  // So never check here that a whole popup is on the screen.
   await page.clock.setFixedTime(FIXED_NOW);
 });
 
