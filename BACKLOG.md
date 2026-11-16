@@ -104,7 +104,7 @@ details belong in an issue or PR once someone picks it up.
     two districts with the same name, or with no name, in different
     counties would merge into one group. No real district in that file
     lacks an FDID (only the four "No District" rows do), so this cannot
-    happen with today's data. Add the county to the fallback key, and
+    happen with that file. Add the county to the fallback key, and
     change the test that expects the merge.
 
 ## From the October 2026 audit, not yet decided

@@ -253,11 +253,12 @@ aws s3 sync alerts/data s3://landslidesncgs-data/alerts/data --exclude "building
 ```
 
 DFENS Simple data, via a local copy (the three small files). This was
-right for the 2026-10 migration. Do not reuse it as it is: since
-2026-11-16 the forecast and flagged files are gzipped in the bucket, and
-this copy would upload the compressed bytes without
-`Content-Encoding: gzip`, which no browser can read. To refill the bucket
-now, run `refresh-simple.yml` with its `force` input.
+right for the 2026-10 migration, and its source, the old
+`s3://landslides-ncgs` bucket, no longer exists. Do not adapt it to copy
+from the current bucket: since 2026-11-16 the forecast and flagged files
+are gzipped there, and a copy like this would upload the compressed
+bytes without `Content-Encoding: gzip`, which no browser can read. To
+refill the bucket now, run `refresh-simple.yml` with its `force` input.
 
 ```bash
 aws s3 sync s3://landslides-ncgs/simple/data /tmp/simple-data
