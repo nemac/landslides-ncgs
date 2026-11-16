@@ -12,7 +12,8 @@
  *   init()
  *   setForecastPeriod(meta) / setForecastVisible(bool)
  *   setRadarVisible(bool)
- *   setAlerts(geojson) / setAlertsVisible(bool) / zoomToAlert(objectid)
+ *   setFireDistrictsVisible(bool)
+ *   setAlerts(geojson, districtsKnown) / setAlertsVisible(bool) / zoomToAlert(objectid) / zoomToAlerts([ids])
  *   setReferenceVisible(bool)  -> Promise
  *   setParcelsVisible(bool)
  *   setBuildingsVisible(bool)
@@ -54,11 +55,12 @@ window.DFS_MAP = (function () {
     // predictably above the basemap regardless of add/remove order.
     //
     // Pointer-events: only panes that need click interaction get pointer
-    // events. The `alerts` pane has clickable polygons for flow popups;
-    // the `parcels` pane has clickable parcels for attribute popups.
+    // events. The `alerts` pane has clickable polygons for flow popups,
+    // the `parcels` pane has clickable parcels for attribute popups, and
+    // the `fire_districts` pane has clickable outlines for district popups.
     // All other panes are visual-only and should let clicks through to
     // whichever clickable layer is under the cursor.
-    const CLICKABLE_PANES = new Set(['alerts', 'parcels']);
+    const CLICKABLE_PANES = new Set(['alerts', 'parcels', 'fire_districts']);
     Object.entries(CFG.PANE_ZINDEX).forEach(([name, z]) => {
       const pane = map.createPane(name + 'Pane');
       pane.style.zIndex = z;
@@ -264,25 +266,53 @@ window.DFS_MAP = (function () {
   // flagged count comes from our own files, so without this a failed
   // forecast query would leave an empty map next to "0 flagged", which
   // reads as a dry day.
-  let _forecastNotice = null;
   function _setForecastNotice(visible) {
+    _setLayerNotice(
+      'forecast',
+      visible,
+      'The forecast precipitation layer could not be loaded from the ' +
+        'NWS service. Flagged pathways below are unaffected.'
+    );
+  }
+
+  // One on-map notice per layer that failed to load, so a ticked layer
+  // that draws nothing is explained. The box on the map is for sighted
+  // users. Screen readers hear the same words from the #map-notices
+  // status region (see index.html for why the box itself is not one).
+  const _layerNotices = {};
+  function _setLayerNotice(layerName, visible, text) {
     if (!map) return;
-    if (visible && !_forecastNotice) {
-      _forecastNotice = L.control({ position: 'topright' });
-      _forecastNotice.onAdd = function () {
+    const shown = _layerNotices[layerName];
+    if (visible && !shown) {
+      const control = L.control({ position: 'topright' });
+      control.onAdd = function () {
         const div = L.DomUtil.create('div', 'map-notice');
-        div.setAttribute('role', 'status');
-        div.textContent =
-          'The forecast precipitation layer could not be loaded from the ' +
-          'NWS service. Flagged pathways below are unaffected.';
+        div.textContent = text;
         return div;
       };
-      _forecastNotice.addTo(map);
-    } else if (!visible && _forecastNotice) {
-      _forecastNotice.remove();
-      _forecastNotice = null;
+      control.addTo(map);
+      _layerNotices[layerName] = { control: control, text: text };
+    } else if (!visible && shown) {
+      shown.control.remove();
+      delete _layerNotices[layerName];
     }
+    _announceLayerNotices();
   }
+
+  // Writes every notice now on the map into the status region. Writing
+  // the same words again would repeat the announcement, so only a change
+  // touches it.
+  function _announceLayerNotices() {
+    const region = document.getElementById('map-notices');
+    if (!region) return;
+    const words = Object.keys(_layerNotices)
+      .map(function (layerName) {
+        return _layerNotices[layerName].text;
+      })
+      .join(' ');
+    if (region.textContent !== words) region.textContent = words;
+  }
+
   function _fmtTs(d) {
     // "YYYY-MM-DD HH:MM:SS" in UTC for ArcGIS SQL
     return d.toISOString().slice(0, 19).replace('T', ' ');
@@ -403,7 +433,9 @@ window.DFS_MAP = (function () {
   }
 
   // ---- Flagged debris flow polygons (alerts) ------------------------------
-  function setAlerts(geojson) {
+  // districtsKnown is the page's answer for the whole file (see
+  // DFS_TABLE.districtsKnown). Left out, it counts as "not known".
+  function setAlerts(geojson, districtsKnown) {
     if (layers.alerts) {
       map.removeLayer(layers.alerts);
       layers.alerts = null;
@@ -436,10 +468,31 @@ window.DFS_MAP = (function () {
             '<dt>Watershed</dt><dd>' +
             _escape(p.watershed || '--') +
             '</dd>' +
+            '<dt>Fire district</dt><dd>' +
+            _escape(_fireDistrictText(p, districtsKnown === true)) +
+            '</dd>' +
             '</dl></div>'
         );
       },
     }).addTo(map);
+  }
+
+  // The popup only repeats what the pipeline wrote for this pathway, and
+  // only when the table is showing districts too. Otherwise (an older
+  // file, or a failed lookup) it says so plainly.
+  function _fireDistrictText(p, districtsKnown) {
+    if (!districtsKnown) return 'Not available';
+    if (p.fire_district_status === 'district') {
+      const name = p.fire_department || 'Unnamed fire district';
+      return p.fdid ? name + ' (FDID ' + p.fdid + ')' : name;
+    }
+    if (p.fire_district_status === 'no_district') {
+      return 'No District (state fire district data)';
+    }
+    if (p.fire_district_status === 'outside_nc') {
+      return 'Outside North Carolina';
+    }
+    return 'Not available';
   }
 
   function zoomToAlert(objectid) {
@@ -453,6 +506,30 @@ window.DFS_MAP = (function () {
     if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
     map.fitBounds(target.getBounds(), { padding: [60, 60], maxZoom: 15 });
     target.openPopup();
+  }
+
+  // Fit the map to a set of pathways (one fire district's group).
+  function zoomToAlerts(objectids) {
+    if (!layers.alerts || !objectids || !objectids.length) return;
+    if (objectids.length === 1) {
+      zoomToAlert(objectids[0]);
+      return;
+    }
+    const want = new Set(objectids.map(String));
+    // Start from an empty box and grow it. L.latLngBounds(l.getBounds())
+    // would hand back the pathway's own stored bounds, and growing those
+    // would make a later zoom to that one pathway show the whole group.
+    const bounds = L.latLngBounds();
+    let found = 0;
+    layers.alerts.eachLayer(function (l) {
+      if (!want.has(String(l.feature.properties.OBJECTID))) return;
+      bounds.extend(l.getBounds());
+      found += 1;
+    });
+    if (found === 0) return;
+    if (!map.hasLayer(layers.alerts)) layers.alerts.addTo(map);
+    map.closePopup();
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
   }
 
   function setAlertsVisible(visible) {
@@ -584,6 +661,80 @@ window.DFS_MAP = (function () {
       })
       .bindPopup(_buildParcelPopup);
     layers.parcels.addTo(map);
+  }
+
+  // ---- NC fire districts (reference outlines, no fill) ---------------------
+  // The service's own colour (#A83800) with no fill. The line is drawn at
+  // 1.3 px, a little heavier than the service's 1 px, so it stays visible
+  // over the basemap.
+  // Click an outline for the department name and FDID.
+  function setFireDistrictsVisible(visible) {
+    if (!visible) {
+      if (layers.fire) {
+        map.removeLayer(layers.fire);
+        layers.fire = null;
+      }
+      _setFireNotice(false);
+      return;
+    }
+    if (layers.fire) return;
+    if (typeof L.esri === 'undefined') {
+      console.warn(
+        '[DFS] esri-leaflet not loaded; fire districts layer unavailable'
+      );
+      return;
+    }
+    layers.fire = L.esri
+      .featureLayer({
+        url: CFG.FIRE_DISTRICTS_URL,
+        pane: 'fire_districtsPane',
+        fields: ['OBJECTID', 'FDID', 'firedepartment', 'fdcounty'],
+        simplifyFactor: 0.5,
+        precision: 5,
+        style: {
+          color: CFG.FIRE_DISTRICTS_COLOR,
+          weight: 1.3,
+          opacity: 1,
+          fill: false,
+        },
+        attribution: 'NC Office of State Fire Marshal',
+      })
+      .bindPopup(function (layer) {
+        const p = layer.feature.properties || {};
+        return (
+          '<div class="alert-popup"><strong>' +
+          _escape(p.firedepartment || 'Fire district') +
+          '</strong><dl>' +
+          '<dt>FDID</dt><dd>' +
+          _escape(p.FDID || '--') +
+          '</dd>' +
+          '<dt>County</dt><dd>' +
+          _escape(p.fdcounty || '--') +
+          '</dd>' +
+          '</dl></div>'
+        );
+      });
+    layers.fire.on('requesterror', function (e) {
+      const err = e && e.error;
+      console.warn(
+        '[DFS] Fire districts layer request failed: ' +
+          (err && err.message ? err.message : 'unknown error')
+      );
+      _setFireNotice(true);
+    });
+    layers.fire.on('requestsuccess', function () {
+      _setFireNotice(false);
+    });
+    layers.fire.addTo(map);
+  }
+
+  function _setFireNotice(visible) {
+    _setLayerNotice(
+      'fire',
+      visible,
+      'The NC fire districts layer could not be loaded from the State ' +
+        'Fire Marshal service. Flagged pathways below are unaffected.'
+    );
   }
 
   // Build the HTML content for a parcel popup. Handles missing/null fields
@@ -1065,8 +1216,10 @@ window.DFS_MAP = (function () {
     setAlerts,
     setAlertsVisible,
     zoomToAlert,
+    zoomToAlerts,
     setReferenceVisible,
     setParcelsVisible,
+    setFireDistrictsVisible,
     setBuildingsVisible,
     _internalMap: () => map,
     // Private helpers, exposed for simple/test/map.test.js only.
@@ -1076,6 +1229,7 @@ window.DFS_MAP = (function () {
       parseOwnerName: _parseOwnerName,
       buildParcelPopup: _buildParcelPopup,
       escape: _escape,
+      fireDistrictText: _fireDistrictText,
     },
   };
 })();

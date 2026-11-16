@@ -39,6 +39,47 @@ details belong in an issue or PR once someone picks it up.
   `development`, which gets its own preview site at
   `pr-<number>.landslidesncgs.org` (`pr-preview.yml`, live since 2026-10-28).
   The design was written 2026-10-21; nothing beyond the previews is built.
+- **Simulated-storm test mode for DFENS Simple.** A way to load sample storm
+  data so the page can be shown and tested when no heavy rain is forecast: a
+  banner saying the data is simulated, forecast rings drawn from the local
+  `forecast_24h.geojson` instead of the live NWS layer, a `SIMULATED-` prefix
+  on the CSV file name and a `forecast_source` CSV column. The frontend half
+  came in with the fire-district work and was taken out again on 2026-11-12,
+  because the script that makes the sample data
+  (`pipeline/simulate_storm.py`) and its `demo/` folder were never
+  committed. The removed code is parked in
+  `simple/pipeline/simulated-storm/` (a patch and a README; the site deploy
+  skips that folder). To finish it: add that script, restore the frontend
+  code, pass the forecast file to `MAP.setForecastLocal` (the load code in
+  `simple/js/app.js` no longer keeps it in a `forecast` variable), and add
+  tests.
+- **Fire district group headings and keys.** Found in the 2026-11-13
+  review of the fire district work, in `simple/js/table.js`:
+  - A group heading shows the county of the group's first pathway. In the
+    WNC district file read on 2026-11-13, 31 FDIDs cover two counties
+    (Blowing Rock Fire & Rescue is in Caldwell and Watauga), so a heading
+    can name the wrong county for some of its pathways. List every county
+    in the group instead.
+  - A district with no FDID is grouped by name alone (`_districtKey`), so
+    two districts with the same name, or with no name, in different
+    counties would merge into one group. No real district in that file
+    lacks an FDID (only the four "No District" rows do), so this cannot
+    happen with today's data. Add the county to the fallback key, and
+    change the test that expects the merge.
+- **Stop the browser tests from using another checkout's server.** Found
+  on 2026-11-13: `simple/e2e/playwright.config.js` serves the page on port
+  8000, the same port as the `static-site` preview, with
+  `reuseExistingServer: true`. When a server from another checkout or
+  worktree is already on that port, `npm run test:e2e` tests that
+  checkout's files and still passes. To fix:
+  - Set `reuseExistingServer: false`, so Playwright always starts its own
+    server from this checkout and fails loudly when the port is taken.
+  - Move the tests off port 8000, and read the port from an environment
+    variable with a default, so a preview can stay open and two checkouts
+    can run the tests at once.
+  - Before the tests run, write a random token to a file the server can
+    serve, fetch it back, and fail if it does not match. This catches a
+    server on the right port that was started from the wrong folder.
 
 ## From the October 2026 audit, not yet decided
 

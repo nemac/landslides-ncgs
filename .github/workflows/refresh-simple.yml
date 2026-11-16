@@ -3,9 +3,10 @@ name: Refresh DFENS Simple data (every 10 min)
 # Data pipeline for the DFENS Simple dashboard at /simple/ (simple/pipeline/).
 # Nothing is committed to git; outputs go straight to
 # s3://landslidesncgs-data/simple/data/. The debris-flow GeoPackage it
-# intersects against is kept current in the same bucket under cache/ by
-# refresh-reference.yml, so a heavy-rain build downloads it instead of
-# re-fetching 225k polygons.
+# intersects against, and the WNC fire district file it tags flagged
+# pathways with, are kept current in the same bucket under cache/ by
+# refresh-reference.yml, so a heavy-rain build downloads them instead of
+# re-fetching 225k polygons and the districts.
 #
 # Each run:
 #   1. ndfd_check.py (stdlib, ~5 s): has NDFD changed since the last
@@ -90,6 +91,16 @@ jobs:
           aws s3 cp "s3://landslidesncgs-data/cache/debris_flows.gpkg" cache/debris_flows.gpkg \
             || echo "No GeoPackage in the bucket yet; the build will fetch the layer itself."
 
+      # The fire district file (~50 MB) tags each flagged pathway with its
+      # fire district, so it is needed in the same case. If the bucket has
+      # none yet, refresh_simple.py downloads the districts itself.
+      - name: Fetch the fire district file
+        if: steps.check.outputs.action == 'build' && steps.check.outputs.heavy == 'true'
+        run: |
+          mkdir -p cache
+          aws s3 cp "s3://landslidesncgs-data/cache/fire_districts_wnc.geojson" cache/fire_districts_wnc.geojson \
+            || echo "No fire district file in the bucket yet; the build will fetch the districts itself."
+
       # The same pinned environment as the alerts pipeline, so the shared
       # modules (scripts/data.py, scripts/analysis.py) run on the same
       # library versions in both places. Cached by file contents.
@@ -129,16 +140,18 @@ jobs:
       - name: Archive a run that flagged pathways
         if: steps.check.outputs.action == 'build'
         run: |
-          N=$(python3 -c "import json; print(json.load(open('out/status.json')).get('n_flagged', 0))")
-          if [ "$N" -gt 0 ]; then
+          # archive_decision.py says no when nothing was flagged, and when
+          # this build was a repeat of a failed fire district lookup that
+          # failed again (the first run for that forecast is already kept).
+          if [ "$(python3 simple/pipeline/archive_decision.py --out out)" = "true" ]; then
             STAMP=$(python3 -c "import json; print(json.load(open('out/status.json'))['generated_at'][:19].replace(':', '') + 'Z')")
             DEST="s3://landslidesncgs-data/simple/archive/${STAMP}"
             for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson status.json; do
               aws s3 cp "out/$f" "$DEST/$f" --content-type application/json
             done
-            echo "Archived a run with $N flagged pathway(s) to $DEST"
+            echo "Archived this run to $DEST"
           else
-            echo "No flagged pathways; nothing archived."
+            echo "Nothing archived: no flagged pathways, or a repeat of a failed fire district lookup."
           fi
 
       - name: Summary

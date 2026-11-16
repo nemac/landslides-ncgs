@@ -40,3 +40,6 @@ alerts/data/
 
 # Local planning notes from Claude sessions
 docs/superpowers/
+
+# Claude Code local settings
+.claude/settings.local.json
