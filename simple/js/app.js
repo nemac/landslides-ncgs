@@ -109,6 +109,11 @@
   // ---- Init ----------------------------------------------------------------
   function init() {
     MAP.init();
+    // A click on a pathway shape opens its district in the table and
+    // brings its row into view.
+    MAP.onPathwayClick(function (pathwayId) {
+      TABLE.revealPathway(pathwayId, _tableElements());
+    });
     _buildLegend();
     _buildMrmsRamp();
     _wireZoomGating();

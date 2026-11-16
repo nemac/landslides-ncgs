@@ -102,8 +102,9 @@ Details live in `BACKLOG.md`; this is the short list.
 
 - Link DFENS Simple from the home page when it is ready for the public.
 - Test `summarize_alerts` in `scripts/analysis.py` (`find_alerts` is tested).
-- Check the Simple page with a storm-sized flagged file (about 52,000
-  pathways).
+- Make the Simple page fast with a storm-sized flagged file (52,430
+  pathways measured): vector tiles for the map shapes, and a search box
+  now that districts start collapsed.
 - Prove an archived flagged Simple run can be rebuilt: a script that
   rebuilds one from its archive folder.
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.

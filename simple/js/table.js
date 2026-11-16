@@ -17,8 +17,8 @@
  * Districts not known (the lookup failed, or an older file without the
  * fields): one plain list sorted by rain, county and ID, plus a notice.
  *
- * Groups can be collapsed; collapsed groups stay collapsed when the page
- * reloads its data.
+ * Every group starts collapsed; a group the user opened stays open when
+ * the page reloads its data.
  *
  * Public surface (window.DFS_TABLE):
  *   render(features, meta, elements, handlers)
@@ -27,6 +27,9 @@
  *           button is gone after a redraw (the table's heading)
  *       handlers.onSelect(pathwayId)       row click -> zoom to one pathway
  *       handlers.onZoomGroup([pathwayId])  "Show on map" -> zoom to a group
+ *   revealPathway(pathwayId, elements) -> bool
+ *       opens that pathway's group, marks its row as the current one and
+ *       scrolls to it; false when the pathway is not in the table
  *   renderMessage(text, elements)          one message row (the error state)
  *   toCSV(features, meta) -> string
  *   districtsKnown(features, meta) -> bool
@@ -70,7 +73,14 @@ window.DFS_TABLE = (function () {
     'the map.';
 
   const COLUMN_COUNT = 5;
-  const collapsedGroupKeys = new Set();
+  // Every district starts collapsed. A storm can flag tens of thousands
+  // of pathways, and a browser that has to lay out that many visible rows
+  // freezes for seconds on a slow computer (measured 2026-11-16). Hidden
+  // rows cost almost nothing. These are the districts the user opened.
+  const expandedGroupKeys = new Set();
+  // The pathway last picked in the table or on the map, as text. Its row
+  // carries aria-current and the is-current class.
+  let currentPathwayId = null;
 
   // ---- Sorting and grouping ------------------------------------------------
   function sortFeatures(features) {
@@ -324,6 +334,7 @@ window.DFS_TABLE = (function () {
     });
 
     function select() {
+      _markCurrentRow(row.closest('table'), row);
       if (onSelect) onSelect(p.pathway_id);
     }
     row.addEventListener('click', select);
@@ -337,13 +348,13 @@ window.DFS_TABLE = (function () {
   }
 
   // ---- Group headings ------------------------------------------------------
-  function _buildToggleButton(group, pathwayRows) {
+  function _buildToggleButton(group) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'group-toggle';
     button.setAttribute(
       'aria-expanded',
-      String(!collapsedGroupKeys.has(group.key))
+      String(expandedGroupKeys.has(group.key))
     );
 
     const name = document.createElement('span');
@@ -362,15 +373,23 @@ window.DFS_TABLE = (function () {
     button.appendChild(meta);
 
     button.addEventListener('click', function () {
-      const collapse = button.getAttribute('aria-expanded') === 'true';
-      button.setAttribute('aria-expanded', String(!collapse));
-      pathwayRows.forEach(function (row) {
-        row.hidden = collapse;
-      });
-      if (collapse) collapsedGroupKeys.add(group.key);
-      else collapsedGroupKeys.delete(group.key);
+      const isExpanded = button.getAttribute('aria-expanded') === 'true';
+      _setGroupExpanded(button.closest('tbody'), !isExpanded);
     });
     return button;
+  }
+
+  // Opens or closes one group body: its button, its rows, and the list of
+  // open groups that the next redraw reads.
+  function _setGroupExpanded(body, expanded) {
+    body
+      .querySelector('.group-toggle')
+      .setAttribute('aria-expanded', String(expanded));
+    body.querySelectorAll('tr.group-item').forEach(function (row) {
+      row.hidden = !expanded;
+    });
+    if (expanded) expandedGroupKeys.add(body.dataset.groupKey);
+    else expandedGroupKeys.delete(body.dataset.groupKey);
   }
 
   function _buildZoomButton(group, onZoomGroup) {
@@ -392,7 +411,7 @@ window.DFS_TABLE = (function () {
     return button;
   }
 
-  function _buildGroupHeaderRow(group, pathwayRows, handlers) {
+  function _buildGroupHeaderRow(group, handlers) {
     const row = document.createElement('tr');
     row.className = 'group-row';
     if (group.kind !== STATUS_DISTRICT) row.classList.add('is-special');
@@ -402,7 +421,7 @@ window.DFS_TABLE = (function () {
 
     const head = document.createElement('div');
     head.className = 'group-head';
-    head.appendChild(_buildToggleButton(group, pathwayRows));
+    head.appendChild(_buildToggleButton(group));
     head.appendChild(_buildZoomButton(group, handlers.onZoomGroup));
     cell.appendChild(head);
     row.appendChild(cell);
@@ -414,18 +433,54 @@ window.DFS_TABLE = (function () {
     body.className = 'group';
     // Lets a redraw find this group again (see _findPart).
     body.dataset.groupKey = group.key;
-    const isCollapsed = collapsedGroupKeys.has(group.key);
+    const isExpanded = expandedGroupKeys.has(group.key);
     const pathwayRows = group.features.map(function (feature) {
       const row = _buildPathwayRow(feature, handlers.onSelect);
       row.classList.add('group-item');
-      row.hidden = isCollapsed;
+      row.hidden = !isExpanded;
       return row;
     });
-    body.appendChild(_buildGroupHeaderRow(group, pathwayRows, handlers));
+    body.appendChild(_buildGroupHeaderRow(group, handlers));
     pathwayRows.forEach(function (row) {
       body.appendChild(row);
     });
     return body;
+  }
+
+  // ---- The current pathway ---------------------------------------------------
+  // One row at a time is "current": the pathway last picked in the table
+  // or on the map. aria-current says so to a screen reader; the is-current
+  // class draws it (a bar and bold text, not color alone).
+  function _markCurrentRow(table, row) {
+    table.querySelectorAll('tr[aria-current]').forEach(function (previous) {
+      previous.removeAttribute('aria-current');
+      previous.classList.remove('is-current');
+    });
+    row.setAttribute('aria-current', 'true');
+    row.classList.add('is-current');
+    currentPathwayId = row.dataset.pathwayId;
+  }
+
+  // A redraw builds new rows, so the mark is put back on the new row.
+  function _restoreCurrentRow(table) {
+    if (currentPathwayId === null) return;
+    const row = _findRow(table, currentPathwayId);
+    if (row) _markCurrentRow(table, row);
+  }
+
+  // Called when a pathway is clicked on the map: opens its district, marks
+  // its row and brings the row into view. Keyboard focus is not moved; the
+  // popup the click opened is on the map.
+  function revealPathway(pathwayId, elements) {
+    const row = _findRow(elements.table, String(pathwayId));
+    if (!row) return false;
+    const body = row.closest('tbody');
+    if (body.dataset.groupKey) _setGroupExpanded(body, true);
+    _markCurrentRow(elements.table, row);
+    // "center" keeps the row clear of the table's sticky header. jsdom,
+    // which runs the unit tests, has no scrollIntoView.
+    if (row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+    return true;
   }
 
   // ---- Keeping keyboard focus across a redraw -------------------------------
@@ -516,6 +571,7 @@ window.DFS_TABLE = (function () {
     } else {
       _renderPlain(features, elements, handlers || {});
     }
+    _restoreCurrentRow(elements.table);
     _restoreFocus(elements, focusedPart);
   }
 
@@ -634,6 +690,7 @@ window.DFS_TABLE = (function () {
 
   return {
     render,
+    revealPathway,
     renderMessage,
     toCSV,
     districtsKnown,

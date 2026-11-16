@@ -887,3 +887,29 @@ for (const [picked, other] of [
     }
   );
 }
+
+// ---- Clicking a pathway on the map -----------------------------------------
+test('clicking a pathway shape tells the page which pathway it was', () => {
+  const m = mapModule();
+  const clicked = [];
+  m.MAP.onPathwayClick((pathwayId) => clicked.push(pathwayId));
+  m.MAP.setAlerts(FLAGGED);
+  alertLayerFor(m, 205).fire('click');
+  alertLayerFor(m, 301).fire('click');
+  assert.deepEqual(clicked, [205, 301]);
+});
+
+test('clicking a pathway shape is harmless when the page did not ask to hear', () => {
+  const m = mapModule();
+  m.MAP.setAlerts(FLAGGED);
+  alertLayerFor(m, 205).fire('click');
+});
+
+test('zooming to a pathway from the table does not count as a click on it', () => {
+  const m = mapModule();
+  const clicked = [];
+  m.MAP.onPathwayClick((pathwayId) => clicked.push(pathwayId));
+  m.MAP.setAlerts(FLAGGED);
+  m.MAP.zoomToAlert(205);
+  assert.deepEqual(clicked, []);
+});

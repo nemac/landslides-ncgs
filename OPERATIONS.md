@@ -69,10 +69,24 @@ back. The same expiry clears any preview a missed cleanup leaves behind.
 A fresh checkout has empty `alerts/data/` and `simple/data/` folders. The
 dashboard shows its stale-data banner until `simple/data/` exists.
 
-With AWS access (the `landslidesncgs` SSO profile; `infra/README.md` sets it up):
+The DFENS Simple files come from the public site. The forecast and
+flagged files are stored gzipped in the bucket under their plain names
+(`refresh-simple.yml` compresses them at upload), so an `aws s3 sync` of
+`simple/data` would leave compressed files that the local server cannot
+serve. `curl --compressed` unpacks them:
 
 ```bash
-aws s3 sync s3://landslidesncgs-data/simple/data simple/data --profile landslidesncgs
+mkdir -p simple/data
+```
+
+```bash
+for f in status.json forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do curl -sS --compressed -o "simple/data/$f" "https://landslidesncgs.org/simple/data/$f"; done
+```
+
+The alerts files need AWS access (the `landslidesncgs` SSO profile;
+`infra/README.md` sets it up):
+
+```bash
 aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile landslidesncgs   # ~870 MB, mostly building footprints
 ```
 

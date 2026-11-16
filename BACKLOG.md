@@ -14,14 +14,41 @@ details belong in an issue or PR once someone picks it up.
 - **Test the intersections.** `find_alerts` in `scripts/analysis.py` has
   tests since 2026-11-13 (`scripts/test_analysis.py`). Still to write:
   tests for `summarize_alerts`.
-- **Check the Simple page with a storm-sized flagged file.** Until
-  2026-11-13 the pipeline kept one pathway per `OBJECTID` and dropped the
-  rest, so the flagged file was never larger than about 15,900 pathways.
-  It now publishes every flagged pathway. Run against the May 2026 storm
-  rain, that is about 52,000 pathways at the 5 inch threshold instead of
-  about 13,000. Measure the file size, the page's load time and the
-  table and map with a file that large, and decide whether the page
-  needs paging, vector tiles or a cap.
+- **Make the Simple page fast with a storm-sized flagged file.** Measured
+  on 2026-11-16 with the real pipeline, the production debris-flow file
+  and the May 2026 storm rain: 52,430 flagged pathways in 110 fire
+  districts. The page works at that size, but it is slow on a slow
+  computer.
+  - File: 52.3 MB, or 10.0 MB gzipped. `refresh-simple.yml` now gzips it
+    at upload. The build took 141 seconds.
+  - Chromium on a fast laptop: usable 2.2 seconds after the page opens.
+    With the processor slowed 4 times: 8.6 seconds, with one freeze of
+    4.7 seconds. Slowed 6 times: 12.8 seconds. The page holds about
+    445 MB of memory at any speed.
+  - Where the time goes, slowed 4 times: reading the file 0.5 seconds,
+    drawing 52,430 map shapes 2.2 seconds, and the table 4.7 seconds.
+    Almost all of the table's time is the browser laying out 52,430
+    visible rows; building them takes 0.6 seconds.
+  - Done on 2026-11-16: every district starts collapsed, so the rows
+    are built but not laid out. Usable after 1.5 seconds on a fast
+    laptop (was 2.2), 4.8 seconds slowed 4 times (was 8.6) and 7.2
+    seconds slowed 6 times (was 12.8). Opening the largest group (7,846
+    rows, "Outside North Carolina") takes 0.3, 1.3 and 1.9 seconds.
+  - Still slow, slowed 4 times: one freeze of 3.3 seconds while the map
+    shapes and the hidden rows are built, 2.8 seconds from a row click
+    to its popup, and about 450 MB of memory. These come from drawing
+    52,430 map shapes at once.
+  - Still to decide and build: split the file into a small table of
+    pathway details and separate map shapes, and serve the shapes as
+    vector tiles, so a browser only downloads and draws what is in view.
+    Drawing the map on a canvas is a smaller step (2.2 seconds down to
+    1.6 in a test). A fixed table layout did not help. A different file
+    format alone would not either.
+  - Also consider: a search box across all districts (the browser's own
+    find does not see rows in a collapsed district), an "open all"
+    button, and a limit on how many rows one opened group lays out.
+  - Not measured: a real phone, a real slow network, or Safari and
+    Firefox. Headless Chromium may undercount painting.
 - **Prove that an archived flagged run can be rebuilt.** Since 2026-11-13
   a run that flags a pathway keeps everything needed to work it out
   again (see "Rebuilding a flagged run" in `simple/README.md`): its rain
@@ -88,9 +115,9 @@ details belong in an issue or PR once someone picks it up.
   shipped with the CDK app. Still open: a Content-Security-Policy listing
   self, unpkg, Google Fonts and the map data hosts (ArcGIS, Iowa Mesonet,
   OpenStreetMap, NC OneMap), started in report-only mode because of the
-  number of external hosts. Flagged files above 10 MB are still served
-  uncompressed (CloudFront's limit); pre-compressing them at upload is the
-  fix if it matters.
+  number of external hosts. (The DFENS Simple map files are gzipped at
+  upload since 2026-11-16, because CloudFront does not compress a file
+  above 10 MB.)
 - **A custom 404 page.** A missing page on the production site answers
   S3's raw `AccessDenied` XML with a 403 (checked 2026-10-28), because
   origin access gives CloudFront no `s3:ListBucket`. Add a `/404/` page and

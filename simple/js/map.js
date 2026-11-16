@@ -14,6 +14,7 @@
  *   setRadarVisible(bool)
  *   setFireDistrictsVisible(bool)
  *   setAlerts(geojson, districtsKnown) / setAlertsVisible(bool) / zoomToAlert(pathwayId) / zoomToAlerts([pathwayIds])
+ *   onPathwayClick(fn)   fn(pathwayId) runs when a pathway shape is clicked
  *   setReferenceVisible(bool)  -> Promise
  *   setParcelsVisible(bool)
  *   setBuildingsVisible(bool)
@@ -453,6 +454,9 @@ window.DFS_MAP = (function () {
       },
       onEachFeature: function (feature, layer) {
         const p = feature.properties || {};
+        layer.on('click', function () {
+          if (_pathwayClickHandler) _pathwayClickHandler(p.pathway_id);
+        });
         layer.bindPopup(
           '<div class="alert-popup">' +
             '<strong>Flagged pathway ' +
@@ -493,6 +497,13 @@ window.DFS_MAP = (function () {
       return 'Outside North Carolina';
     }
     return 'Not available';
+  }
+
+  // The page gives one function to call with the pathway ID when a
+  // pathway shape is clicked, so it can show that pathway's table row.
+  let _pathwayClickHandler = null;
+  function onPathwayClick(handler) {
+    _pathwayClickHandler = handler;
   }
 
   function zoomToAlert(pathwayId) {
@@ -1217,6 +1228,7 @@ window.DFS_MAP = (function () {
     setAlertsVisible,
     zoomToAlert,
     zoomToAlerts,
+    onPathwayClick,
     setReferenceVisible,
     setParcelsVisible,
     setFireDistrictsVisible,
