@@ -214,6 +214,8 @@ test('clicking a pathway on the map opens its district and shows its row', async
   await expect(row).toBeVisible();
   await expect(row).toBeInViewport();
   await expect(row).toHaveAttribute('aria-current', 'true');
+  // Only the table's box scrolled: the popup is still on the screen.
+  await expect(page.locator('.leaflet-popup .alert-popup')).toBeInViewport();
   // The other district was not opened.
   await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
   // The marked row and the open popup must pass the same checks. Leaflet
@@ -530,6 +532,32 @@ test('the layer toggles add and remove their layers', async ({ page }) => {
 });
 
 // ---- Narrow screens -------------------------------------------------------
+test('on a phone, a map click keeps its popup on the screen', async ({
+  page,
+}) => {
+  // On a narrow screen the table is below the map. Scrolling the page to
+  // the pathway's row would push the popup off the top of the screen.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openLive(page);
+  await page
+    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
+    .click();
+  // Put the whole map on the screen first, so the click itself has no
+  // reason to scroll the page.
+  await page.locator('#map').evaluate((map) => map.scrollIntoView());
+  const scrollBeforeClick = await page.evaluate(() => window.scrollY);
+  await page.locator('.leaflet-alerts-pane path').nth(1).click();
+
+  const popup = page.locator('.leaflet-popup .alert-popup');
+  await expect(popup).toContainText('Flagged pathway 205');
+  // The row is still opened and marked, ready when the user scrolls down.
+  const row = page.locator('#alerts-table tr[data-pathway-id="205"]');
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('aria-current', 'true');
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeClick);
+  await expect(popup).toBeInViewport();
+});
+
 for (const width of [375, 320]) {
   test(
     'the grouped page fits ' + width + 'px without sideways scrolling',
