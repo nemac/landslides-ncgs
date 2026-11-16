@@ -8,6 +8,9 @@ The spatial match itself lives in fire_district_join.py (geopandas).
 
 Run from the repo root to refresh the local copy:
     python simple/pipeline/fire_districts.py --out cache/fire_districts_wnc.geojson
+
+The file names the version of the state layer it came from. To print it:
+    python simple/pipeline/fire_districts.py --version-of cache/fire_districts_wnc.geojson
 """
 
 from __future__ import annotations
@@ -243,6 +246,36 @@ def fetch_wnc_districts(get_json=ndfd_check.get_json) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+def fetch_layer_version(get_json=ndfd_check.get_json) -> str:
+    """Which version of the state's fire district layer is being served:
+    its data-last-edit time in UTC, safe in a file path, like
+    "2026-03-03T171307Z". The same format scripts/data.py uses for the
+    debris-flow layer."""
+    info = get_json(S.FIRE_DISTRICTS_URL, {"f": "json"}, timeout=REQUEST_TIMEOUT_SECONDS)
+    last_edit_ms = (info.get("editingInfo") or {}).get("dataLastEditDate")
+    if not last_edit_ms:
+        raise RuntimeError("fire district layer reports no data edit date")
+    last_edit = datetime.fromtimestamp(int(last_edit_ms) / 1000, tz=UTC)
+    return last_edit.strftime("%Y-%m-%dT%H%M%SZ")
+
+
+def download_wnc_districts(get_json=ndfd_check.get_json) -> dict:
+    """The WNC districts, with the layer version they came from in a
+    top-level "layer_version" field."""
+    # Read first, so the districts are never newer than their name.
+    layer_version = fetch_layer_version(get_json)
+    collection = fetch_wnc_districts(get_json)
+    collection["layer_version"] = layer_version
+    return collection
+
+
+def read_layer_version(path: Path) -> str | None:
+    """The layer version a district file was downloaded from. None for a
+    file written before 2026-11-13, which does not say."""
+    collection = json.loads(Path(path).read_text(encoding="utf-8"))
+    return collection.get("layer_version")
+
+
 def write_districts(path: Path, feature_collection: dict) -> None:
     """Write through a temp file so a reader never sees half a file."""
     path = Path(path)
@@ -252,12 +285,31 @@ def write_districts(path: Path, feature_collection: dict) -> None:
     temp_path.replace(path)
 
 
+def print_version_of(path: Path) -> int:
+    """For refresh-reference.yml, which names the copy it keeps of each
+    layer version from the file itself. Fails for a file with no version."""
+    layer_version = read_layer_version(path)
+    if not layer_version:
+        print(f"[fire-districts] {path} names no layer version; rebuild it", file=sys.stderr)
+        return 1
+    print(layer_version)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download the WNC fire districts.")
     parser.add_argument("--out", default=str(REPO / S.FIRE_DISTRICTS_CACHE))
+    parser.add_argument(
+        "--version-of",
+        metavar="FILE",
+        help="print the layer version a district file holds, and download nothing",
+    )
     args = parser.parse_args()
 
-    collection = fetch_wnc_districts()
+    if args.version_of:
+        return print_version_of(Path(args.version_of))
+
+    collection = download_wnc_districts()
     write_districts(Path(args.out), collection)
     print(f"[fire-districts] wrote {len(collection['features'])} districts to {args.out}")
     return 0

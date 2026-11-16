@@ -159,7 +159,7 @@ function fakeLeaflet(document) {
         // Like real Leaflet, a layer hands out its own stored bounds, the
         // same object every time. Growing that object changes the layer.
         const ownBounds = {
-          of: feature.properties.OBJECTID,
+          of: feature.properties.pathway_id,
           extend(more) {
             this.grownBy = more;
             return this;

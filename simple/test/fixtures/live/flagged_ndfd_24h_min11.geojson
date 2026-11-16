@@ -10,7 +10,8 @@
   "n_flagged": 3,
   "generated_at": "2026-10-27T18:20:44+00:00",
   "ndfd_key": "2026-10-27T18:00:00+00:00|2026-10-27T18:11:16+00:00",
-  "fire_districts": "ok"
+  "fire_districts": "ok",
+  "ncgs_layer_version": "2026-03-03T171307Z"
  },
  "features": [
   {
@@ -43,7 +44,8 @@
     ]
    },
    "properties": {
-    "OBJECTID": 301,
+    "pathway_id": 301,
+    "OBJECTID": 7,
     "county": "Buncombe",
     "watershed": "Swannanoa River",
     "max_category": 11,
@@ -86,7 +88,8 @@
     ]
    },
    "properties": {
-    "OBJECTID": 102,
+    "pathway_id": 102,
+    "OBJECTID": 44,
     "county": "Haywood",
     "watershed": "Pigeon River, East Fork",
     "max_category": 12,
@@ -129,7 +132,8 @@
     ]
    },
    "properties": {
-    "OBJECTID": 205,
+    "pathway_id": 205,
+    "OBJECTID": 7,
     "county": "Buncombe",
     "watershed": "French Broad River",
     "max_category": 11,
@@ -172,7 +176,8 @@
     ]
    },
    "properties": {
-    "OBJECTID": 407,
+    "pathway_id": 407,
+    "OBJECTID": 9,
     "county": "Madison",
     "watershed": "Ivy Creek",
     "max_category": 10,

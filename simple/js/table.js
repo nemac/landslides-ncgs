@@ -25,8 +25,8 @@
  *       elements: { table, summary, notice, focusFallback }
  *           focusFallback takes focus when the focused row or group
  *           button is gone after a redraw (the table's heading)
- *       handlers.onSelect(objectid)        row click -> zoom to one pathway
- *       handlers.onZoomGroup([objectid])   "Show on map" -> zoom to a group
+ *       handlers.onSelect(pathwayId)       row click -> zoom to one pathway
+ *       handlers.onZoomGroup([pathwayId])  "Show on map" -> zoom to a group
  *   renderMessage(text, elements)          one message row (the error state)
  *   toCSV(features, meta) -> string
  *   districtsKnown(features, meta) -> bool
@@ -84,7 +84,7 @@ window.DFS_TABLE = (function () {
         String(pb.county || '')
       );
       if (byCounty !== 0) return byCounty;
-      return (pa.OBJECTID || 0) - (pb.OBJECTID || 0);
+      return (pa.pathway_id || 0) - (pb.pathway_id || 0);
     });
   }
 
@@ -298,7 +298,7 @@ window.DFS_TABLE = (function () {
       p.watershed || '--',
       _rainLabel(p.max_category),
       _acres(p),
-      String(p.OBJECTID),
+      String(p.pathway_id),
     ];
   }
 
@@ -307,11 +307,11 @@ window.DFS_TABLE = (function () {
     const row = document.createElement('tr');
     row.tabIndex = 0;
     row.className = 'row-clickable';
-    row.dataset.objectid = String(p.OBJECTID);
+    row.dataset.pathwayId = String(p.pathway_id);
     row.setAttribute(
       'aria-label',
       'Show pathway ' +
-        p.OBJECTID +
+        p.pathway_id +
         ' in ' +
         (p.county || 'unknown county') +
         ' on the map'
@@ -324,7 +324,7 @@ window.DFS_TABLE = (function () {
     });
 
     function select() {
-      if (onSelect) onSelect(p.OBJECTID);
+      if (onSelect) onSelect(p.pathway_id);
     }
     row.addEventListener('click', select);
     row.addEventListener('keydown', function (event) {
@@ -385,7 +385,7 @@ window.DFS_TABLE = (function () {
       if (!onZoomGroup) return;
       onZoomGroup(
         group.features.map(function (f) {
-          return f.properties.OBJECTID;
+          return f.properties.pathway_id;
         })
       );
     });
@@ -435,8 +435,8 @@ window.DFS_TABLE = (function () {
   function _focusedPart(table) {
     const focused = document.activeElement;
     if (!focused || !table.contains(focused)) return null;
-    if (focused.dataset.objectid) {
-      return { objectid: focused.dataset.objectid };
+    if (focused.dataset.pathwayId) {
+      return { pathwayId: focused.dataset.pathwayId };
     }
     const body = focused.closest('tbody');
     if (focused.tagName === 'BUTTON' && body && body.dataset.groupKey) {
@@ -445,10 +445,10 @@ window.DFS_TABLE = (function () {
     return null;
   }
 
-  function _findRow(table, objectid) {
-    const rows = Array.from(table.querySelectorAll('tr[data-objectid]'));
+  function _findRow(table, pathwayId) {
+    const rows = Array.from(table.querySelectorAll('tr[data-pathway-id]'));
     return rows.find(function (row) {
-      return row.dataset.objectid === objectid;
+      return row.dataset.pathwayId === pathwayId;
     });
   }
 
@@ -460,7 +460,7 @@ window.DFS_TABLE = (function () {
   }
 
   function _findPart(table, part) {
-    if (part.objectid) return _findRow(table, part.objectid);
+    if (part.pathwayId) return _findRow(table, part.pathwayId);
     return _findGroupButton(table, part.groupKey, part.className);
   }
 
@@ -532,7 +532,8 @@ window.DFS_TABLE = (function () {
 
   // ---- CSV -----------------------------------------------------------------
   // The pathway's own columns come first. The district status sits right
-  // before the five columns it explains, and the times come last.
+  // before the five columns it explains. Then come the times, and last the
+  // NCGS layer version that the pathway IDs belong to.
   const CSV_HEADER = [
     'pathway_id',
     'county',
@@ -550,11 +551,12 @@ window.DFS_TABLE = (function () {
     'window_end_utc',
     'nws_updated_utc',
     'exported_utc',
+    'ncgs_layer_version',
   ];
 
   function _csvPathwayCells(p) {
     return [
-      p.OBJECTID,
+      p.pathway_id,
       p.county || '',
       p.watershed || '',
       CFG.PRECIP_LABELS[p.max_category] || '',
@@ -589,7 +591,13 @@ window.DFS_TABLE = (function () {
 
   function _csvRow(p, meta, exported, known) {
     return _csvPathwayCells(p)
-      .concat(_csvDistrictCells(p, known), _csvTimeCells(meta, exported))
+      .concat(
+        _csvDistrictCells(p, known),
+        _csvTimeCells(meta, exported),
+        // A pathway_id is a row number in one version of the NCGS layer,
+        // so the file says which version. Blank for an older file.
+        [meta.ncgs_layer_version || '']
+      )
       .map(_csvEscape)
       .join(',');
   }

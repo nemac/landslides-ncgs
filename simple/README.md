@@ -67,6 +67,95 @@ dashboard. The debris-flow GeoPackage (`cache/debris_flows.gpkg`) is
 rebuilt by `refresh-reference.yml` when the NCGS layer changes and shared
 through the data bucket.
 
+### Pathway IDs
+
+Every flagged pathway is published with two ID fields:
+
+- `pathway_id` is the pathway's `OBJECTID_1` in the NCGS layer, the
+  layer's own row number. It is different for every pathway. The page
+  uses it for everything: the table's "Pathway ID" column, the row and
+  map lookups, the popup title and the CSV's `pathway_id` column. To find
+  a pathway in the NCGS layer, query `OBJECTID_1 = <pathway_id>`. NCGS
+  may renumber the rows when it republishes the layer, so an ID is only
+  good for the layer version it was read from (see "Layer versions"
+  below).
+- `OBJECTID` is the layer's plain `OBJECTID` field. It is **not unique**:
+  the layer is a mosaic of about 55 source tiles and the number restarts
+  at 1 in each one, so on 2026-11-13 its 228,870 pathways shared 15,885
+  values (`ORIG_FID` always holds the same number). It is published only
+  so that older readers of the file keep working. Never use it as a key.
+
+Before pipeline version 4 (2026-11-13) the pipeline kept one pathway per
+`OBJECTID` and silently dropped the others that shared it, and the page
+and the CSV showed `OBJECTID` as the pathway ID. Files from before then
+(the archived runs included) have no `pathway_id`; the page falls back
+to `OBJECTID` for those, which is safe because each appears once in them.
+A CSV exported before that date holds `OBJECTID` in its `pathway_id`
+column.
+
+#### Layer versions
+
+A `pathway_id` is a row number in one version of the NCGS layer, so
+every place an ID is published also says which version it belongs to:
+
+- `meta.ncgs_layer_version` in the flagged file, and the last column of
+  the CSV (`ncgs_layer_version`). The value is the layer's
+  data-last-edit time in UTC, like `2026-03-03T171307Z`. It is `null`
+  (blank in the CSV) when no pathways were looked up, and in files from
+  before 2026-11-13.
+- Every row of `cache/debris_flows.gpkg` carries the same value in its
+  `ncgs_layer_version` column, read from the layer just before the
+  download.
+
+`refresh-reference.yml` keeps one copy of the GeoPackage for every layer
+version, for good, at
+`s3://landslidesncgs-data/cache/archive/debris_flows/<version>/debris_flows.gpkg`.
+The copy is named from the version inside the file
+(`scripts/debris_cache_version.py`), and the first copy of a version is
+never replaced. The data bucket deletes an overwritten object after 30
+days, but never an object under its own name, and the workflow's role
+cannot delete there. So to look up an old ID, read `ncgs_layer_version`
+next to it, download that version's GeoPackage and find the row with
+that `OBJECTID_1`. Each copy is about 570 MB; NCGS last changed the layer
+on 2026-03-03.
+
+Not covered: IDs published before the first rebuild with this code have
+no version, and the copy kept for them is the first one made after
+2026-11-13 (the layer had not changed since 2026-03-03, so the rows are
+the same). And if NCGS republishes twice between two daily checks, the
+version in between is never downloaded.
+
+#### Rebuilding a flagged run
+
+Every run that flags a pathway is copied to
+`s3://landslidesncgs-data/simple/archive/<generated_at>/`, which
+CloudFront does not serve and nothing expires. Since 2026-11-13 the copy
+holds what is needed to work the same pathways out again after the
+forecast has moved on:
+
+| Needed | Where it is kept |
+|---|---|
+| The rain polygons the flagging used | `rain_input_ndfd_24h_min11.geojson` in the run's archive folder: the 5 inch and over polygons, not clipped and not rounded. NDFD only serves the current forecast, so this is the only copy. It is never published. |
+| The debris-flow pathways | `meta.ncgs_layer_version` in the flagged file names the layer version; its GeoPackage (with county and watershed tags) is under `cache/archive/debris_flows/<version>/`. |
+| The fire districts | `meta.fire_district_layer_version` names the state layer's version; its file is under `cache/archive/fire_districts/<version>/`. |
+| The code, thresholds and library versions | `meta.code_commit` is the commit the workflow ran. `settings.py`, `scripts/config.py` and `environment.yml` at that commit hold the rest. |
+| What was published | `flagged_ndfd_24h_min11.geojson`, `forecast_24h.geojson` and `status.json` in the same folder. |
+
+To rebuild: check out `meta.code_commit`, read the rain file and the two
+layer files, and run `find_alerts()` and the fire district match on them.
+There is no script that does this yet (see `BACKLOG.md`).
+
+A version field is `null` when its lookup did not run or failed, and
+until the first reference rebuild after 2026-11-13 gives the shared
+files their version stamps. `code_commit` is `null` for a run outside
+GitHub Actions. Runs that flag nothing keep none of this.
+
+The pipeline refuses to flag pathways from a GeoPackage that has no
+`OBJECTID_1` column. `scripts/data.py` treats such a file as missing and
+fetches the layer again (10 to 20 minutes), so a run that meets an old
+file is slow but never publishes de-duplicated data. To replace the
+shared file, run `refresh-reference.yml` by hand with `force` checked.
+
 ### Fire districts
 
 Each flagged pathway is tagged with its NC fire district from the NC
@@ -149,10 +238,11 @@ The pathway popup on the map and the CSV follow the same rule as the
 table. The popup shows the district, "No District (state fire district
 data)" or "Outside North Carolina", and "Not available" when the
 districts are not known. The CSV starts with the pathway's own columns
-(`pathway_id` first), then `fire_district_status` (`district`,
+(`pathway_id` first, see "Pathway IDs" above), then `fire_district_status` (`district`,
 `no_district`, `outside_nc`, or `unavailable` when the districts are not
 known) right before the five fire district columns it explains, which are
-blank when it is `unavailable`, and ends with the times.
+blank when it is `unavailable`. Then come the times, and last
+`ncgs_layer_version`.
 
 ### Expected freshness
 

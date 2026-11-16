@@ -97,9 +97,11 @@ for pending work, `OPERATIONS.md` for running things locally, and
 Details live in `BACKLOG.md`; this is the short list.
 
 - Link DFENS Simple from the home page when it is ready for the public.
-- Test `scripts/analysis.py` (the intersection logic).
-- Make the archived flagged Simple runs reproducible (inputs, thresholds,
-  commit).
+- Test `summarize_alerts` in `scripts/analysis.py` (`find_alerts` is tested).
+- Check the Simple page with a storm-sized flagged file (about 52,000
+  pathways).
+- Prove an archived flagged Simple run can be rebuilt: a script that
+  rebuilds one from its archive folder.
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
 - Slack dev requests: a Slack request opens a GitHub issue, an agent run in
   Actions opens a PR with a `pr-N.landslidesncgs.org` preview.

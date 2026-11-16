@@ -51,7 +51,7 @@ function pathway(id, county, watershed, category, acres, fire) {
   return feature(
     Object.assign(
       {
-        OBJECTID: id,
+        pathway_id: id,
         county: county,
         watershed: watershed,
         max_category: category,
@@ -70,7 +70,7 @@ const FRENCH_BROAD = pathway(205, 'Buncombe', 'French Broad River', 11, 12, {});
 const OK_META = { fire_districts: 'ok' };
 
 function ids(features) {
-  return Array.from(features, (f) => f.properties.OBJECTID);
+  return Array.from(features, (f) => f.properties.pathway_id);
 }
 
 // ---- sortFeatures ---------------------------------------------------------
@@ -86,7 +86,7 @@ test('sortFeatures leaves the input array untouched', () => {
 });
 
 test('a missing county sorts first and a missing ID sorts as zero', () => {
-  const noCounty = feature({ OBJECTID: 9, max_category: 11 });
+  const noCounty = feature({ pathway_id: 9, max_category: 11 });
   const noId = feature({ county: 'Avery', max_category: 11 });
   const sorted = TABLE.sortFeatures([SWANNANOA, noId, noCounty]);
   assert.deepEqual(sorted, [noCounty, noId, SWANNANOA]);
@@ -236,7 +236,7 @@ function tableParts() {
     },
     bodies: () => Array.from(elements.table.tBodies),
     pathwayRows: () =>
-      Array.from(elements.table.querySelectorAll('tr[data-objectid]')),
+      Array.from(elements.table.querySelectorAll('tr[data-pathway-id]')),
     headings: () =>
       Array.from(elements.table.querySelectorAll('.group-row th')),
   };
@@ -250,7 +250,7 @@ test('without the marker the table is a plain sorted list in one body', () => {
   assert.equal(t.headings().length, 0);
   const rows = t.pathwayRows();
   assert.deepEqual(
-    rows.map((r) => r.dataset.objectid),
+    rows.map((r) => r.dataset.pathwayId),
     ['102', '205', '301']
   );
   assert.deepEqual(
@@ -338,7 +338,7 @@ test('Enter and Space on a row select it; other keys do not', () => {
 
 test('render shows dashes for missing county, watershed and category', () => {
   const t = tableParts();
-  t.render([feature({ OBJECTID: 5, max_category: 99 })], {});
+  t.render([feature({ pathway_id: 5, max_category: 99 })], {});
   const row = t.pathwayRows()[0];
   assert.deepEqual(
     Array.from(row.cells).map((td) => td.textContent),
@@ -396,8 +396,8 @@ test('known districts give one body per group, each led by a rowgroup heading', 
     assert.ok(th.querySelector('button.group-zoom'));
   }
   assert.deepEqual(
-    Array.from(bodies[1].querySelectorAll('tr[data-objectid]')).map(
-      (r) => r.dataset.objectid
+    Array.from(bodies[1].querySelectorAll('tr[data-pathway-id]')).map(
+      (r) => r.dataset.pathwayId
     ),
     ['205', '301']
   );
@@ -554,7 +554,7 @@ test('collapsing a group hides only its pathway rows, and expanding shows them',
   const hidden = t
     .pathwayRows()
     .filter((r) => r.hidden)
-    .map((r) => r.dataset.objectid);
+    .map((r) => r.dataset.pathwayId);
   assert.deepEqual(hidden, ['205', '301']);
   assert.equal(t.headings()[1].parentElement.hidden, false, 'heading stays');
   toggle.click();
@@ -573,7 +573,7 @@ test('a collapsed group stays collapsed when the table renders again', () => {
     t
       .pathwayRows()
       .filter((r) => r.hidden)
-      .map((r) => r.dataset.objectid),
+      .map((r) => r.dataset.pathwayId),
     ['205', '301']
   );
 });
@@ -594,7 +594,7 @@ test('"Show on map" names its group and zooms to the group pathways', () => {
 test('grouped rows still select by click, Enter and Space', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
-  const row = t.elements.table.querySelector('tr[data-objectid="102"]');
+  const row = t.elements.table.querySelector('tr[data-pathway-id="102"]');
   row.click();
   row.dispatchEvent(new t.window.KeyboardEvent('keydown', { key: 'Enter' }));
   row.dispatchEvent(new t.window.KeyboardEvent('keydown', { key: ' ' }));
@@ -626,7 +626,7 @@ test('a message after a plain render hides the notice', () => {
 
 // ---- Keyboard focus across a redraw ----------------------------------------
 function rowFor(t, id) {
-  return t.elements.table.querySelector('tr[data-objectid="' + id + '"]');
+  return t.elements.table.querySelector('tr[data-pathway-id="' + id + '"]');
 }
 
 test('a redraw keeps focus on the same pathway row', () => {
@@ -664,7 +664,7 @@ test('focus moves to the heading when the focused pathway is gone', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
   rowFor(t, 205).focus();
-  const without205 = LIVE_LIKE.filter((f) => f.properties.OBJECTID !== 205);
+  const without205 = LIVE_LIKE.filter((f) => f.properties.pathway_id !== 205);
   t.render(without205, OK_META);
   assert.equal(t.doc.activeElement, t.elements.focusFallback);
 });
@@ -701,7 +701,8 @@ const HEADER =
   'pathway_id,county,watershed,forecast_rain,ndfd_category,area_acres,' +
   'fire_district_status,fire_department,fdid,fd_county,fd_address,' +
   'district_updated,' +
-  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc';
+  'window_start_utc,window_end_utc,nws_updated_utc,exported_utc,' +
+  'ncgs_layer_version';
 
 // Column name -> position, so the tests below do not depend on the order.
 const COL = {};
@@ -725,7 +726,7 @@ function csvFields(line) {
   return line
     .match(/("([^"]|"")*"|[^,]*)(,|$)/g)
     .map((c) => c.replace(/,$/, ''))
-    .slice(0, 16);
+    .slice(0, HEADER.split(',').length);
 }
 
 test('toCSV writes the header, one CRLF row per pathway and a trailing CRLF', () => {
@@ -827,7 +828,7 @@ test('toCSV rounds acres to two places under one acre and one above', () => {
 });
 
 test('toCSV leaves unknown values blank and non-numeric acres as dashes', () => {
-  const bare = feature({ OBJECTID: 5, max_category: 99, area_acres: 'n/a' });
+  const bare = feature({ pathway_id: 5, max_category: 99, area_acres: 'n/a' });
   const row = TABLE.toCSV([bare], undefined).split('\r\n')[1];
   const fields = row.split(',');
   assert.equal(
@@ -835,4 +836,78 @@ test('toCSV leaves unknown values blank and non-numeric acres as dashes', () => 
     '5,,,,99,--,unavailable,,,,,,,,'
   );
   assert.match(fields[COL.exported_utc], /Z$/);
+});
+
+// ---- Two pathways that share an OBJECTID -----------------------------------
+// The NCGS layer reuses OBJECTID across its source tiles, so two different
+// pathways can carry the same one. pathway_id is what tells them apart.
+function pairSharingAnObjectid() {
+  const west = pathway(101, 'Buncombe', 'Hominy Creek', 11, 1, ASHEVILLE);
+  const east = pathway(202, 'Buncombe', 'Swannanoa River', 11, 2, ASHEVILLE);
+  west.properties.OBJECTID = 7;
+  east.properties.OBJECTID = 7;
+  return [east, west];
+}
+
+test('two pathways that share an OBJECTID each get their own row and ID', () => {
+  const t = tableParts();
+  t.render(pairSharingAnObjectid(), OK_META);
+  const rows = t.pathwayRows();
+  assert.deepEqual(
+    rows.map((r) => r.dataset.pathwayId),
+    ['101', '202']
+  );
+  assert.deepEqual(
+    rows.map((r) => r.cells[4].textContent),
+    ['101', '202']
+  );
+  assert.match(rows[1].getAttribute('aria-label'), /^Show pathway 202 /);
+});
+
+test('rows of pathways that share an OBJECTID select their own pathway', () => {
+  const t = tableParts();
+  t.render(pairSharingAnObjectid(), OK_META);
+  rowFor(t, 202).click();
+  rowFor(t, 101).click();
+  assert.deepEqual(t.picked, [202, 101]);
+});
+
+test('"Show on map" lists both pathways that share an OBJECTID', () => {
+  const t = tableParts();
+  t.render(pairSharingAnObjectid(), OK_META);
+  t.elements.table.querySelector('.group-zoom').click();
+  assert.deepEqual(t.zoomed, [[101, 202]]);
+});
+
+test('a redraw keeps focus on the right one of two pathways sharing an OBJECTID', () => {
+  const t = tableParts();
+  t.render(pairSharingAnObjectid(), OK_META);
+  rowFor(t, 202).focus();
+  t.render(pairSharingAnObjectid(), OK_META);
+  assert.equal(t.doc.activeElement, rowFor(t, 202));
+});
+
+test('toCSV gives pathways that share an OBJECTID their own pathway_id', () => {
+  const lines = TABLE.toCSV(pairSharingAnObjectid(), META)
+    .split('\r\n')
+    .slice(1, -1);
+  assert.deepEqual(
+    lines.map((line) => csvFields(line)[COL.pathway_id]),
+    ['101', '202']
+  );
+});
+
+// ---- Which NCGS layer version the pathway IDs belong to ---------------------
+test('toCSV ends each row with the NCGS layer version from the file', () => {
+  const meta = Object.assign(
+    { ncgs_layer_version: '2026-03-03T171307Z' },
+    META
+  );
+  const row = TABLE.toCSV([SWANNANOA], meta).split('\r\n')[1];
+  assert.equal(csvFields(row)[COL.ncgs_layer_version], '2026-03-03T171307Z');
+});
+
+test('toCSV leaves the layer version blank for a file that does not name one', () => {
+  const row = TABLE.toCSV([SWANNANOA], META).split('\r\n')[1];
+  assert.equal(csvFields(row)[COL.ncgs_layer_version], '');
 });
