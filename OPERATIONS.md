@@ -33,6 +33,13 @@ From the repo root:
 python3 -m http.server 8000
 ```
 
+If another checkout or worktree is already serving on port 8000, pick
+another port (`python3 -m http.server 8001`); the two launch configs in
+`.claude/launch.json`, `static-site` and `static-site-2`, are these two
+ports. Check which folder a running server belongs to before trusting a
+page: a server left running from another checkout serves that checkout's
+files.
+
 Then open `http://localhost:8000/` for the main site or
 `http://localhost:8000/simple/` for the dashboard. Page links are
 root-absolute (`/about/`, `/assets/...`), so the server must run from the
