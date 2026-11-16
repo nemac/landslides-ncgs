@@ -115,7 +115,8 @@ Details live in `BACKLOG.md`; this is the short list.
 - Fire district groups: list every county in a heading, and add the county
   to the key used when a district has no FDID.
 - Content-Security-Policy header, started in report-only mode.
-- A custom 404 page: a missing object currently returns S3's raw 403 XML.
+- Serve the 404 page (`/404/`) for missing pages: a missing object still
+  returns S3's raw 403 XML.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
 - Flat-site cleanup: one shared stylesheet for header, nav, footer and tokens.
 - Overture buildings layer: vector tiles instead of per-county GeoJSON.

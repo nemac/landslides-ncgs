@@ -206,7 +206,7 @@ These files were read only by the offline alerts dashboard.
 
 | What | Where |
 |---|---|
-| Main site pages | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` |
+| Main site pages | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/`, `404/` |
 | DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
 | Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |

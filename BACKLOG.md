@@ -118,12 +118,23 @@ details belong in an issue or PR once someone picks it up.
   number of external hosts. (The DFENS Simple map files are gzipped at
   upload since 2026-11-16, because CloudFront does not compress a file
   above 10 MB.)
-- **A custom 404 page.** A missing page on the production site answers
-  S3's raw `AccessDenied` XML with a 403 (checked 2026-10-28), because
-  origin access gives CloudFront no `s3:ListBucket`. Add a `/404/` page and
-  an error response on each distribution that serves it with a 404 for a
-  403 from the site bucket, leaving the data behaviors alone so a missing
-  data file still fails loudly.
+- **Serve the 404 page for missing pages.** The page exists since
+  2026-11-16 at `/404/` (`404/index.html`), but nothing sends a visitor
+  there yet: a missing page on the production site still answers S3's
+  raw `AccessDenied` XML with a 403, because origin access gives
+  CloudFront no `s3:ListBucket`.
+  - Do not map 403 to the 404 page for the whole distribution. An error
+    response applies to every behavior, the data files included, and
+    `scripts/reference_check.py` reads `reference_state.json` through
+    the site: it treats a 404 as "first run, rebuild everything" and a
+    403 as an error on purpose. A 403 turned into a 404 would make a
+    broken bucket policy look like a first run.
+  - One way that leaves the data files alone: let CloudFront list the
+    site bucket only, so a missing page there is a real 404 while a
+    missing data file stays a 403, and add an error response for 404
+    only that serves `/404/index.html` with a 404. Check first that the
+    bucket listing itself cannot be reached through the site.
+  - Needs a test in `infra/cdk/test/` and a deploy of the `Web` stack.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` in `scripts/config.py` is the
   intended production setting or a leftover from testing.
 - **Flat-site cleanup, readable without a framework.** The five main-site
