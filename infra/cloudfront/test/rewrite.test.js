@@ -188,3 +188,21 @@ test('dashboard host does not apply the retired page response', () => {
     '/simple/data-tour/index.html'
   );
 });
+
+// CloudFront may list the site bucket (so a missing page is a real 404),
+// and a request for the bucket root itself would return that list. So no
+// URL may reach the origin as "/".
+for (const host of [
+  'landslidesncgs.org',
+  'www.landslidesncgs.org',
+  'dashboard.landslidesncgs.org',
+  'dev.landslidesncgs.org',
+]) {
+  test('the bucket root is never requested on ' + host, () => {
+    for (const uri of ['/', '/simple/', '/404/', '/no-such-page/']) {
+      const out = rewrite(eventFor(host, uri));
+      if (out.statusCode) continue; // answered here, the origin is not asked
+      assert.ok(out.uri.endsWith('/index.html'), uri + ' -> ' + out.uri);
+    }
+  });
+}

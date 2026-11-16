@@ -1,4 +1,5 @@
 import {
+  Annotations,
   CfnOutput,
   Duration,
   RemovalPolicy,
@@ -44,6 +45,33 @@ export interface WebStackProps extends StackProps {
 // page loads, although the SIREN dashboard itself went offline on 2026-10-22.
 const DATA_PATHS = ['alerts/data/*', 'simple/data/*', 'data/*'];
 
+// A missing page shows /404/index.html with a 404, on production and dev.
+//
+// CloudFront applies an error response to every behavior, the data files
+// included, so this replaces a 404 only and never a 403. A missing data
+// file is a 403 (CloudFront may not list the data bucket) and must stay
+// one: scripts/reference_check.py reads its state file through the site
+// and treats a 404 as "first run, rebuild everything" but a 403 as an
+// error. Only the site buckets can answer 404 (see listableOriginFor).
+//
+// The default root object is a second guard for those two buckets: a
+// request for the bucket root itself would return the list of files. The
+// function already turns "/" into "/index.html".
+//
+// Previews are left out. Their files sit in a pr-<number>/ folder, and
+// CloudFront fetches the error page by this fixed path.
+const NOT_FOUND_PAGE = {
+  defaultRootObject: 'index.html',
+  errorResponses: [
+    {
+      httpStatus: 404,
+      responseHttpStatus: 404,
+      responsePagePath: '/404/index.html',
+      ttl: Duration.seconds(60),
+    },
+  ],
+};
+
 // Site, data, dev-site and preview-site buckets with the production, dev and
 // preview distributions. All in one stack because the dev and preview
 // distributions read the production data bucket, and an origin access control across stacks would cycle through the
@@ -78,6 +106,13 @@ export class WebStack extends Stack {
     this.productionDistribution = this.makeProductionDistribution(props);
     this.devDistribution = this.makeDevDistribution(props);
     this.previewDistribution = this.makePreviewDistribution(props);
+
+    // CDK warns that a bucket CloudFront may list needs a default root
+    // object. NOT_FOUND_PAGE sets one on both distributions that list.
+    Annotations.of(this).acknowledgeWarning(
+      '@aws-cdk/aws-cloudfront-origins:listBucketSecurityRisk',
+      'defaultRootObject is set wherever a listable origin is used'
+    );
 
     this.makeRecords(props, [...PROD_HOSTNAMES], this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);
@@ -172,11 +207,12 @@ export class WebStack extends Stack {
         certificate: props.certificate,
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         defaultBehavior: this.makeBehavior(
-          this.originFor(this.siteBucket),
+          this.listableOriginFor(this.siteBucket),
           fn,
           true
         ),
         additionalBehaviors: this.makeDataBehaviors(fn, true),
+        ...NOT_FOUND_PAGE,
       })
     );
   }
@@ -206,11 +242,12 @@ export class WebStack extends Stack {
         certificate: props.certificate,
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         defaultBehavior: this.makeBehavior(
-          this.originFor(this.devSiteBucket),
+          this.listableOriginFor(this.devSiteBucket),
           fn,
           false
         ),
         additionalBehaviors: this.makeDataBehaviors(fn, false),
+        ...NOT_FOUND_PAGE,
       })
     );
   }
@@ -256,6 +293,20 @@ export class WebStack extends Stack {
   // share one origin entry in the distribution.
   private originFor(bucket: s3.IBucket): cloudfront.IOrigin {
     return origins.S3BucketOrigin.withOriginAccessControl(bucket);
+  }
+
+  // Like originFor, but CloudFront may also list the bucket. S3 answers a
+  // request for a missing file with 404 only when the caller may list the
+  // bucket; otherwise it answers 403. Used for the production and dev site
+  // buckets, so a missing page there is a 404 and gets NOT_FOUND_PAGE.
+  // Never use it for the data bucket: see NOT_FOUND_PAGE.
+  private listableOriginFor(bucket: s3.IBucket): cloudfront.IOrigin {
+    return origins.S3BucketOrigin.withOriginAccessControl(bucket, {
+      originAccessLevels: [
+        cloudfront.AccessLevel.READ,
+        cloudfront.AccessLevel.LIST,
+      ],
+    });
   }
 
   private makeBehavior(
