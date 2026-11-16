@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { App } from 'aws-cdk-lib';
-import { Match, Template } from 'aws-cdk-lib/assertions';
+import { Annotations, Match, Template } from 'aws-cdk-lib/assertions';
 import { ACCOUNT, PROD_HOSTNAMES, REGION } from '../lib/config.js';
 import { DnsStack } from '../lib/dns-stack.js';
 import { WebStack } from '../lib/web-stack.js';
@@ -284,6 +284,21 @@ function listableBuckets(template: Template): string[] {
 test('CloudFront may list the production and dev site buckets, and no other', () => {
   const { template } = webTemplate();
   assert.deepEqual(listableBuckets(template), ['DevSiteBucket', 'SiteBucket']);
+});
+
+// CDK warns about every listable origin. The stack answers that warning
+// for production and dev only, so a listable origin added anywhere else
+// (the previews, say) shows up here as a warning nobody answered.
+test('no listable origin is left with its CDK warning unanswered', () => {
+  const { web } = webTemplate();
+  const warnings = Annotations.fromStack(web).findWarning(
+    '*',
+    Match.stringLikeRegexp('listBucketSecurityRisk')
+  );
+  assert.deepEqual(
+    warnings.map((warning) => warning.id),
+    []
+  );
 });
 
 test('the listing permission is for CloudFront only', () => {

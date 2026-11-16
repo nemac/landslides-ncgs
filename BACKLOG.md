@@ -118,15 +118,6 @@ details belong in an issue or PR once someone picks it up.
   number of external hosts. (The DFENS Simple map files are gzipped at
   upload since 2026-11-16, because CloudFront does not compress a file
   above 10 MB.)
-- **Deploy the 404 page wiring, then check it.** The page is at `/404/`
-  (`404/index.html`) and the `Web` stack code serves it for a missing
-  page on production and dev since 2026-11-16, but the stack has not
-  been deployed with that change. Until it is, a missing page still
-  answers S3's raw `AccessDenied` XML with a 403. After `npx cdk deploy
-  Web`: a made-up address must answer 404 with the page, a missing data
-  file (for example `/simple/data/nope.json`) must still answer 403, and
-  `/` must still be the home page, not a list of files. `infra/README.md`
-  says why it is built this way.
 - **A 404 page on pull request previews.** Previews keep their files in a
   `pr-<number>/` folder, and CloudFront fetches an error page by one
   fixed path, so a missing page there still answers 403.

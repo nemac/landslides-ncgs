@@ -5,12 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not found | Landslides in Western North Carolina</title>
   <meta name="description" content="This page could not be found on Landslides in Western North Carolina." />
-  <!-- This page is shown for a missing page on every address the site
-       answers to, and the dashboard address (dashboard.landslidesncgs.org)
-       has none of the main site's pages or images. So, unlike the other
-       pages, its links and images use the full main-site address. The one
-       exception is the "Go to the home page" button, which goes to the
-       home of whichever address the visitor is on. -->
+  <!-- This page is shown for a missing page on production, on dev and on
+       the dashboard address (dashboard.landslidesncgs.org). Pull request
+       previews and the inventory and map viewer addresses do not show it.
+       The dashboard address has none of the main site's pages or images.
+       So, unlike the other pages, its links and images use the full
+       main-site address. On dev that means they lead to production.
+       The one exception is the "Go to the home page" button, which goes
+       to the first page of whichever address the visitor is on. On the
+       dashboard address that page is the dashboard, while "Home" in the
+       menu is always the main site's home page. The button keeps the
+       plain words "home page" all the same (decided 2026-11-16): they
+       are the words visitors know, and the dashboard is that address's
+       home page. -->
   <!-- An error page should not show up in search results. -->
   <meta name="robots" content="noindex" />
 

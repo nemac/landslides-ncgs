@@ -22,14 +22,22 @@
  *
  * Public surface (window.DFS_TABLE):
  *   render(features, meta, elements, handlers)
- *       elements: { table, summary, notice, focusFallback }
+ *       elements: { table, scrollBox, map, summary, notice, focusFallback }
+ *           scrollBox is the box the table scrolls in; it is hidden
+ *           while the user has the table closed
+ *           map is the map's box; revealPathway keeps its top edge on
+ *           the screen
  *           focusFallback takes focus when the focused row or group
  *           button is gone after a redraw (the table's heading)
  *       handlers.onSelect(pathwayId)       row click -> zoom to one pathway
  *       handlers.onZoomGroup([pathwayId])  "Show on map" -> zoom to a group
  *   revealPathway(pathwayId, elements) -> bool
- *       opens that pathway's group, marks its row as the current one and
- *       scrolls to it; false when the pathway is not in the table
+ *       marks that pathway's row as the current one, opens its group and
+ *       scrolls the table's box to it; false when the pathway is not in
+ *       the table. While the table is hidden it only marks the row.
+ *   showWaitingPathway(elements)
+ *       call when the table is shown again: opens and scrolls to the
+ *       pathway that revealPathway marked while the table was hidden
  *   renderMessage(text, elements)          one message row (the error state)
  *   toCSV(features, meta) -> string
  *   districtsKnown(features, meta) -> bool
@@ -81,6 +89,9 @@ window.DFS_TABLE = (function () {
   // The pathway last picked in the table or on the map, as text. Its row
   // carries aria-current and the is-current class.
   let currentPathwayId = null;
+  // A pathway clicked on the map while the table was hidden. It is opened
+  // and scrolled to when the table is shown again.
+  let waitingPathwayId = null;
 
   // ---- Sorting and grouping ------------------------------------------------
   function sortFeatures(features) {
@@ -462,25 +473,86 @@ window.DFS_TABLE = (function () {
   }
 
   // A redraw builds new rows, so the mark is put back on the new row.
+  // When the pathway is no longer flagged, the mark is forgotten. Without
+  // that, a later forecast that flags it again would show it marked,
+  // though the user never picked it in that forecast.
   function _restoreCurrentRow(table) {
     if (currentPathwayId === null) return;
     const row = _findRow(table, currentPathwayId);
-    if (row) _markCurrentRow(table, row);
+    if (row) {
+      _markCurrentRow(table, row);
+      return;
+    }
+    currentPathwayId = null;
+    // A pathway waiting for the table to be shown is the current one, so
+    // it is forgotten with it.
+    waitingPathwayId = null;
   }
 
-  // Called when a pathway is clicked on the map: opens its district, marks
-  // its row and brings the row into view. Keyboard focus is not moved; the
+  // Scrolls the table's own box so the row sits in the middle of it, clear
+  // of the sticky header. On a narrow screen the box is as tall as the
+  // table and does not scroll, so this does nothing there.
+  function _centerRowInScrollBox(row, scrollBox) {
+    const boxScrolls = scrollBox.scrollHeight > scrollBox.clientHeight;
+    if (!boxScrolls) return;
+    const rowRect = row.getBoundingClientRect();
+    const boxRect = scrollBox.getBoundingClientRect();
+    const rowTopInTable = rowRect.top - boxRect.top + scrollBox.scrollTop;
+    const spaceAroundRow = scrollBox.clientHeight - rowRect.height;
+    scrollBox.scrollTop = rowTopInTable - spaceAroundRow / 2;
+  }
+
+  // Scrolls the page down just far enough to show the row, when the row is
+  // below the bottom of the screen. On a laptop the page is a little taller
+  // than the screen and the table starts below the bottom edge.
+  // The page never moves so far that the top of the map leaves the screen:
+  // the popup the click just opened is on the map. That is why this does
+  // not use scrollIntoView, which would scroll all the way to the row. On
+  // a phone the table is far below the map, so the page stays where it is
+  // and the popup stays on the screen.
+  function _scrollPageTowardRow(row, map) {
+    const page = document.documentElement;
+    const rowBottom = row.getBoundingClientRect().bottom;
+    // Whole pixels: round the need up so the full row shows, and the limit
+    // down so the map's top edge never leaves the screen.
+    const rowBelowScreen = Math.ceil(rowBottom - page.clientHeight);
+    const roomAboveMap = Math.floor(map.getBoundingClientRect().top);
+    const distance = Math.min(rowBelowScreen, roomAboveMap);
+    if (distance > 0) page.scrollTop += distance;
+  }
+
+  function _openGroupAndScrollTo(row, elements) {
+    const body = row.closest('tbody');
+    if (body.dataset.groupKey) _setGroupExpanded(body, true);
+    _centerRowInScrollBox(row, elements.scrollBox);
+    _scrollPageTowardRow(row, elements.map);
+  }
+
+  // Called when a pathway is clicked on the map: marks its row, opens its
+  // district and brings the row into view. Keyboard focus is not moved; the
   // popup the click opened is on the map.
+  // While the user has the table hidden, the district is not opened: an
+  // open district stays open, and laying out its rows is slow in a storm.
+  // The pathway waits until the table is shown (showWaitingPathway).
   function revealPathway(pathwayId, elements) {
     const row = _findRow(elements.table, String(pathwayId));
     if (!row) return false;
-    const body = row.closest('tbody');
-    if (body.dataset.groupKey) _setGroupExpanded(body, true);
     _markCurrentRow(elements.table, row);
-    // "center" keeps the row clear of the table's sticky header. jsdom,
-    // which runs the unit tests, has no scrollIntoView.
-    if (row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+    if (elements.scrollBox.hidden) {
+      waitingPathwayId = row.dataset.pathwayId;
+      return true;
+    }
+    waitingPathwayId = null;
+    _openGroupAndScrollTo(row, elements);
     return true;
+  }
+
+  // Called when the user shows the table again.
+  function showWaitingPathway(elements) {
+    if (waitingPathwayId === null) return;
+    const row = _findRow(elements.table, waitingPathwayId);
+    waitingPathwayId = null;
+    if (row) _openGroupAndScrollTo(row, elements);
   }
 
   // ---- Keeping keyboard focus across a redraw -------------------------------
@@ -691,6 +763,7 @@ window.DFS_TABLE = (function () {
   return {
     render,
     revealPathway,
+    showWaitingPathway,
     renderMessage,
     toCSV,
     districtsKnown,

@@ -109,10 +109,17 @@ export class WebStack extends Stack {
 
     // CDK warns that a bucket CloudFront may list needs a default root
     // object. NOT_FOUND_PAGE sets one on both distributions that list.
-    Annotations.of(this).acknowledgeWarning(
-      '@aws-cdk/aws-cloudfront-origins:listBucketSecurityRisk',
-      'defaultRootObject is set wherever a listable origin is used'
-    );
+    // The warning is answered on those two only, not on the whole stack,
+    // so a new listable origin anywhere else still warns.
+    for (const distribution of [
+      this.productionDistribution,
+      this.devDistribution,
+    ]) {
+      Annotations.of(distribution).acknowledgeWarning(
+        '@aws-cdk/aws-cloudfront-origins:listBucketSecurityRisk',
+        'defaultRootObject is set on this distribution'
+      );
+    }
 
     this.makeRecords(props, [...PROD_HOSTNAMES], this.productionDistribution);
     this.makeRecords(props, [DEV_HOSTNAME], this.devDistribution);

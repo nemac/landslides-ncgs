@@ -87,7 +87,13 @@ make that work, and they depend on each other:
 
 Pull request previews have no 404 page: their files sit in a
 `pr-<number>/` folder, and CloudFront fetches an error page by one fixed
-path.
+path. The inventory and map viewer addresses have none either: the
+function answers every request there itself.
+
+The page's menu and section links use the full production address,
+because the dashboard address has none of the main site's pages. So on
+dev those links lead to production. Only its "Go to the home page"
+button stays on the address the visitor is on.
 
 ## GitHub environments and branch locks
 
@@ -246,7 +252,12 @@ aws s3 sync alerts/data s3://landslidesncgs-data/alerts/data --exclude "building
   --content-type application/json --cache-control "public, max-age=300" --profile landslidesncgs
 ```
 
-DFENS Simple data, via a local copy (the three small files):
+DFENS Simple data, via a local copy (the three small files). This was
+right for the 2026-10 migration. Do not reuse it as it is: since
+2026-11-16 the forecast and flagged files are gzipped in the bucket, and
+this copy would upload the compressed bytes without
+`Content-Encoding: gzip`, which no browser can read. To refill the bucket
+now, run `refresh-simple.yml` with its `force` input.
 
 ```bash
 aws s3 sync s3://landslides-ncgs/simple/data /tmp/simple-data
