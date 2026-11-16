@@ -118,8 +118,8 @@ Details live in `BACKLOG.md`; this is the short list.
 - Fire district groups: list every county in a heading, and add the county
   to the key used when a district has no FDID.
 - Content-Security-Policy header, started in report-only mode.
-- Deploy the `Web` stack so missing pages show the 404 page (`/404/`),
-  then check it; previews still answer a raw 403.
+- A 404 page on pull request previews: a missing page there still
+  answers a raw 403.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
 - Flat-site cleanup: one shared stylesheet for header, nav, footer and tokens.
 - Overture buildings layer: vector tiles instead of per-county GeoJSON.
