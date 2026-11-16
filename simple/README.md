@@ -55,8 +55,8 @@ Nothing under `simple/data/` is committed to git.
       any flagged pathways? tag each with its fire district from
       cache/fire_districts_wnc.geojson (also from the data bucket)
   -> s3://landslidesncgs-data/simple/data/
-        forecast_24h.geojson             (map layer, Cache-Control max-age=60)
-        flagged_ndfd_24h_min11.geojson   (max-age=60)
+        forecast_24h.geojson             (map layer, Cache-Control max-age=60, gzipped)
+        flagged_ndfd_24h_min11.geojson   (max-age=60, gzipped)
         status.json                      (max-age=30, rewritten every run)
 ```
 

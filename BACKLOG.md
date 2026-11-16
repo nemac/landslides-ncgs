@@ -14,14 +14,33 @@ details belong in an issue or PR once someone picks it up.
 - **Test the intersections.** `find_alerts` in `scripts/analysis.py` has
   tests since 2026-11-13 (`scripts/test_analysis.py`). Still to write:
   tests for `summarize_alerts`.
-- **Check the Simple page with a storm-sized flagged file.** Until
-  2026-11-13 the pipeline kept one pathway per `OBJECTID` and dropped the
-  rest, so the flagged file was never larger than about 15,900 pathways.
-  It now publishes every flagged pathway. Run against the May 2026 storm
-  rain, that is about 52,000 pathways at the 5 inch threshold instead of
-  about 13,000. Measure the file size, the page's load time and the
-  table and map with a file that large, and decide whether the page
-  needs paging, vector tiles or a cap.
+- **Make the Simple page fast with a storm-sized flagged file.** Measured
+  on 2026-11-16 with the real pipeline, the production debris-flow file
+  and the May 2026 storm rain: 52,430 flagged pathways in 110 fire
+  districts. The page works at that size, but it is slow on a slow
+  computer.
+  - File: 52.3 MB, or 10.0 MB gzipped. `refresh-simple.yml` now gzips it
+    at upload. The build took 141 seconds.
+  - Chromium on a fast laptop: usable 2.2 seconds after the page opens.
+    With the processor slowed 4 times: 8.6 seconds, with one freeze of
+    4.7 seconds. Slowed 6 times: 12.8 seconds. The page holds about
+    445 MB of memory at any speed.
+  - Where the time goes, slowed 4 times: reading the file 0.5 seconds,
+    drawing 52,430 map shapes 2.2 seconds, and the table 4.7 seconds.
+    Almost all of the table's time is the browser laying out 52,430
+    visible rows; building them takes 0.6 seconds.
+  - Tried: with every district collapsed the table takes 0.8 seconds
+    instead of 4.7. Drawing the map on a canvas takes 1.6 seconds
+    instead of 2.2. A fixed table layout does not help.
+  - Still to decide and build: (1) do not lay out every row at once, for
+    example start with the districts collapsed when there are many
+    pathways; (2) split the file into a small table of pathway details
+    and separate map shapes, and serve the shapes as vector tiles, so a
+    browser only downloads and draws what is in view. The first is the
+    bigger win for the smaller change. A different file format alone
+    does not help: it would not touch the table, the largest cost.
+  - Not measured: a real phone, a real slow network, or Safari and
+    Firefox. Headless Chromium may undercount painting.
 - **Prove that an archived flagged run can be rebuilt.** Since 2026-11-13
   a run that flags a pathway keeps everything needed to work it out
   again (see "Rebuilding a flagged run" in `simple/README.md`): its rain
@@ -102,9 +121,9 @@ details belong in an issue or PR once someone picks it up.
   shipped with the CDK app. Still open: a Content-Security-Policy listing
   self, unpkg, Google Fonts and the map data hosts (ArcGIS, Iowa Mesonet,
   OpenStreetMap, NC OneMap), started in report-only mode because of the
-  number of external hosts. Flagged files above 10 MB are still served
-  uncompressed (CloudFront's limit); pre-compressing them at upload is the
-  fix if it matters.
+  number of external hosts. (The DFENS Simple map files are gzipped at
+  upload since 2026-11-16, because CloudFront does not compress a file
+  above 10 MB.)
 - **A custom 404 page.** A missing page on the production site answers
   S3's raw `AccessDenied` XML with a 403 (checked 2026-10-28), because
   origin access gives CloudFront no `s3:ListBucket`. Add a `/404/` page and

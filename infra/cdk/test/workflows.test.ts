@@ -238,3 +238,31 @@ test('refresh-simple.yml archives the rain polygons a flagged run used', () => {
     /for f in [^\n]*rain_input_ndfd_24h_min11\.geojson/
   );
 });
+
+// CloudFront only compresses files up to 10 MB, and a storm-sized flagged
+// file is about 50 MB. So the workflow compresses the two map files itself
+// and tells S3 so, and every browser gets the small copy.
+test('refresh-simple.yml uploads the forecast and flagged files gzipped', () => {
+  const workflow = workflows()['refresh-simple.yml'];
+  const uploadStep = workflow
+    .split('Upload forecast + flagged files')[1]
+    .split('- name:')[0];
+  assert.match(
+    uploadStep,
+    /for f in forecast_24h\.geojson flagged_ndfd_24h_min11\.geojson; do/
+  );
+  assert.match(uploadStep, /gzip -9 -c "out\/\$f" > "out\/\$f\.gz"/);
+  const upload = s3Commands(uploadStep).find((cmd) =>
+    cmd.startsWith('aws s3 cp "out/$f.gz" "$S3_DATA/$f"')
+  );
+  assert.ok(upload, 'the compressed copy is uploaded under the plain name');
+  assert.match(upload, /--content-encoding gzip/);
+  assert.match(upload, /--content-type application\/json/);
+  assert.match(upload, /--cache-control "public, max-age=60"/);
+});
+
+test('refresh-simple.yml keeps status.json and the archive copies uncompressed', () => {
+  const workflow = workflows()['refresh-simple.yml'];
+  const afterUpload = workflow.split('- name: Upload status')[1];
+  assert.doesNotMatch(afterUpload, /content-encoding/);
+});

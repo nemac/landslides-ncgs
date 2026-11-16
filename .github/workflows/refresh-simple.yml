@@ -120,9 +120,16 @@ jobs:
       - name: Upload forecast + flagged files
         if: steps.check.outputs.action == 'build'
         run: |
+          # Compressed here because CloudFront only compresses files up to
+          # 10 MB, and a storm-sized flagged file is about 50 MB (10 MB
+          # gzipped, measured 2026-11-16). The object keeps its plain name;
+          # Content-Encoding tells the browser to unpack it. The out/ copies
+          # stay uncompressed for the archive step below.
           for f in forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do
-            aws s3 cp "out/$f" "$S3_DATA/$f" \
+            gzip -9 -c "out/$f" > "out/$f.gz"
+            aws s3 cp "out/$f.gz" "$S3_DATA/$f" \
               --content-type application/json \
+              --content-encoding gzip \
               --cache-control "public, max-age=60"
           done
 
