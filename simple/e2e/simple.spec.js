@@ -61,6 +61,20 @@ async function openStale(page) {
   await expect(page.locator('#status-count')).toHaveText('3');
 }
 
+// "Show on map" zooms the map with an animation. A click on the map while
+// it is still zooming opens the popup in the wrong place, sometimes off the
+// map, so a test waits here before it clicks a pathway. Leaflet sets the
+// new zoom when the animation starts and keeps the leaflet-zoom-anim class
+// on the map until it ends.
+async function showDistrictOnMap(page, districtName) {
+  const zoomBefore = await mapZoom(page);
+  await page
+    .getByRole('button', { name: 'Show on map: ' + districtName })
+    .click();
+  await expect.poll(() => mapZoom(page)).toBeGreaterThan(zoomBefore);
+  await expect(page.locator('.leaflet-zoom-anim')).toHaveCount(0);
+}
+
 function groupToggle(page, name) {
   return page.locator('.group-toggle', { hasText: name });
 }
@@ -199,9 +213,7 @@ test('clicking a pathway on the map opens its district and shows its row', async
 
   // Zoom in so the pathway shapes are big enough to click. The shapes are
   // drawn in the table's order: 102, then 205, then 301.
-  await page
-    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
-    .click();
+  await showDistrictOnMap(page, 'Asheville Fire Department');
   await page.locator('.leaflet-alerts-pane path').nth(1).click();
 
   await expect(page.locator('.leaflet-popup .alert-popup')).toContainText(
@@ -539,9 +551,7 @@ test('on a phone, a map click keeps its popup on the screen', async ({
   // the pathway's row would push the popup off the top of the screen.
   await page.setViewportSize({ width: 375, height: 812 });
   await openLive(page);
-  await page
-    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
-    .click();
+  await showDistrictOnMap(page, 'Asheville Fire Department');
   // Put the whole map on the screen first, so the click itself has no
   // reason to scroll the page.
   await page.locator('#map').evaluate((map) => map.scrollIntoView());
