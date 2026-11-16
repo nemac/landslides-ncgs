@@ -60,6 +60,11 @@ Nothing under `simple/data/` is committed to git.
         status.json                      (max-age=30, rewritten every run)
 ```
 
+The two gzipped files are served with `Content-Encoding: gzip` to every
+client, whether or not it asks for compression. A browser unpacks them
+on its own. A script that reads them must do it itself: `curl
+--compressed`, or `gzip.decompress` in Python. `status.json` is plain.
+
 The pipeline imports `scripts/data.py`, `scripts/analysis.py` and
 `scripts/config.py` directly (the debris-flow fetch with county and
 watershed tagging, and the intersection), so results match the full

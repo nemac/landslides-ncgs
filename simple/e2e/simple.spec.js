@@ -25,6 +25,12 @@ test.beforeEach(async ({ page }) => {
     const host = new URL(route.request().url()).hostname;
     return ALLOWED_HOSTS.has(host) ? route.continue() : route.abort();
   });
+  // A fixed clock also stops the map from sliding. Leaflet slides the map
+  // to fit a popup, and it measures that slide by the clock, so here the
+  // slide starts and never moves. A popup near the map's edge then stays
+  // partly off the map. That is this test setup, not the page: with a
+  // real clock the map slides and the popup fits (checked 2026-11-16).
+  // So never check here that a whole popup is on the screen.
   await page.clock.setFixedTime(FIXED_NOW);
 });
 
@@ -59,6 +65,20 @@ async function openLive(page) {
 async function openStale(page) {
   await page.goto(pageUrl('stale'));
   await expect(page.locator('#status-count')).toHaveText('3');
+}
+
+// "Show on map" zooms the map with an animation. A click on the map while
+// it is still zooming opens the popup in the wrong place, sometimes off the
+// map, so a test waits here before it clicks a pathway. Leaflet sets the
+// new zoom when the animation starts and keeps the leaflet-zoom-anim class
+// on the map until it ends.
+async function showDistrictOnMap(page, districtName) {
+  const zoomBefore = await mapZoom(page);
+  await page
+    .getByRole('button', { name: 'Show on map: ' + districtName })
+    .click();
+  await expect.poll(() => mapZoom(page)).toBeGreaterThan(zoomBefore);
+  await expect(page.locator('.leaflet-zoom-anim')).toHaveCount(0);
 }
 
 function groupToggle(page, name) {
@@ -199,9 +219,7 @@ test('clicking a pathway on the map opens its district and shows its row', async
 
   // Zoom in so the pathway shapes are big enough to click. The shapes are
   // drawn in the table's order: 102, then 205, then 301.
-  await page
-    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
-    .click();
+  await showDistrictOnMap(page, 'Asheville Fire Department');
   await page.locator('.leaflet-alerts-pane path').nth(1).click();
 
   await expect(page.locator('.leaflet-popup .alert-popup')).toContainText(
@@ -214,6 +232,8 @@ test('clicking a pathway on the map opens its district and shows its row', async
   await expect(row).toBeVisible();
   await expect(row).toBeInViewport();
   await expect(row).toHaveAttribute('aria-current', 'true');
+  // Only the table's box scrolled: the popup is still on the screen.
+  await expect(page.locator('.leaflet-popup .alert-popup')).toBeInViewport();
   // The other district was not opened.
   await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
   // The marked row and the open popup must pass the same checks. Leaflet
@@ -530,6 +550,30 @@ test('the layer toggles add and remove their layers', async ({ page }) => {
 });
 
 // ---- Narrow screens -------------------------------------------------------
+test('on a phone, a map click keeps its popup on the screen', async ({
+  page,
+}) => {
+  // On a narrow screen the table is below the map. Scrolling the page to
+  // the pathway's row would push the popup off the top of the screen.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openLive(page);
+  await showDistrictOnMap(page, 'Asheville Fire Department');
+  // Put the whole map on the screen first, so the click itself has no
+  // reason to scroll the page.
+  await page.locator('#map').evaluate((map) => map.scrollIntoView());
+  const scrollBeforeClick = await page.evaluate(() => window.scrollY);
+  await page.locator('.leaflet-alerts-pane path').nth(1).click();
+
+  const popup = page.locator('.leaflet-popup .alert-popup');
+  await expect(popup).toContainText('Flagged pathway 205');
+  // The row is still opened and marked, ready when the user scrolls down.
+  const row = page.locator('#alerts-table tr[data-pathway-id="205"]');
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('aria-current', 'true');
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeClick);
+  await expect(popup).toBeInViewport();
+});
+
 for (const width of [375, 320]) {
   test(
     'the grouped page fits ' + width + 'px without sideways scrolling',

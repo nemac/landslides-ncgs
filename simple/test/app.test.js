@@ -759,6 +759,16 @@ test('clicking a pathway on the map opens its district and marks its row', async
   assert.equal(other.hidden, true, 'the other district stays collapsed');
 });
 
+test('a map click with the table hidden opens the district once the table is shown', async () => {
+  const p = await open({ storage: { 'siren.tableOpen': '0' } });
+  const row = p.$('alerts-table').querySelector('tr[data-pathway-id="205"]');
+  p.MAP.clickPathway(205);
+  assert.equal(row.hidden, true, 'nothing opens while the table is hidden');
+  assert.equal(row.getAttribute('aria-current'), 'true');
+  p.$('toggle-table').click();
+  assert.equal(row.hidden, false);
+});
+
 test('an opened district stays open across the automatic reload', async () => {
   const p = await open();
   const toggle = () =>

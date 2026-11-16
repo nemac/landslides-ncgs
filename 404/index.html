@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page not found | Landslides in Western North Carolina</title>
   <meta name="description" content="This page could not be found on Landslides in Western North Carolina." />
-  <!-- This page is shown for a missing page on every address the site
-       answers to, and the dashboard address (dashboard.landslidesncgs.org)
-       has none of the main site's pages or images. So, unlike the other
-       pages, its links and images use the full main-site address. The one
-       exception is the "Go to the home page" button, which goes to the
-       home of whichever address the visitor is on. -->
+  <!-- This page is shown for a missing page on production, on dev and on
+       the dashboard address (dashboard.landslidesncgs.org). Pull request
+       previews and the inventory and map viewer addresses do not show it.
+       The dashboard address has none of the main site's pages or images.
+       So, unlike the other pages, its links and images use the full
+       main-site address. On dev that means they lead to production.
+       The one exception is the "Go to the start page" button, which goes
+       to the first page of whichever address the visitor is on. It says
+       "start page", not "home page", because on the dashboard address
+       that page is the dashboard, while "Home" in the menu is always the
+       main site's home page. -->
   <!-- An error page should not show up in search results. -->
   <meta name="robots" content="noindex" />
 
@@ -132,8 +137,8 @@
       <div class="not-found__code" aria-hidden="true">404</div>
       <h2 class="not-found__heading" id="heading-not-found">Page not found</h2>
       <p>We could not find the page you were looking for. It may have been moved or retired, or the address may have been typed incorrectly.</p>
-      <p>The home page is the best place to start again.</p>
-      <a class="not-found__home" href="/">Go to the home page</a>
+      <p>The start page is the best place to begin again.</p>
+      <a class="not-found__home" href="/">Go to the start page</a>
 
       <div class="not-found__more">
         <h3 class="not-found__more-heading">Or go straight to a section</h3>

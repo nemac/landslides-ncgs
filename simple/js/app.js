@@ -279,6 +279,8 @@
     els.toggleTable.setAttribute('aria-label', label);
     els.toggleTable.title = label;
     els.tableWrapper.hidden = !open;
+    // A pathway clicked on the map while the table was hidden is shown now.
+    if (open) TABLE.showWaitingPathway(_tableElements());
     document
       .querySelector('.table-section')
       .classList.toggle('is-collapsed', !open);
@@ -434,6 +436,7 @@
   function _tableElements() {
     return {
       table: els.table,
+      scrollBox: els.tableWrapper,
       summary: els.tableSummary,
       notice: els.districtNotice,
       // Where focus goes when the focused row is gone after a redraw.
