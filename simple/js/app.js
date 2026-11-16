@@ -45,6 +45,7 @@
     layerFire: $('layer-fire'),
     toggleTable: $('toggle-table'),
     tableWrapper: $('table-wrapper'),
+    map: $('map'),
     layerBuildings: $('layer-buildings'),
   };
 
@@ -437,6 +438,7 @@
     return {
       table: els.table,
       scrollBox: els.tableWrapper,
+      map: els.map,
       summary: els.tableSummary,
       notice: els.districtNotice,
       // Where focus goes when the focused row is gone after a redraw.
