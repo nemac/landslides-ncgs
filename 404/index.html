@@ -11,11 +11,13 @@
        The dashboard address has none of the main site's pages or images.
        So, unlike the other pages, its links and images use the full
        main-site address. On dev that means they lead to production.
-       The one exception is the "Go to the start page" button, which goes
-       to the first page of whichever address the visitor is on. It says
-       "start page", not "home page", because on the dashboard address
-       that page is the dashboard, while "Home" in the menu is always the
-       main site's home page. -->
+       The one exception is the "Go to the home page" button, which goes
+       to the first page of whichever address the visitor is on. On the
+       dashboard address that page is the dashboard, while "Home" in the
+       menu is always the main site's home page. The button keeps the
+       plain words "home page" all the same (decided 2026-11-16): they
+       are the words visitors know, and the dashboard is that address's
+       home page. -->
   <!-- An error page should not show up in search results. -->
   <meta name="robots" content="noindex" />
 
@@ -137,8 +139,8 @@
       <div class="not-found__code" aria-hidden="true">404</div>
       <h2 class="not-found__heading" id="heading-not-found">Page not found</h2>
       <p>We could not find the page you were looking for. It may have been moved or retired, or the address may have been typed incorrectly.</p>
-      <p>The start page is the best place to begin again.</p>
-      <a class="not-found__home" href="/">Go to the start page</a>
+      <p>The home page is the best place to start again.</p>
+      <a class="not-found__home" href="/">Go to the home page</a>
 
       <div class="not-found__more">
         <h3 class="not-found__more-heading">Or go straight to a section</h3>

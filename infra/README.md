@@ -92,7 +92,7 @@ function answers every request there itself.
 
 The page's menu and section links use the full production address,
 because the dashboard address has none of the main site's pages. So on
-dev those links lead to production. Only its "Go to the start page"
+dev those links lead to production. Only its "Go to the home page"
 button stays on the address the visitor is on.
 
 ## GitHub environments and branch locks
