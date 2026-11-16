@@ -11,16 +11,56 @@ details belong in an issue or PR once someone picks it up.
   `https://dashboard.landslidesncgs.org/`. (The SIREN dashboard at
   `/alerts/` was taken offline on 2026-10-22 and now redirects to
   `/simple/`; it is not coming back to the home page.)
-- **Test the intersections.** Still to write: tests for
-  `scripts/analysis.py` (the intersection logic).
-- **Make the archived flagged runs reproducible.** Since 2026-10-27
-  `refresh-simple.yml` copies the three output files of every run that
-  flags a pathway to `s3://landslidesncgs-data/simple/archive/<generated_at>/`,
-  a prefix CloudFront does not serve and the lifecycle rule does not touch.
-  Those files show what was flagged but not how to get there again: the
-  archive still needs the NDFD precipitation input for the window, the
-  thresholds and category cutoffs in force, the debris-flow data version
-  and the code commit. Runs that flag nothing keep nothing but their log.
+- **Test the intersections.** `find_alerts` in `scripts/analysis.py` has
+  tests since 2026-11-13 (`scripts/test_analysis.py`). Still to write:
+  tests for `summarize_alerts`.
+- **Make the Simple page fast with a storm-sized flagged file.** Measured
+  on 2026-11-16 with the real pipeline, the production debris-flow file
+  and the May 2026 storm rain: 52,430 flagged pathways in 110 fire
+  districts. The page works at that size, but it is slow on a slow
+  computer.
+  - File: 52.3 MB, or 10.0 MB gzipped. `refresh-simple.yml` now gzips it
+    at upload. The build took 141 seconds.
+  - Chromium on a fast laptop: usable 2.2 seconds after the page opens.
+    With the processor slowed 4 times: 8.6 seconds, with one freeze of
+    4.7 seconds. Slowed 6 times: 12.8 seconds. The page holds about
+    445 MB of memory at any speed.
+  - Where the time goes, slowed 4 times: reading the file 0.5 seconds,
+    drawing 52,430 map shapes 2.2 seconds, and the table 4.7 seconds.
+    Almost all of the table's time is the browser laying out 52,430
+    visible rows; building them takes 0.6 seconds.
+  - Done on 2026-11-16: every district starts collapsed, so the rows
+    are built but not laid out. Usable after 1.5 seconds on a fast
+    laptop (was 2.2), 4.8 seconds slowed 4 times (was 8.6) and 7.2
+    seconds slowed 6 times (was 12.8). Opening the largest group (7,846
+    rows, "Outside North Carolina") takes 0.3, 1.3 and 1.9 seconds.
+  - Still slow, slowed 4 times: one freeze of 3.3 seconds while the map
+    shapes and the hidden rows are built, 2.8 seconds from a row click
+    to its popup, and about 450 MB of memory. These come from drawing
+    52,430 map shapes at once.
+  - Still to decide and build: split the file into a small table of
+    pathway details and separate map shapes, and serve the shapes as
+    vector tiles, so a browser only downloads and draws what is in view.
+    Drawing the map on a canvas is a smaller step (2.2 seconds down to
+    1.6 in a test). A fixed table layout did not help. A different file
+    format alone would not either.
+  - Also consider: a search box across all districts (the browser's own
+    find does not see rows in a collapsed district), an "open all"
+    button, and a limit on how many rows one opened group lays out.
+  - Not measured: a real phone, a real slow network, or Safari and
+    Firefox. Headless Chromium may undercount painting.
+- **Prove that an archived flagged run can be rebuilt.** Since 2026-11-13
+  a run that flags a pathway keeps everything needed to work it out
+  again (see "Rebuilding a flagged run" in `simple/README.md`): its rain
+  input, the debris-flow and fire district layer versions, and the code
+  commit. Still to do: a script that takes one archive folder and
+  rebuilds the flagged file from it, run against a real archived storm,
+  so the claim is tested and not just designed. Also consider S3 Object
+  Lock on `simple/archive/` and `cache/archive/`: the workflow role
+  cannot delete there, but it could overwrite a copy, and an overwritten
+  copy is gone after 30 days. Runs that flag nothing keep nothing but
+  their log, and runs archived before 2026-11-13 hold only their three
+  output files.
 - **Run the pipelines on AWS ("Option B").** Decided 2026-10-21 as the end
   state. Done so far: the dedicated account and CDK app (`infra/`), data in
   S3, the debris-flow GeoPackage kept in the data bucket by
@@ -66,20 +106,6 @@ details belong in an issue or PR once someone picks it up.
     lacks an FDID (only the four "No District" rows do), so this cannot
     happen with today's data. Add the county to the fallback key, and
     change the test that expects the merge.
-- **Stop the browser tests from using another checkout's server.** Found
-  on 2026-11-13: `simple/e2e/playwright.config.js` serves the page on port
-  8000, the same port as the `static-site` preview, with
-  `reuseExistingServer: true`. When a server from another checkout or
-  worktree is already on that port, `npm run test:e2e` tests that
-  checkout's files and still passes. To fix:
-  - Set `reuseExistingServer: false`, so Playwright always starts its own
-    server from this checkout and fails loudly when the port is taken.
-  - Move the tests off port 8000, and read the port from an environment
-    variable with a default, so a preview can stay open and two checkouts
-    can run the tests at once.
-  - Before the tests run, write a random token to a file the server can
-    serve, fetch it back, and fail if it does not match. This catches a
-    server on the right port that was started from the wrong folder.
 
 ## From the October 2026 audit, not yet decided
 
@@ -89,9 +115,9 @@ details belong in an issue or PR once someone picks it up.
   shipped with the CDK app. Still open: a Content-Security-Policy listing
   self, unpkg, Google Fonts and the map data hosts (ArcGIS, Iowa Mesonet,
   OpenStreetMap, NC OneMap), started in report-only mode because of the
-  number of external hosts. Flagged files above 10 MB are still served
-  uncompressed (CloudFront's limit); pre-compressing them at upload is the
-  fix if it matters.
+  number of external hosts. (The DFENS Simple map files are gzipped at
+  upload since 2026-11-16, because CloudFront does not compress a file
+  above 10 MB.)
 - **A custom 404 page.** A missing page on the production site answers
   S3's raw `AccessDenied` XML with a 403 (checked 2026-10-28), because
   origin access gives CloudFront no `s3:ListBucket`. Add a `/404/` page and
