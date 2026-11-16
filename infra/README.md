@@ -64,6 +64,31 @@ commands in step 4 below: the GitHub token in Secrets Manager and the dev
 site's basic-auth credential in a CloudFront KeyValueStore. The pull request
 preview sites share that KeyValueStore, so the same credential opens them.
 
+## Missing pages and the 404 page
+
+On production and dev, a request for a page that does not exist answers
+with `/404/index.html` and a 404 status. Three things in `web-stack.ts`
+make that work, and they depend on each other:
+
+- **CloudFront may list the two site buckets.** S3 answers a request for
+  a missing file with 404 only when the caller may list the bucket;
+  otherwise it answers 403.
+- **An error response replaces a 404, and only a 404, with the page.**
+  CloudFront applies an error response to every behavior, the data files
+  included. A missing data file is a 403, because CloudFront may not
+  list the data bucket, and it must stay one:
+  `scripts/reference_check.py` reads its state file through the site and
+  treats a 404 as "first run, rebuild everything" but a 403 as an error.
+  So never add an error response for 403, and never let CloudFront list
+  the data bucket.
+- **A default root object, `index.html`.** A request for a listable
+  bucket's root would return the list of its files. The function already
+  turns `/` into `/index.html`; this is a second guard.
+
+Pull request previews have no 404 page: their files sit in a
+`pr-<number>/` folder, and CloudFront fetches an error page by one fixed
+path.
+
 ## GitHub environments and branch locks
 
 Each deploy role trusts one GitHub environment (the OIDC `sub` is

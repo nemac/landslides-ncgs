@@ -235,3 +235,80 @@ test('distributions are retained and the stack is termination protected', () => 
     assert.equal(d.DeletionPolicy, 'Retain');
   }
 });
+
+// ---- The "page not found" page ---------------------------------------------
+// A missing page should show /404/index.html with a 404. Two rules keep the
+// data files out of it, because scripts/reference_check.py reads its state
+// file through the site and treats a 403 and a 404 differently on purpose:
+//   - only a 404 from the origin is replaced, never a 403;
+//   - only the site buckets can answer 404. CloudFront may list those two
+//     buckets, so a missing page there is a 404. It may not list the data
+//     bucket, so a missing data file stays a 403.
+const NOT_FOUND_RESPONSE = [
+  {
+    ErrorCode: 404,
+    ResponseCode: 404,
+    ResponsePagePath: '/404/index.html',
+    ErrorCachingMinTTL: 60,
+  },
+];
+
+test('production and dev show the 404 page for a missing page, and only for a 404', () => {
+  const { template } = webTemplate();
+  for (const config of [productionConfig(template), devConfig(template)]) {
+    assert.deepEqual(config.CustomErrorResponses, NOT_FOUND_RESPONSE);
+  }
+});
+
+test('previews have no 404 page: their files sit in a pr-<number>/ folder', () => {
+  const config = previewConfig(webTemplate().template);
+  assert.equal(config.CustomErrorResponses, undefined);
+});
+
+// Which buckets a bucket policy lets someone list, by the bucket's name in
+// the template ("SiteBucket...", "DataBucket...").
+function listableBuckets(template: Template): string[] {
+  const policies = template.findResources('AWS::S3::BucketPolicy');
+  const names: string[] = [];
+  for (const policy of Object.values(policies)) {
+    for (const statement of policy.Properties.PolicyDocument.Statement) {
+      const actions = [statement.Action].flat();
+      if (actions.includes('s3:ListBucket')) {
+        names.push(policy.Properties.Bucket.Ref.replace(/[0-9A-F]{8}$/, ''));
+      }
+    }
+  }
+  return names.sort();
+}
+
+test('CloudFront may list the production and dev site buckets, and no other', () => {
+  const { template } = webTemplate();
+  assert.deepEqual(listableBuckets(template), ['DevSiteBucket', 'SiteBucket']);
+});
+
+test('the listing permission is for CloudFront only', () => {
+  const { template } = webTemplate();
+  const policies = template.findResources('AWS::S3::BucketPolicy');
+  for (const policy of Object.values(policies)) {
+    for (const statement of policy.Properties.PolicyDocument.Statement) {
+      if (![statement.Action].flat().includes('s3:ListBucket')) continue;
+      assert.deepEqual(statement.Principal, {
+        Service: 'cloudfront.amazonaws.com',
+      });
+      assert.ok(
+        statement.Condition?.StringEquals?.['AWS:SourceArn'],
+        'limited to one distribution'
+      );
+    }
+  }
+});
+
+// With the listing permission, a request for the bucket root itself would
+// return the list of files. The function already turns "/" into
+// "/index.html"; the default root object is a second guard.
+test('production and dev never ask the origin for the bucket root', () => {
+  const { template } = webTemplate();
+  for (const config of [productionConfig(template), devConfig(template)]) {
+    assert.equal(config.DefaultRootObject, 'index.html');
+  }
+});
