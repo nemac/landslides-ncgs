@@ -10,7 +10,7 @@ pipelines are Python.
 
 | Path | What |
 |---|---|
-| `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` | The main site, one directory per page, served at `/<name>/` |
+| `index.html`, `about/`, `downloads/`, `faq/`, `learn-more/`, `reducing-landslide-risk/` | The main site, one directory per page, served at `/<name>/` |
 | `404/` | The "page not found" page, shown with a 404 for a missing page on production and dev (`infra/README.md`) |
 | `assets/` | Images shared by every page |
 | `simple/` | DFENS Simple dashboard and its ten-minute data pipeline |
