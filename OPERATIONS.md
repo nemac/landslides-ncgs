@@ -73,14 +73,15 @@ The DFENS Simple files come from the public site. The forecast and
 flagged files are stored gzipped in the bucket under their plain names
 (`refresh-simple.yml` compresses them at upload), so an `aws s3 sync` of
 `simple/data` would leave compressed files that the local server cannot
-serve. `curl --compressed` unpacks them:
+serve. `curl --compressed` unpacks them, and `-f` makes curl stop with an
+error on a 403 or 404, so an error page is never saved as a data file:
 
 ```bash
 mkdir -p simple/data
 ```
 
 ```bash
-for f in status.json forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do curl -sS --compressed -o "simple/data/$f" "https://landslidesncgs.org/simple/data/$f"; done
+for f in status.json forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do curl -fsS --compressed -o "simple/data/$f" "https://landslidesncgs.org/simple/data/$f"; done
 ```
 
 The alerts files need AWS access (the `landslidesncgs` SSO profile;
