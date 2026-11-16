@@ -65,6 +65,13 @@ function groupToggle(page, name) {
   return page.locator('.group-toggle', { hasText: name });
 }
 
+// Districts start collapsed, so a test opens one before it uses its rows.
+async function openDistrict(page, name) {
+  const toggle = groupToggle(page, name);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
 function mapZoom(page) {
   return page.evaluate(() => window.DFS_MAP._internalMap().getZoom());
 }
@@ -137,35 +144,37 @@ test('the live fixture renders the cards, the grouped table and the map', async 
   expect(log.errors).toEqual([]);
 });
 
-test('a district collapses and expands with the mouse', async ({ page }) => {
+test('districts start collapsed, and one opens and closes with the mouse', async ({
+  page,
+}) => {
   await openLive(page);
   const toggle = groupToggle(page, 'Asheville Fire Department');
   const rows = page.locator(
     '#alerts-table tr[data-pathway-id="205"], #alerts-table tr[data-pathway-id="301"]'
   );
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toBeHidden();
   await expect(rows.nth(1)).toBeHidden();
-  await expect(page.locator('tr[data-pathway-id="102"]')).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(rows.nth(0)).toBeVisible();
+  await expect(rows.nth(1)).toBeVisible();
+  // The other district stays as it was.
+  await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(rows.nth(0)).toBeHidden();
 });
 
-test('a district collapses and expands from the keyboard', async ({ page }) => {
+test('a district opens and closes from the keyboard', async ({ page }) => {
   await openLive(page);
   const toggle = groupToggle(page, 'Cruso Fire Department');
   await toggle.focus();
   await page.keyboard.press('Enter');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
-  await expect(toggle).toBeFocused();
-  await page.keyboard.press('Space');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('tr[data-pathway-id="102"]')).toBeVisible();
+  await expect(toggle).toBeFocused();
 
   // Tab moves on to the district's "Show on map" button, then its rows.
   await page.keyboard.press('Tab');
@@ -174,6 +183,43 @@ test('a district collapses and expands from the keyboard', async ({ page }) => {
   ).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('tr[data-pathway-id="102"]')).toBeFocused();
+
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
+});
+
+test('clicking a pathway on the map opens its district and shows its row', async ({
+  page,
+}) => {
+  await openLive(page);
+  const row = page.locator('#alerts-table tr[data-pathway-id="205"]');
+  await expect(row).toBeHidden();
+
+  // Zoom in so the pathway shapes are big enough to click. The shapes are
+  // drawn in the table's order: 102, then 205, then 301.
+  await page
+    .getByRole('button', { name: 'Show on map: Asheville Fire Department' })
+    .click();
+  await page.locator('.leaflet-alerts-pane path').nth(1).click();
+
+  await expect(page.locator('.leaflet-popup .alert-popup')).toContainText(
+    'Flagged pathway 205'
+  );
+  await expect(groupToggle(page, 'Asheville Fire Department')).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  await expect(row).toBeVisible();
+  await expect(row).toBeInViewport();
+  await expect(row).toHaveAttribute('aria-current', 'true');
+  // The other district was not opened.
+  await expect(page.locator('tr[data-pathway-id="102"]')).toBeHidden();
+  // The marked row and the open popup must pass the same checks. Leaflet
+  // fades the popup in, and half-faded text fails the contrast check.
+  await expect(page.locator('.leaflet-popup')).toHaveCSS('opacity', '1');
+  await expectNoAxeViolations(page);
 });
 
 test('"Show on map" fits the map to the district pathways', async ({
@@ -225,6 +271,7 @@ test('selecting a row zooms the map to that pathway and opens its popup', async 
   page,
 }) => {
   await openLive(page);
+  await openDistrict(page, 'Asheville Fire Department');
   const zoomBefore = await mapZoom(page);
   await page.locator('#alerts-table tr[data-pathway-id="205"]').click();
   const popup = page.locator('.leaflet-popup .alert-popup');
@@ -244,6 +291,7 @@ test('two pathways that share an OBJECTID each open their own popup', async ({
     page.locator('#alerts-table tr[data-pathway-id] td:last-child')
   ).toHaveText(['102', '205', '301']);
 
+  await openDistrict(page, 'Asheville Fire Department');
   // Leaflet fades the old popup out, so two can exist for a moment.
   const popups = page.locator('.leaflet-popup .alert-popup');
   await page.locator('#alerts-table tr[data-pathway-id="301"]').click();
@@ -261,6 +309,7 @@ test('a reload with the same pathways keeps the popup open and the row focused',
   page,
 }) => {
   await openLive(page);
+  await openDistrict(page, 'Asheville Fire Department');
   const row = page.locator('#alerts-table tr[data-pathway-id="205"]');
   await row.focus();
   await page.keyboard.press('Enter');
@@ -283,6 +332,7 @@ test('a reload with the same pathways keeps the popup open and the row focused',
 
 test('the table rows work from the keyboard', async ({ page }) => {
   await openLive(page);
+  await openDistrict(page, 'Cruso Fire Department');
   await page.locator('#alerts-table tr[data-pathway-id="102"]').focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('.leaflet-popup .alert-popup')).toContainText(

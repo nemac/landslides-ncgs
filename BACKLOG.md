@@ -29,16 +29,24 @@ details belong in an issue or PR once someone picks it up.
     drawing 52,430 map shapes 2.2 seconds, and the table 4.7 seconds.
     Almost all of the table's time is the browser laying out 52,430
     visible rows; building them takes 0.6 seconds.
-  - Tried: with every district collapsed the table takes 0.8 seconds
-    instead of 4.7. Drawing the map on a canvas takes 1.6 seconds
-    instead of 2.2. A fixed table layout does not help.
-  - Still to decide and build: (1) do not lay out every row at once, for
-    example start with the districts collapsed when there are many
-    pathways; (2) split the file into a small table of pathway details
-    and separate map shapes, and serve the shapes as vector tiles, so a
-    browser only downloads and draws what is in view. The first is the
-    bigger win for the smaller change. A different file format alone
-    does not help: it would not touch the table, the largest cost.
+  - Done on 2026-11-16: every district starts collapsed, so the rows
+    are built but not laid out. Usable after 1.5 seconds on a fast
+    laptop (was 2.2), 4.8 seconds slowed 4 times (was 8.6) and 7.2
+    seconds slowed 6 times (was 12.8). Opening the largest group (7,846
+    rows, "Outside North Carolina") takes 0.3, 1.3 and 1.9 seconds.
+  - Still slow, slowed 4 times: one freeze of 3.3 seconds while the map
+    shapes and the hidden rows are built, 2.8 seconds from a row click
+    to its popup, and about 450 MB of memory. These come from drawing
+    52,430 map shapes at once.
+  - Still to decide and build: split the file into a small table of
+    pathway details and separate map shapes, and serve the shapes as
+    vector tiles, so a browser only downloads and draws what is in view.
+    Drawing the map on a canvas is a smaller step (2.2 seconds down to
+    1.6 in a test). A fixed table layout did not help. A different file
+    format alone would not either.
+  - Also consider: a search box across all districts (the browser's own
+    find does not see rows in a collapsed district), an "open all"
+    button, and a limit on how many rows one opened group lays out.
   - Not measured: a real phone, a real slow network, or Safari and
     Firefox. Headless Chromium may undercount painting.
 - **Prove that an archived flagged run can be rebuilt.** Since 2026-11-13

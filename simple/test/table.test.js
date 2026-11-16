@@ -420,7 +420,7 @@ test('a real district heading shows name, FDID, county, count and max rain', () 
     toggle.querySelector('.group-meta').textContent,
     'FDID 11101 · Buncombe County · 2 pathways · max 5–6″'
   );
-  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
   assert.equal(toggle.getAttribute('aria-label'), null, 'name comes from text');
   assert.doesNotMatch(toggle.textContent, /collapse|expand/i);
 });
@@ -545,37 +545,32 @@ test('the notice clears when districts become known', () => {
   assert.equal(t.elements.notice.textContent, '');
 });
 
-test('collapsing a group hides only its pathway rows, and expanding shows them', () => {
+test('opening a group shows only its pathway rows, and closing hides them', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
   const toggle = t.headings()[1].querySelector('.group-toggle');
   toggle.click();
-  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  const hidden = t
-    .pathwayRows()
-    .filter((r) => r.hidden)
-    .map((r) => r.dataset.pathwayId);
-  assert.deepEqual(hidden, ['205', '301']);
-  assert.equal(t.headings()[1].parentElement.hidden, false, 'heading stays');
-  toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(t.pathwayRows().filter((r) => r.hidden).length, 0);
+  const shown = t
+    .pathwayRows()
+    .filter((r) => !r.hidden)
+    .map((r) => r.dataset.pathwayId);
+  assert.deepEqual(shown, ['205', '301']);
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(t.pathwayRows().filter((r) => !r.hidden).length, 0);
+  assert.equal(t.headings()[1].parentElement.hidden, false, 'heading stays');
 });
 
-test('a collapsed group stays collapsed when the table renders again', () => {
+test('a group that was opened and closed again stays closed on the next render', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
+  t.headings()[1].querySelector('.group-toggle').click();
   t.headings()[1].querySelector('.group-toggle').click();
   t.render(LIVE_LIKE, OK_META);
   const toggle = t.headings()[1].querySelector('.group-toggle');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.deepEqual(
-    t
-      .pathwayRows()
-      .filter((r) => r.hidden)
-      .map((r) => r.dataset.pathwayId),
-    ['205', '301']
-  );
+  assert.equal(t.pathwayRows().filter((r) => !r.hidden).length, 0);
 });
 
 test('"Show on map" names its group and zooms to the group pathways', () => {
@@ -625,6 +620,13 @@ test('a message after a plain render hides the notice', () => {
 });
 
 // ---- Keyboard focus across a redraw ----------------------------------------
+// Districts start collapsed, and a hidden row cannot hold focus.
+function openEveryGroup(t) {
+  t.elements.table.querySelectorAll('.group-toggle').forEach((button) => {
+    if (button.getAttribute('aria-expanded') === 'false') button.click();
+  });
+}
+
 function rowFor(t, id) {
   return t.elements.table.querySelector('tr[data-pathway-id="' + id + '"]');
 }
@@ -632,6 +634,7 @@ function rowFor(t, id) {
 test('a redraw keeps focus on the same pathway row', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
+  openEveryGroup(t);
   const before = rowFor(t, 205);
   before.focus();
   t.render(LIVE_LIKE, OK_META);
@@ -663,6 +666,7 @@ for (const className of ['group-toggle', 'group-zoom']) {
 test('focus moves to the heading when the focused pathway is gone', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
+  openEveryGroup(t);
   rowFor(t, 205).focus();
   const without205 = LIVE_LIKE.filter((f) => f.properties.pathway_id !== 205);
   t.render(without205, OK_META);
@@ -672,11 +676,13 @@ test('focus moves to the heading when the focused pathway is gone', () => {
 test('focus moves to the heading when the table empties or shows a message', () => {
   const t = tableParts();
   t.render(LIVE_LIKE, OK_META);
+  openEveryGroup(t);
   rowFor(t, 205).focus();
   t.render([], OK_META);
   assert.equal(t.doc.activeElement, t.elements.focusFallback);
 
   t.render(LIVE_LIKE, OK_META);
+  openEveryGroup(t);
   rowFor(t, 205).focus();
   t.TABLE.renderMessage('Forecast data could not be loaded.', t.elements);
   assert.equal(t.doc.activeElement, t.elements.focusFallback);
@@ -882,6 +888,7 @@ test('"Show on map" lists both pathways that share an OBJECTID', () => {
 test('a redraw keeps focus on the right one of two pathways sharing an OBJECTID', () => {
   const t = tableParts();
   t.render(pairSharingAnObjectid(), OK_META);
+  openEveryGroup(t);
   rowFor(t, 202).focus();
   t.render(pairSharingAnObjectid(), OK_META);
   assert.equal(t.doc.activeElement, rowFor(t, 202));
@@ -910,4 +917,147 @@ test('toCSV ends each row with the NCGS layer version from the file', () => {
 test('toCSV leaves the layer version blank for a file that does not name one', () => {
   const row = TABLE.toCSV([SWANNANOA], META).split('\r\n')[1];
   assert.equal(csvFields(row)[COL.ncgs_layer_version], '');
+});
+
+// ---- Districts start collapsed ----------------------------------------------
+// A storm can flag tens of thousands of pathways. Laying out that many
+// visible rows freezes a slow computer, so every district starts closed.
+function toggleFor(t, groupName) {
+  return Array.from(t.elements.table.querySelectorAll('.group-toggle')).find(
+    (button) => button.querySelector('.group-name').textContent === groupName
+  );
+}
+
+function visibleRowIds(t) {
+  return t
+    .pathwayRows()
+    .filter((r) => !r.hidden)
+    .map((r) => r.dataset.pathwayId);
+}
+
+test('every district starts collapsed, with its rows hidden', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  const toggles = Array.from(
+    t.elements.table.querySelectorAll('.group-toggle')
+  );
+  assert.deepEqual(
+    toggles.map((b) => b.getAttribute('aria-expanded')),
+    ['false', 'false']
+  );
+  assert.deepEqual(visibleRowIds(t), []);
+  assert.equal(t.pathwayRows().length, 3, 'the rows are still in the table');
+});
+
+test('the plain list, which has no districts to open, shows every row', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, {});
+  assert.deepEqual(visibleRowIds(t), ['102', '205', '301']);
+});
+
+test('an opened district stays open when the table renders again', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  toggleFor(t, 'Asheville Fire Department').click();
+  t.render(LIVE_LIKE, OK_META);
+  assert.equal(
+    toggleFor(t, 'Asheville Fire Department').getAttribute('aria-expanded'),
+    'true'
+  );
+  assert.deepEqual(visibleRowIds(t), ['205', '301']);
+});
+
+// ---- revealPathway: from a shape on the map to its row ----------------------
+function scrolledRows(t) {
+  const scrolled = [];
+  t.window.HTMLElement.prototype.scrollIntoView = function (options) {
+    scrolled.push({ id: this.dataset.pathwayId, options });
+  };
+  return scrolled;
+}
+
+function currentRowIds(t) {
+  return t
+    .pathwayRows()
+    .filter((r) => r.getAttribute('aria-current') === 'true')
+    .map((r) => r.dataset.pathwayId);
+}
+
+test('revealPathway opens the district of that pathway and no other', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  const found = t.TABLE.revealPathway(205, t.elements);
+  assert.equal(found, true);
+  assert.equal(
+    toggleFor(t, 'Asheville Fire Department').getAttribute('aria-expanded'),
+    'true'
+  );
+  assert.equal(
+    toggleFor(t, 'Cruso Fire Department').getAttribute('aria-expanded'),
+    'false'
+  );
+  assert.deepEqual(visibleRowIds(t), ['205', '301']);
+});
+
+test('revealPathway marks the row as the current one and scrolls to it', () => {
+  const t = tableParts();
+  const scrolled = scrolledRows(t);
+  t.render(LIVE_LIKE, OK_META);
+  t.TABLE.revealPathway('205', t.elements);
+  assert.deepEqual(currentRowIds(t), ['205']);
+  assert.ok(rowFor(t, 205).classList.contains('is-current'));
+  assert.deepEqual(JSON.parse(JSON.stringify(scrolled)), [
+    { id: '205', options: { block: 'center' } },
+  ]);
+});
+
+test('revealPathway moves the mark from the last pathway to the new one', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.TABLE.revealPathway(205, t.elements);
+  t.TABLE.revealPathway(102, t.elements);
+  assert.deepEqual(currentRowIds(t), ['102']);
+  assert.ok(!rowFor(t, 205).classList.contains('is-current'));
+});
+
+test('revealPathway leaves keyboard focus where it was', () => {
+  // The click was on the map, and the popup opens there. Moving focus
+  // into the table would pull a keyboard user away from it.
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.focusFallback.focus();
+  t.TABLE.revealPathway(205, t.elements);
+  assert.equal(t.doc.activeElement, t.elements.focusFallback);
+});
+
+test('revealPathway for a pathway that is not in the table does nothing', () => {
+  const t = tableParts();
+  const scrolled = scrolledRows(t);
+  t.render(LIVE_LIKE, OK_META);
+  assert.equal(t.TABLE.revealPathway(999, t.elements), false);
+  assert.deepEqual(visibleRowIds(t), []);
+  assert.deepEqual(scrolled, []);
+});
+
+test('revealPathway marks the row in the plain list too', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, {});
+  assert.equal(t.TABLE.revealPathway(301, t.elements), true);
+  assert.deepEqual(currentRowIds(t), ['301']);
+});
+
+test('the current row is still marked after the table renders again', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.TABLE.revealPathway(205, t.elements);
+  t.render(LIVE_LIKE, OK_META);
+  assert.deepEqual(currentRowIds(t), ['205']);
+});
+
+test('selecting a row marks it as the current one', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  toggleFor(t, 'Asheville Fire Department').click();
+  rowFor(t, 301).click();
+  assert.deepEqual(currentRowIds(t), ['301']);
 });

@@ -218,10 +218,18 @@ and every pathway has one of the three statuses.
 - **Districts known:** the table is grouped. Real districts come first
   (highest forecast rain, then most pathways, then name), then a
   "No District" group and an "Outside North Carolina" group, each shown
-  only when it has pathways. Each heading can be collapsed, and has a
-  "Show on map" button that fits the map to that group. The summary reads
-  like `12 pathways in 3 fire districts (2 with no district, 1 outside
-  North Carolina)`.
+  only when it has pathways. Every group starts collapsed: a storm can
+  flag tens of thousands of pathways, and laying out that many visible
+  rows freezes a slow computer. Each heading opens and closes its group,
+  and has a "Show on map" button that fits the map to that group. A group
+  the user opened stays open when the page reloads its data. The summary
+  reads like `12 pathways in 3 fire districts (2 with no district, 1
+  outside North Carolina)`.
+- **From the map to the table:** clicking a pathway on the map opens its
+  popup, opens that pathway's group in the table, scrolls its row into
+  view and marks it as the current row (a bar, bold text and
+  `aria-current`). Selecting a row marks it the same way. Keyboard focus
+  stays where it was.
 - **Districts not known** (the lookup failed, or a file from before the
   fire district fields): the table is a plain list sorted by rain, county
   and pathway ID, and a notice says that fire district information is

@@ -121,6 +121,12 @@ function fakeMapModule() {
     stub.reference = deferred();
     return stub.reference.promise;
   };
+  // The page hands the map one function to call when a pathway shape is
+  // clicked. clickPathway() stands in for that click.
+  stub.onPathwayClick = (handler) => {
+    stub.pathwayClickHandler = handler;
+  };
+  stub.clickPathway = (pathwayId) => stub.pathwayClickHandler(pathwayId);
   stub._internalMap = () => map;
   return stub;
 }

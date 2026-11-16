@@ -511,6 +511,8 @@ test('a reload with different pathways redraws the table and the map', async () 
     },
   };
   const p = await open({ data });
+  // Districts start collapsed, and a hidden row cannot hold focus.
+  p.$('alerts-table').tBodies[1].querySelector('.group-toggle').click();
   p.$('alerts-table').querySelector('tr[data-pathway-id="205"]').focus();
   dropOne = true;
   await reload(p);
@@ -746,19 +748,32 @@ test('"Show on map" zooms the map to every pathway in that district', async () =
   assert.deepEqual(Array.from(calls[0][1]), [205, 301]);
 });
 
-test('a collapsed district stays collapsed across the automatic reload', async () => {
+test('clicking a pathway on the map opens its district and marks its row', async () => {
+  const p = await open();
+  const row = p.$('alerts-table').querySelector('tr[data-pathway-id="205"]');
+  assert.equal(row.hidden, true, 'districts start collapsed');
+  p.MAP.clickPathway(205);
+  assert.equal(row.hidden, false);
+  assert.equal(row.getAttribute('aria-current'), 'true');
+  const other = p.$('alerts-table').querySelector('tr[data-pathway-id="102"]');
+  assert.equal(other.hidden, true, 'the other district stays collapsed');
+});
+
+test('an opened district stays open across the automatic reload', async () => {
   const p = await open();
   const toggle = () =>
     p.$('alerts-table').tBodies[1].querySelector('.group-toggle');
+  assert.equal(toggle().getAttribute('aria-expanded'), 'false');
   toggle().click();
   mock.timers.tick(5 * MINUTE);
   await p.settle();
-  assert.equal(toggle().getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle().getAttribute('aria-expanded'), 'true');
   assert.deepEqual(
     Array.from(p.$('alerts-table').querySelectorAll('tr[hidden]')).map(
       (tr) => tr.dataset.pathwayId
     ),
-    ['205', '301']
+    ['102'],
+    'only the other district is still collapsed'
   );
 });
 
