@@ -201,8 +201,9 @@ test('special groups only appear when they have pathways', () => {
 // ---- render ---------------------------------------------------------------
 function tableParts() {
   const dom = new JSDOM(
-    '<table id="t"><caption>Loading</caption><thead><tr><th>x</th></tr></thead>' +
-      '<tbody><tr><td>Loading</td></tr></tbody></table>' +
+    '<div id="scroll-box">' +
+      '<table id="t"><caption>Loading</caption><thead><tr><th>x</th></tr></thead>' +
+      '<tbody><tr><td>Loading</td></tr></tbody></table></div>' +
       '<h2 id="heading" tabindex="-1">Flagged pathways</h2>' +
       '<p id="summary"></p><div id="notice" role="status"></div>'
   );
@@ -213,6 +214,7 @@ function tableParts() {
   });
   const elements = {
     table: doc.getElementById('t'),
+    scrollBox: doc.getElementById('scroll-box'),
     summary: doc.getElementById('summary'),
     notice: doc.getElementById('notice'),
     focusFallback: doc.getElementById('heading'),
@@ -968,10 +970,23 @@ test('an opened district stays open when the table renders again', () => {
 });
 
 // ---- revealPathway: from a shape on the map to its row ----------------------
-function scrolledRows(t) {
+// jsdom lays nothing out, so every size and position is 0. These give the
+// scroll box and one row the sizes a browser would: a box 200px tall
+// holding 1000px of table, with the row 600px down the table.
+function giveScrollBoxLayout(t, row, contentHeight) {
+  const box = t.elements.scrollBox;
+  Object.defineProperty(box, 'clientHeight', { value: 200 });
+  Object.defineProperty(box, 'scrollHeight', { value: contentHeight });
+  box.getBoundingClientRect = () => ({ top: 500, height: 200 });
+  row.getBoundingClientRect = () => ({ top: 1100, height: 40 });
+}
+
+// Fails the test if anything scrolls with scrollIntoView, which moves the
+// whole page and not just the table's box.
+function pageScrolls(t) {
   const scrolled = [];
-  t.window.HTMLElement.prototype.scrollIntoView = function (options) {
-    scrolled.push({ id: this.dataset.pathwayId, options });
+  t.window.HTMLElement.prototype.scrollIntoView = function () {
+    scrolled.push(this.dataset.pathwayId);
   };
   return scrolled;
 }
@@ -999,16 +1014,74 @@ test('revealPathway opens the district of that pathway and no other', () => {
   assert.deepEqual(visibleRowIds(t), ['205', '301']);
 });
 
-test('revealPathway marks the row as the current one and scrolls to it', () => {
+test('revealPathway marks the row and centers it in the table box', () => {
   const t = tableParts();
-  const scrolled = scrolledRows(t);
+  const scrolled = pageScrolls(t);
   t.render(LIVE_LIKE, OK_META);
+  giveScrollBoxLayout(t, rowFor(t, 205), 1000);
   t.TABLE.revealPathway('205', t.elements);
   assert.deepEqual(currentRowIds(t), ['205']);
   assert.ok(rowFor(t, 205).classList.contains('is-current'));
-  assert.deepEqual(JSON.parse(JSON.stringify(scrolled)), [
-    { id: '205', options: { block: 'center' } },
-  ]);
+  // The row is 600px down the table. Centered in a 200px box, 80px of
+  // table shows above the 40px row: 600 - 80 = 520.
+  assert.equal(t.elements.scrollBox.scrollTop, 520);
+  // The page itself must not move: the popup is on the map.
+  assert.deepEqual(scrolled, []);
+});
+
+test('revealPathway scrolls nothing when the table box does not scroll', () => {
+  // On a narrow screen the box is as tall as the table and sits below the
+  // map. Scrolling there would move the page away from the popup.
+  const t = tableParts();
+  const scrolled = pageScrolls(t);
+  t.render(LIVE_LIKE, OK_META);
+  giveScrollBoxLayout(t, rowFor(t, 205), 200);
+  t.TABLE.revealPathway(205, t.elements);
+  assert.deepEqual(currentRowIds(t), ['205']);
+  assert.equal(t.elements.scrollBox.scrollTop, 0);
+  assert.deepEqual(scrolled, []);
+});
+
+test('revealPathway with the table hidden marks the row but opens nothing', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.scrollBox.hidden = true;
+  assert.equal(t.TABLE.revealPathway(205, t.elements), true);
+  assert.deepEqual(currentRowIds(t), ['205']);
+  assert.equal(
+    toggleFor(t, 'Asheville Fire Department').getAttribute('aria-expanded'),
+    'false'
+  );
+  // Still closed after the next redraw.
+  t.render(LIVE_LIKE, OK_META);
+  assert.deepEqual(visibleRowIds(t), []);
+});
+
+test('showing the table again opens the pathway picked while it was hidden', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.scrollBox.hidden = true;
+  t.TABLE.revealPathway(205, t.elements);
+  t.elements.scrollBox.hidden = false;
+  t.TABLE.showWaitingPathway(t.elements);
+  assert.equal(
+    toggleFor(t, 'Asheville Fire Department').getAttribute('aria-expanded'),
+    'true'
+  );
+  assert.deepEqual(visibleRowIds(t), ['205', '301']);
+});
+
+test('showing the table reopens nothing once the waiting pathway was shown', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.scrollBox.hidden = true;
+  t.TABLE.revealPathway(205, t.elements);
+  t.elements.scrollBox.hidden = false;
+  t.TABLE.showWaitingPathway(t.elements);
+  // The user closes the district, then hides and shows the table.
+  toggleFor(t, 'Asheville Fire Department').click();
+  t.TABLE.showWaitingPathway(t.elements);
+  assert.deepEqual(visibleRowIds(t), []);
 });
 
 test('revealPathway moves the mark from the last pathway to the new one', () => {
@@ -1032,11 +1105,11 @@ test('revealPathway leaves keyboard focus where it was', () => {
 
 test('revealPathway for a pathway that is not in the table does nothing', () => {
   const t = tableParts();
-  const scrolled = scrolledRows(t);
   t.render(LIVE_LIKE, OK_META);
+  giveScrollBoxLayout(t, rowFor(t, 205), 1000);
   assert.equal(t.TABLE.revealPathway(999, t.elements), false);
   assert.deepEqual(visibleRowIds(t), []);
-  assert.deepEqual(scrolled, []);
+  assert.equal(t.elements.scrollBox.scrollTop, 0);
 });
 
 test('revealPathway marks the row in the plain list too', () => {
@@ -1052,6 +1125,19 @@ test('the current row is still marked after the table renders again', () => {
   t.TABLE.revealPathway(205, t.elements);
   t.render(LIVE_LIKE, OK_META);
   assert.deepEqual(currentRowIds(t), ['205']);
+});
+
+test('a pathway that left the table does not come back marked', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.TABLE.revealPathway(205, t.elements);
+  // The next forecast no longer flags 205; a later one flags it again.
+  const without205 = LIVE_LIKE.filter(
+    (f) => String(f.properties.pathway_id) !== '205'
+  );
+  t.render(without205, OK_META);
+  t.render(LIVE_LIKE, OK_META);
+  assert.deepEqual(currentRowIds(t), []);
 });
 
 test('selecting a row marks it as the current one', () => {
