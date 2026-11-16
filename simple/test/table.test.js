@@ -204,6 +204,7 @@ function tableParts() {
     '<div id="scroll-box">' +
       '<table id="t"><caption>Loading</caption><thead><tr><th>x</th></tr></thead>' +
       '<tbody><tr><td>Loading</td></tr></tbody></table></div>' +
+      '<div id="map"></div>' +
       '<h2 id="heading" tabindex="-1">Flagged pathways</h2>' +
       '<p id="summary"></p><div id="notice" role="status"></div>'
   );
@@ -215,6 +216,7 @@ function tableParts() {
   const elements = {
     table: doc.getElementById('t'),
     scrollBox: doc.getElementById('scroll-box'),
+    map: doc.getElementById('map'),
     summary: doc.getElementById('summary'),
     notice: doc.getElementById('notice'),
     focusFallback: doc.getElementById('heading'),
@@ -1040,6 +1042,91 @@ test('revealPathway scrolls nothing when the table box does not scroll', () => {
   assert.deepEqual(currentRowIds(t), ['205']);
   assert.equal(t.elements.scrollBox.scrollTop, 0);
   assert.deepEqual(scrolled, []);
+});
+
+// Gives the page the layout of a laptop screen: a screen `screenHeight`
+// tall, the top of the map `mapTop` below the top of the screen, and the
+// bottom of the row `rowBottom` below the top of the screen.
+function givePageLayout(t, row, layout) {
+  Object.defineProperty(t.doc.documentElement, 'clientHeight', {
+    value: layout.screenHeight,
+  });
+  t.elements.map.getBoundingClientRect = () => ({ top: layout.mapTop });
+  row.getBoundingClientRect = () => ({
+    top: layout.rowBottom - 40,
+    bottom: layout.rowBottom,
+    height: 40,
+  });
+}
+
+test('revealPathway scrolls the page down just far enough to show the row', () => {
+  // A laptop screen: the page is taller than the screen and the table
+  // starts below the bottom edge.
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  givePageLayout(t, rowFor(t, 205), {
+    screenHeight: 720,
+    mapTop: 284,
+    rowBottom: 887,
+  });
+  t.TABLE.revealPathway(205, t.elements);
+  // 887 - 720 = 167px of the row was below the screen.
+  assert.equal(t.doc.documentElement.scrollTop, 167);
+});
+
+test('revealPathway never scrolls the top of the map off the screen', () => {
+  // The popup is on the map. Only 100px can go before the map's top
+  // edge would leave the screen, so the page moves 100px and no more.
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  givePageLayout(t, rowFor(t, 205), {
+    screenHeight: 720,
+    mapTop: 100,
+    rowBottom: 887,
+  });
+  t.TABLE.revealPathway(205, t.elements);
+  assert.equal(t.doc.documentElement.scrollTop, 100);
+});
+
+test('revealPathway leaves the page alone when the map is at the top of the screen', () => {
+  // A phone: the table is below the map, and the map fills the screen.
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  givePageLayout(t, rowFor(t, 205), {
+    screenHeight: 812,
+    mapTop: 0,
+    rowBottom: 1400,
+  });
+  t.TABLE.revealPathway(205, t.elements);
+  assert.equal(t.doc.documentElement.scrollTop, 0);
+});
+
+test('revealPathway leaves the page alone when the row is already on the screen', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  givePageLayout(t, rowFor(t, 205), {
+    screenHeight: 1080,
+    mapTop: 284,
+    rowBottom: 1030,
+  });
+  t.TABLE.revealPathway(205, t.elements);
+  assert.equal(t.doc.documentElement.scrollTop, 0);
+});
+
+test('a waiting pathway that left the table is forgotten too', () => {
+  const t = tableParts();
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.scrollBox.hidden = true;
+  t.TABLE.revealPathway(205, t.elements);
+  // The next forecast no longer flags 205; a later one flags it again.
+  const without205 = LIVE_LIKE.filter(
+    (f) => String(f.properties.pathway_id) !== '205'
+  );
+  t.render(without205, OK_META);
+  t.render(LIVE_LIKE, OK_META);
+  t.elements.scrollBox.hidden = false;
+  t.TABLE.showWaitingPathway(t.elements);
+  assert.deepEqual(visibleRowIds(t), []);
 });
 
 test('revealPathway with the table hidden marks the row but opens nothing', () => {

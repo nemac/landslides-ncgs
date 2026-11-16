@@ -549,6 +549,33 @@ test('the layer toggles add and remove their layers', async ({ page }) => {
   expect(log.errors).toEqual([]);
 });
 
+// ---- Laptop screens -------------------------------------------------------
+// On a laptop the page is a little taller than the screen, and the table
+// starts below the bottom edge.
+for (const height of [720, 768, 800]) {
+  test(
+    'on a ' +
+      height +
+      'px tall screen, a map click shows the row and keeps the popup',
+    async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height });
+      await openLive(page);
+      await showDistrictOnMap(page, 'Asheville Fire Department');
+      // Start from the top of the page, where the table is out of sight.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.locator('.leaflet-alerts-pane path').nth(1).click();
+
+      const row = page.locator('#alerts-table tr[data-pathway-id="205"]');
+      await expect(row).toHaveAttribute('aria-current', 'true');
+      await expect(row).toBeInViewport({ ratio: 1 });
+      // Not the whole popup: with the clock fixed the map cannot slide to
+      // fit it (see beforeEach), so part of it stays above the map.
+      const popup = page.locator('.leaflet-popup .alert-popup');
+      await expect(popup).toBeInViewport();
+    }
+  );
+}
+
 // ---- Narrow screens -------------------------------------------------------
 test('on a phone, a map click keeps its popup on the screen', async ({
   page,

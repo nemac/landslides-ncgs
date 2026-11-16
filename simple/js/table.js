@@ -22,9 +22,11 @@
  *
  * Public surface (window.DFS_TABLE):
  *   render(features, meta, elements, handlers)
- *       elements: { table, scrollBox, summary, notice, focusFallback }
+ *       elements: { table, scrollBox, map, summary, notice, focusFallback }
  *           scrollBox is the box the table scrolls in; it is hidden
  *           while the user has the table closed
+ *           map is the map's box; revealPathway keeps its top edge on
+ *           the screen
  *           focusFallback takes focus when the focused row or group
  *           button is gone after a redraw (the table's heading)
  *       handlers.onSelect(pathwayId)       row click -> zoom to one pathway
@@ -477,16 +479,19 @@ window.DFS_TABLE = (function () {
   function _restoreCurrentRow(table) {
     if (currentPathwayId === null) return;
     const row = _findRow(table, currentPathwayId);
-    if (row) _markCurrentRow(table, row);
-    else currentPathwayId = null;
+    if (row) {
+      _markCurrentRow(table, row);
+      return;
+    }
+    currentPathwayId = null;
+    // A pathway waiting for the table to be shown is the current one, so
+    // it is forgotten with it.
+    waitingPathwayId = null;
   }
 
   // Scrolls the table's own box so the row sits in the middle of it, clear
-  // of the sticky header. This does not use scrollIntoView, because that
-  // scrolls the page too. On a narrow screen the table is below the map,
-  // so the page would jump down to the row and push the popup the click
-  // just opened off the screen. There the box is as tall as the table and
-  // does not scroll, so nothing moves.
+  // of the sticky header. On a narrow screen the box is as tall as the
+  // table and does not scroll, so this does nothing there.
   function _centerRowInScrollBox(row, scrollBox) {
     const boxScrolls = scrollBox.scrollHeight > scrollBox.clientHeight;
     if (!boxScrolls) return;
@@ -497,10 +502,30 @@ window.DFS_TABLE = (function () {
     scrollBox.scrollTop = rowTopInTable - spaceAroundRow / 2;
   }
 
-  function _openGroupAndScrollTo(row, scrollBox) {
+  // Scrolls the page down just far enough to show the row, when the row is
+  // below the bottom of the screen. On a laptop the page is a little taller
+  // than the screen and the table starts below the bottom edge.
+  // The page never moves so far that the top of the map leaves the screen:
+  // the popup the click just opened is on the map. That is why this does
+  // not use scrollIntoView, which would scroll all the way to the row. On
+  // a phone the table is far below the map, so the page stays where it is
+  // and the popup stays on the screen.
+  function _scrollPageTowardRow(row, map) {
+    const page = document.documentElement;
+    const rowBottom = row.getBoundingClientRect().bottom;
+    // Whole pixels: round the need up so the full row shows, and the limit
+    // down so the map's top edge never leaves the screen.
+    const rowBelowScreen = Math.ceil(rowBottom - page.clientHeight);
+    const roomAboveMap = Math.floor(map.getBoundingClientRect().top);
+    const distance = Math.min(rowBelowScreen, roomAboveMap);
+    if (distance > 0) page.scrollTop += distance;
+  }
+
+  function _openGroupAndScrollTo(row, elements) {
     const body = row.closest('tbody');
     if (body.dataset.groupKey) _setGroupExpanded(body, true);
-    _centerRowInScrollBox(row, scrollBox);
+    _centerRowInScrollBox(row, elements.scrollBox);
+    _scrollPageTowardRow(row, elements.map);
   }
 
   // Called when a pathway is clicked on the map: marks its row, opens its
@@ -518,7 +543,7 @@ window.DFS_TABLE = (function () {
       return true;
     }
     waitingPathwayId = null;
-    _openGroupAndScrollTo(row, elements.scrollBox);
+    _openGroupAndScrollTo(row, elements);
     return true;
   }
 
@@ -527,7 +552,7 @@ window.DFS_TABLE = (function () {
     if (waitingPathwayId === null) return;
     const row = _findRow(elements.table, waitingPathwayId);
     waitingPathwayId = null;
-    if (row) _openGroupAndScrollTo(row, elements.scrollBox);
+    if (row) _openGroupAndScrollTo(row, elements);
   }
 
   // ---- Keeping keyboard focus across a redraw -------------------------------
