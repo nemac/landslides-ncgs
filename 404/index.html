@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page not found | Landslides in Western North Carolina</title>
+  <meta name="description" content="This page could not be found on Landslides in Western North Carolina." />
+  <!-- This page is shown for a missing page on every address the site
+       answers to, and the dashboard address (dashboard.landslidesncgs.org)
+       has none of the main site's pages or images. So, unlike the other
+       pages, its links and images use the full main-site address. The one
+       exception is the "Go to the home page" button, which goes to the
+       home of whichever address the visitor is on. -->
+  <!-- An error page should not show up in search results. -->
+  <meta name="robots" content="noindex" />
+
+  <link rel="icon" type="image/png" href="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png" />
+  <link rel="apple-touch-icon" href="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root{--clr-bg:#122518;--clr-primary:#C04C00;--clr-accent:#3E8452;--clr-text:#FFFFFF;--clr-text-muted:#D4E8D8;--clr-surface:#1C3521;--clr-surface-2:#243D29;--clr-border:#2E5438;--clr-focus:#FFD166;--font-main:'Source Sans 3','Source Sans Pro',Arial,sans-serif;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--clr-bg);color:var(--clr-text);font-family:var(--font-main);font-size:1rem;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;}
+    .skip-nav{position:absolute;top:-100%;left:0;background:var(--clr-focus);color:#000;font-weight:700;padding:0.75rem 1.5rem;z-index:9999;text-decoration:none;border-radius:0 0 4px 0;transition:top 0.2s;}
+    .skip-nav:focus{top:0;}
+    :focus-visible{outline:3px solid var(--clr-focus);outline-offset:3px;}
+    :focus:not(:focus-visible){outline:none;}
+
+    .site-header{background:var(--clr-bg);padding:1.25rem 2rem;display:flex;align-items:center;gap:1.25rem;border-bottom:3px solid var(--clr-accent);flex-shrink:0;}
+    .site-header__logo{width: 100px; height: 100px;flex-shrink:0;border-radius:50%;overflow:hidden;border:2px solid var(--clr-accent);}
+    .site-header__logo img{width:100%;height:100%;object-fit:contain;}
+    
+    .site-header__logo { display: block; text-decoration: none; transition: border-color 0.2s; }
+    .site-header__logo:hover, .site-header__logo:focus-visible { border-color: var(--clr-focus); }
+    .site-header__partner-logo {
+      margin-left: auto; flex-shrink: 0; display: block;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+      border: 2px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .site-header__partner-logo:hover, .site-header__partner-logo:focus-visible {
+      border-color: var(--clr-primary);
+      background: rgba(192, 76, 0, 0.1);
+    }
+    .site-header__partner-logo img { height: 80px; width: auto; display: block; }
+.site-header__text h1{font-size:clamp(1.3rem,3vw,2rem);font-weight:700;color:var(--clr-text);line-height:1.2;}
+    .site-header__text p{font-size:clamp(0.85rem,1.4vw,0.95rem);color:var(--clr-text-muted);max-width:65ch;margin-top:0.3rem;}
+
+    .site-nav{background:var(--clr-surface);border-bottom:1px solid var(--clr-border);position:sticky;top:0;z-index:100;flex-shrink:0;}
+    .site-nav__list{list-style:none;display:flex;flex-wrap:wrap;padding:0 1rem;max-width:1200px;margin:0 auto;}
+    .site-nav__item a{display:block;padding:1rem 1.5rem;color:var(--clr-text-muted);text-decoration:none;font-weight:700;font-size:0.95rem;border-bottom:3px solid transparent;transition:color 0.2s,border-color 0.2s;white-space:nowrap;}
+    .site-nav__item a:hover{color:var(--clr-text);border-bottom-color:var(--clr-accent);}
+    .site-nav__item a[aria-current="page"]{color:var(--clr-text);border-bottom-color:var(--clr-primary);}
+
+    .page-wrapper{max-width:1200px;width:100%;margin:0 auto;padding:2rem 1.5rem 4rem;flex:1;}
+
+    /* The message card. The big "404" is decoration; the heading says it in words. */
+    .not-found{background:var(--clr-surface);border:1px solid var(--clr-border);border-top:4px solid var(--clr-primary);border-radius:0 0 6px 6px;padding:2.5rem 1.75rem;max-width:44rem;margin:1rem auto 0;text-align:center;}
+    .not-found__code{font-size:clamp(3.5rem,14vw,6rem);font-weight:700;line-height:1;color:#5FA873;letter-spacing:0.04em;}
+    .not-found__heading{font-size:1.6rem;font-weight:700;color:var(--clr-text);margin:0.75rem 0 0.75rem;}
+    .not-found p{color:var(--clr-text-muted);font-size:1rem;line-height:1.7;max-width:36rem;margin:0 auto 0.75rem;}
+    .not-found__home{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;min-height:44px;margin-top:1rem;padding:0.7rem 1.5rem;background:var(--clr-primary);color:var(--clr-text);font-weight:700;font-size:1rem;text-decoration:none;border:2px solid var(--clr-text);border-radius:4px;transition:background 0.2s;}
+    .not-found__home:hover,.not-found__home:focus-visible{background:#9E3F00;}
+    .not-found__more{margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--clr-border);}
+    .not-found__more-heading{font-size:1rem;font-weight:700;color:var(--clr-text);margin-bottom:0.5rem;}
+    .not-found__list{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;gap:0.25rem 0.5rem;}
+    .not-found__list a{display:inline-flex;align-items:center;min-height:44px;padding:0.4rem 0.9rem;color:var(--clr-text-muted);font-weight:600;text-decoration:underline;border-radius:4px;}
+    .not-found__list a:hover{color:var(--clr-text);background:var(--clr-surface-2);}
+
+    .site-footer{background:var(--clr-surface);border-top:3px solid var(--clr-primary);padding: 1.75rem 2rem 1.75rem calc(2rem + 100px + 1.25rem);flex-shrink:0;}
+    .site-footer__inner { /* full-width; content flushes left, aligning with header edge */ }
+    /* A lighter green than --clr-accent, which is only 2.9:1 on this background. */
+    .site-footer__org{font-size:1rem;font-weight:700;color:#5FA873;}
+    .site-footer__detail{font-size:0.9rem;color:var(--clr-text-muted);margin-top:0.25rem;}
+    .site-footer__detail a{color:var(--clr-text-muted);text-decoration:underline;}
+    .site-footer__detail a:hover{color:var(--clr-text);}
+
+    @media(max-width:768px){
+      .site-header{padding:1rem;}
+      .site-header__logo{width: 72px; height: 72px;}
+      .site-header__partner-logo img { height: 52px; }
+      .site-footer { padding: 1.25rem 1rem 1.25rem calc(1rem + 72px + 1.25rem); }
+      .page-wrapper{padding:1.25rem 1rem 3rem;}
+      .not-found{padding:2rem 1.25rem;}
+    }
+    /* Narrow phones: the header's two logos and the title do not fit on one
+       row at 320px, so the partner logo drops to its own row. */
+    @media(max-width:480px){
+      .site-header{flex-wrap:wrap;}
+      .site-header__text{flex:1;min-width:0;}
+      .site-header__partner-logo{margin-left:0;}
+    }
+    @media(prefers-reduced-motion:reduce){
+      .skip-nav,.site-header__logo,.site-header__partner-logo,.site-nav__item a,.not-found__home{transition:none;}
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-nav" href="#main-content">Skip to main content</a>
+
+  <header class="site-header" role="banner">
+    <a class="site-header__logo" href="https://www.deq.nc.gov/about/divisions/energy-mineral-and-land-resources/nc-geological-survey" target="_blank" rel="noopener noreferrer"
+      aria-label="North Carolina Geological Survey home page — opens in a new tab">
+      <img src="https://landslidesncgs.org/assets/images/shared/ncgs-seal.png" alt="North Carolina Geological Survey Home" />
+    </a>
+    <div class="site-header__text">
+      <h1>Landslides in Western North Carolina</h1>
+      <p>Explore current and historical information about landslides across the region, and access resources to help you plan for and build resilience to landslide hazards.</p>
+    </div>
+    <a class="site-header__partner-logo" href="https://www.deq.nc.gov/" target="_blank" rel="noopener noreferrer"
+      aria-label="North Carolina Department of Environmental Quality — opens in a new tab">
+      <img src="https://landslidesncgs.org/assets/images/shared/DEQLogo.png" alt="North Carolina Department of Environmental Quality" />
+    </a>
+  </header>
+
+  <nav class="site-nav" aria-label="Main navigation">
+    <ul class="site-nav__list" role="list">
+      <li class="site-nav__item"><a href="https://landslidesncgs.org/">Home</a></li>
+      <li class="site-nav__item"><a href="https://landslidesncgs.org/reducing-landslide-risk/">Reducing Landslide Risk</a></li>
+      <li class="site-nav__item"><a href="https://landslidesncgs.org/learn-more/">Learn More</a></li>
+      <li class="site-nav__item"><a href="https://landslidesncgs.org/about/">About</a></li>
+      <li class="site-nav__item"><a href="https://landslidesncgs.org/faq/">FAQ</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content" class="page-wrapper">
+    <section class="not-found" aria-labelledby="heading-not-found">
+      <div class="not-found__code" aria-hidden="true">404</div>
+      <h2 class="not-found__heading" id="heading-not-found">Page not found</h2>
+      <p>We could not find the page you were looking for. It may have been moved or retired, or the address may have been typed incorrectly.</p>
+      <p>The home page is the best place to start again.</p>
+      <a class="not-found__home" href="/">Go to the home page</a>
+
+      <div class="not-found__more">
+        <h3 class="not-found__more-heading">Or go straight to a section</h3>
+        <ul class="not-found__list" role="list">
+          <li><a href="https://landslidesncgs.org/reducing-landslide-risk/">Reducing Landslide Risk</a></li>
+          <li><a href="https://landslidesncgs.org/learn-more/">Learn More</a></li>
+          <li><a href="https://landslidesncgs.org/about/">About</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="site-footer__inner">
+      <div class="site-footer__org">
+        <a href="https://deq.nc.gov/about/divisions/energy-mineral-land-resources/north-carolina-geological-survey"
+          target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;"
+          aria-label="North Carolina Geological Survey — opens in a new tab">
+          North Carolina Geological Survey
+        </a>
+      </div>
+      <div class="site-footer__detail">Department of Environmental Quality</div>
+      <div class="site-footer__detail">Asheville Regional Office</div>
+      <div class="site-footer__detail"><a href="tel:+18282964500">828-296-4500</a></div>
+    </div>
+  </footer>
+</body>
+</html>

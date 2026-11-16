@@ -33,6 +33,13 @@ From the repo root:
 python3 -m http.server 8000
 ```
 
+If another checkout or worktree is already serving on port 8000, pick
+another port (`python3 -m http.server 8001`); the two launch configs in
+`.claude/launch.json`, `static-site` and `static-site-2`, are these two
+ports. Check which folder a running server belongs to before trusting a
+page: a server left running from another checkout serves that checkout's
+files.
+
 Then open `http://localhost:8000/` for the main site or
 `http://localhost:8000/simple/` for the dashboard. Page links are
 root-absolute (`/about/`, `/assets/...`), so the server must run from the
@@ -62,10 +69,24 @@ back. The same expiry clears any preview a missed cleanup leaves behind.
 A fresh checkout has empty `alerts/data/` and `simple/data/` folders. The
 dashboard shows its stale-data banner until `simple/data/` exists.
 
-With AWS access (the `landslidesncgs` SSO profile; `infra/README.md` sets it up):
+The DFENS Simple files come from the public site. The forecast and
+flagged files are stored gzipped in the bucket under their plain names
+(`refresh-simple.yml` compresses them at upload), so an `aws s3 sync` of
+`simple/data` would leave compressed files that the local server cannot
+serve. `curl --compressed` unpacks them:
 
 ```bash
-aws s3 sync s3://landslidesncgs-data/simple/data simple/data --profile landslidesncgs
+mkdir -p simple/data
+```
+
+```bash
+for f in status.json forecast_24h.geojson flagged_ndfd_24h_min11.geojson; do curl -sS --compressed -o "simple/data/$f" "https://landslidesncgs.org/simple/data/$f"; done
+```
+
+The alerts files need AWS access (the `landslidesncgs` SSO profile;
+`infra/README.md` sets it up):
+
+```bash
 aws s3 sync s3://landslidesncgs-data/alerts/data alerts/data --profile landslidesncgs   # ~870 MB, mostly building footprints
 ```
 
@@ -185,10 +206,13 @@ These files were read only by the offline alerts dashboard.
 
 | What | Where |
 |---|---|
-| Main site pages | `index.html`, `about/`, `downloads/`, `learn-more/`, `reducing-landslide-risk/` |
+| Main site pages | `index.html`, `about/`, `downloads/`, `faq/`, `learn-more/`, `reducing-landslide-risk/`, `404/` |
 | DFENS Simple page and pipeline | `simple/`, `simple/pipeline/` |
 | Alerts dashboard (offline) and its pipeline | `alerts/`, `scripts/` |
 | Debris-flow cache | `cache/debris_flows.gpkg` (never committed) |
+| Every past version of the debris-flow layer | `s3://landslidesncgs-data/cache/archive/debris_flows/<version>/` (see "Layer versions" in `simple/README.md`) |
+| Every past version of the fire district layer | `s3://landslidesncgs-data/cache/archive/fire_districts/<version>/` |
+| Every run that flagged pathways, with its rain input | `s3://landslidesncgs-data/simple/archive/<generated_at>/` (see "Rebuilding a flagged run" in `simple/README.md`) |
 | Fire district cache | `cache/fire_districts_wnc.geojson` (never committed) |
 | Python environment | `defns-refresh`, from `environment.yml` |
 | Production | `https://landslidesncgs.org`, `https://dashboard.landslidesncgs.org` (serves `/simple/`) |

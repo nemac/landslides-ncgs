@@ -42,6 +42,9 @@ for pending work, `OPERATIONS.md` for running things locally, and
 - Each main-site page is a directory with an `index.html`, served at
   `/<name>/`. Links between pages and to assets are root-absolute
   (`/about/`, `/assets/images/...`). The home page stays at the root.
+  The one exception is `404/index.html`: it is shown on every address the
+  site answers to, the dashboard address included, so its links and images
+  use the full `https://landslidesncgs.org/...` address.
 - Shared images live only under `assets/`; never copy them next to a page.
   The deploy syncs `assets/` separately with a one-day cache.
 - Moving or renaming a page needs a 301 from its old URL in
@@ -88,18 +91,25 @@ for pending work, `OPERATIONS.md` for running things locally, and
 - `npm run test:e2e` after a change that a browser would show (page
   structure, CSS state hooks, Leaflet drawing, downloads): the real page in
   Chromium against `simple/test/fixtures/`. Needs
-  `npx playwright install chromium` once.
+  `npx playwright install chromium` once. The tests start their own server
+  on port 8765 and stop with an error if that port is taken; set
+  `SIMPLE_E2E_PORT` to use another one.
 - Preview locally with the `static-site` launch config (a Python HTTP server
-  on port 8000) and confirm every asset request returns 200.
+  on port 8000) and confirm every asset request returns 200. When another
+  checkout or worktree already holds port 8000, use `static-site-2` (port
+  8001) instead.
 
 ## Todos
 
 Details live in `BACKLOG.md`; this is the short list.
 
 - Link DFENS Simple from the home page when it is ready for the public.
-- Test `scripts/analysis.py` (the intersection logic).
-- Make the archived flagged Simple runs reproducible (inputs, thresholds,
-  commit).
+- Test `summarize_alerts` in `scripts/analysis.py` (`find_alerts` is tested).
+- Make the Simple page fast with a storm-sized flagged file (52,430
+  pathways measured): vector tiles for the map shapes, and a search box
+  now that districts start collapsed.
+- Prove an archived flagged Simple run can be rebuilt: a script that
+  rebuilds one from its archive folder.
 - Run the pipelines on AWS (Fargate or Lambda) instead of GitHub Actions.
 - Slack dev requests: a Slack request opens a GitHub issue, an agent run in
   Actions opens a PR with a `pr-N.landslidesncgs.org` preview.
@@ -107,10 +117,9 @@ Details live in `BACKLOG.md`; this is the short list.
   `simple/pipeline/simulated-storm/`.
 - Fire district groups: list every county in a heading, and add the county
   to the key used when a district has no FDID.
-- Browser tests: never reuse a server on port 8000 from another checkout
-  (own port, no reuse, and a check that the server is this checkout).
 - Content-Security-Policy header, started in report-only mode.
-- A custom 404 page: a missing object currently returns S3's raw 403 XML.
+- Deploy the `Web` stack so missing pages show the 404 page (`/404/`),
+  then check it; previews still answer a raw 403.
 - Decide whether `FLAGGED_MIN_CATEGORY = 0` is intended.
 - Flat-site cleanup: one shared stylesheet for header, nav, footer and tokens.
 - Overture buildings layer: vector tiles instead of per-county GeoJSON.

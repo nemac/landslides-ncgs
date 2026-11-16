@@ -13,7 +13,8 @@
  *   setForecastPeriod(meta) / setForecastVisible(bool)
  *   setRadarVisible(bool)
  *   setFireDistrictsVisible(bool)
- *   setAlerts(geojson, districtsKnown) / setAlertsVisible(bool) / zoomToAlert(objectid) / zoomToAlerts([ids])
+ *   setAlerts(geojson, districtsKnown) / setAlertsVisible(bool) / zoomToAlert(pathwayId) / zoomToAlerts([pathwayIds])
+ *   onPathwayClick(fn)   fn(pathwayId) runs when a pathway shape is clicked
  *   setReferenceVisible(bool)  -> Promise
  *   setParcelsVisible(bool)
  *   setBuildingsVisible(bool)
@@ -453,10 +454,13 @@ window.DFS_MAP = (function () {
       },
       onEachFeature: function (feature, layer) {
         const p = feature.properties || {};
+        layer.on('click', function () {
+          if (_pathwayClickHandler) _pathwayClickHandler(p.pathway_id);
+        });
         layer.bindPopup(
           '<div class="alert-popup">' +
             '<strong>Flagged pathway ' +
-            _escape(p.OBJECTID) +
+            _escape(p.pathway_id) +
             '</strong>' +
             '<dl>' +
             '<dt>Forecast rain</dt><dd>' +
@@ -495,11 +499,18 @@ window.DFS_MAP = (function () {
     return 'Not available';
   }
 
-  function zoomToAlert(objectid) {
+  // The page gives one function to call with the pathway ID when a
+  // pathway shape is clicked, so it can show that pathway's table row.
+  let _pathwayClickHandler = null;
+  function onPathwayClick(handler) {
+    _pathwayClickHandler = handler;
+  }
+
+  function zoomToAlert(pathwayId) {
     if (!layers.alerts) return;
     let target = null;
     layers.alerts.eachLayer(function (l) {
-      if (String(l.feature.properties.OBJECTID) === String(objectid))
+      if (String(l.feature.properties.pathway_id) === String(pathwayId))
         target = l;
     });
     if (!target) return;
@@ -509,20 +520,20 @@ window.DFS_MAP = (function () {
   }
 
   // Fit the map to a set of pathways (one fire district's group).
-  function zoomToAlerts(objectids) {
-    if (!layers.alerts || !objectids || !objectids.length) return;
-    if (objectids.length === 1) {
-      zoomToAlert(objectids[0]);
+  function zoomToAlerts(pathwayIds) {
+    if (!layers.alerts || !pathwayIds || !pathwayIds.length) return;
+    if (pathwayIds.length === 1) {
+      zoomToAlert(pathwayIds[0]);
       return;
     }
-    const want = new Set(objectids.map(String));
+    const want = new Set(pathwayIds.map(String));
     // Start from an empty box and grow it. L.latLngBounds(l.getBounds())
     // would hand back the pathway's own stored bounds, and growing those
     // would make a later zoom to that one pathway show the whole group.
     const bounds = L.latLngBounds();
     let found = 0;
     layers.alerts.eachLayer(function (l) {
-      if (!want.has(String(l.feature.properties.OBJECTID))) return;
+      if (!want.has(String(l.feature.properties.pathway_id))) return;
       bounds.extend(l.getBounds());
       found += 1;
     });
@@ -1217,6 +1228,7 @@ window.DFS_MAP = (function () {
     setAlertsVisible,
     zoomToAlert,
     zoomToAlerts,
+    onPathwayClick,
     setReferenceVisible,
     setParcelsVisible,
     setFireDistrictsVisible,

@@ -774,6 +774,15 @@ tbody tr:nth-child(even) td {
 .row-clickable:focus td {
   background: rgba(255, 106, 19, 0.18);
 }
+/* The pathway last picked in the table or on the map. A bar down the
+   left edge and bold text mark it, so it does not rely on color alone. */
+tbody tr.is-current td {
+  background: rgba(255, 106, 19, 0.18);
+  font-weight: 700;
+}
+tbody tr.is-current td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent-text);
+}
 .empty-row {
   color: var(--text-muted);
   font-style: italic;

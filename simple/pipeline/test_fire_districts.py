@@ -308,5 +308,48 @@ class WriteDistrictsTest(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), collection)
 
 
+# 2026-03-03 17:13:07 UTC, in the milliseconds ArcGIS reports.
+LAYER_LAST_EDIT_MS = 1772557987994
+LAYER_VERSION = "2026-03-03T171307Z"
+LAYER_INFO = {"editingInfo": {"dataLastEditDate": LAYER_LAST_EDIT_MS}}
+
+
+class LayerVersionTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(S, "FIRE_DISTRICTS_MIN_COUNT", 1)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_version_is_the_layer_edit_time_safe_for_a_file_path(self):
+        getter = FakeGetter([LAYER_INFO])
+        self.assertEqual(fd.fetch_layer_version(get_json=getter), LAYER_VERSION)
+        self.assertEqual(getter.calls[0]["url"], S.FIRE_DISTRICTS_URL)
+
+    def test_a_layer_with_no_edit_date_is_an_error(self):
+        with self.assertRaisesRegex(RuntimeError, "edit date"):
+            fd.fetch_layer_version(get_json=FakeGetter([{"editingInfo": {}}]))
+
+    def test_a_download_names_its_layer_version(self):
+        # The version is read first, so the districts are never newer
+        # than the name they are kept under.
+        getter = FakeGetter([LAYER_INFO, {"features": [feature("A")]}, {"count": 1}])
+        collection = fd.download_wnc_districts(get_json=getter)
+        self.assertEqual(collection["layer_version"], LAYER_VERSION)
+        self.assertEqual(len(collection["features"]), 1)
+
+    def test_the_version_can_be_read_back_from_the_file(self):
+        collection = {"type": "FeatureCollection", "features": [], "layer_version": LAYER_VERSION}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "districts.geojson"
+            fd.write_districts(path, collection)
+            self.assertEqual(fd.read_layer_version(path), LAYER_VERSION)
+
+    def test_an_older_file_has_no_version(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "districts.geojson"
+            fd.write_districts(path, {"type": "FeatureCollection", "features": []})
+            self.assertIsNone(fd.read_layer_version(path))
+
+
 if __name__ == "__main__":
     unittest.main()

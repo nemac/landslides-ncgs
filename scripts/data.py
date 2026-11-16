@@ -24,6 +24,7 @@ from config import (
     CACHE_TTL_DAYS,
     DEBRIS_CACHE_FILENAME,
     DEBRIS_FLOW_SERVICE_URL,
+    DEBRIS_VERSION_FIELD,
     DISPLAY_CRS,
     NDFD_PRECIP_SERVICE_URL,
     OVERTURE_BUILDINGS_COORD_PRECISION,
@@ -31,6 +32,7 @@ from config import (
     OVERTURE_BUILDINGS_MIN_AREA_SQM,
     OVERTURE_BUILDINGS_SIMPLIFY_TOL_DEG,
     OVERTURE_BUILDINGS_SUBDIR,
+    PATHWAY_KEY_FIELD,
     WNC_BBOX,
 )
 
@@ -257,6 +259,50 @@ def _cache_is_fresh() -> bool:
     return age_days < CACHE_TTL_DAYS
 
 
+def layer_version_from_ms(last_edit_ms: int) -> str:
+    """An ArcGIS edit time (milliseconds since 1970, UTC) as a version name
+    that is safe in a file path, like "2026-03-03T171307Z"."""
+    last_edit = datetime.fromtimestamp(int(last_edit_ms) / 1000, tz=UTC)
+    return last_edit.strftime("%Y-%m-%dT%H%M%SZ")
+
+
+def _debris_layer_version() -> str:
+    """Which version of the NCGS layer is being served right now."""
+    info = _agol_request_with_retry(
+        DEBRIS_FLOW_SERVICE_URL, {"f": "json"}, label="debris flow layer info"
+    )
+    last_edit_ms = (info.get("editingInfo") or {}).get("dataLastEditDate")
+    if not last_edit_ms:
+        raise RuntimeError(
+            "The NCGS debris-flow layer reports no data edit date, so this "
+            "download could not be tied to a layer version."
+        )
+    return layer_version_from_ms(last_edit_ms)
+
+
+def _cache_has_pathway_key() -> bool:
+    """False for a cache file built before PATHWAY_KEY_FIELD was kept.
+    Reads one row only, so it is quick even though the file is large."""
+    first_row = gpd.read_file(_cache_path(), rows=1)
+    return PATHWAY_KEY_FIELD in first_row.columns
+
+
+def _require_unique_pathway_keys(gdf: gpd.GeoDataFrame) -> None:
+    """Stop before caching a download where the key is missing or repeats.
+    Everything downstream trusts that one key means one pathway."""
+    if PATHWAY_KEY_FIELD not in gdf.columns:
+        raise RuntimeError(
+            f"The NCGS debris-flow layer returned no {PATHWAY_KEY_FIELD} field, "
+            "so its pathways cannot be told apart. Check the layer's field list."
+        )
+    repeats = int(gdf[PATHWAY_KEY_FIELD].duplicated().sum())
+    if repeats:
+        raise RuntimeError(
+            f"{PATHWAY_KEY_FIELD} is not unique in the NCGS debris-flow download: "
+            f"{repeats:,} pathways repeat another pathway's value."
+        )
+
+
 def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     """Pull WNC-area debris flow polygons from the NCGS feature service.
 
@@ -284,12 +330,22 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     Returns
     -------
-    GeoDataFrame in EPSG:4326 with columns OBJECTID, county, watershed,
-    geometry.
+    GeoDataFrame in EPSG:4326 with columns OBJECTID_1 (the unique pathway
+    key, see config.PATHWAY_KEY_FIELD), OBJECTID (not unique),
+    ncgs_layer_version (see config.DEBRIS_VERSION_FIELD; missing in a
+    cache built before 2026-11-13), county, watershed, geometry.
     """
     cache_p = _cache_path()
 
-    if not force_refresh and _cache_is_fresh():
+    use_cache = not force_refresh and _cache_is_fresh()
+    # A cache from before 2026-11-13 has only OBJECTID, which many pathways
+    # share. Its rows cannot be matched back to their keys, so fetch the
+    # layer again instead of using it.
+    if use_cache and not _cache_has_pathway_key():
+        print(f"Debris flow cache ({cache_p}) has no {PATHWAY_KEY_FIELD} column; rebuilding it.")
+        use_cache = False
+
+    if use_cache:
         age_h = (datetime.now().timestamp() - cache_p.stat().st_mtime) / 3600
         print(f"Loading debris flow polygons from cache ({cache_p}, {age_h:.1f}h old)...")
         gdf = gpd.read_file(cache_p)
@@ -324,6 +380,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
 
     bbox_str = ",".join(str(c) for c in WNC_BBOX)
     print(f"Fetching debris flow polygons from NCGS (WNC bbox = {bbox_str})...")
+    # Read before the download, so the rows are never newer than the name.
+    layer_version = _debris_layer_version()
+    print(f"  NCGS layer version: {layer_version}")
 
     # The debris model is a Western NC dataset, so ~225k of its ~228k polygons
     # fall inside the WNC bbox - the spatial filter trims almost nothing, it
@@ -331,7 +390,9 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     # of pages at the service's 2000-record cap, so fetch them in parallel.
     base_params = {
         "where": "1=1",
-        "outFields": "OBJECTID",
+        # OBJECTID_1 is the unique key. OBJECTID is kept only because older
+        # readers of the published files expect the column.
+        "outFields": f"{PATHWAY_KEY_FIELD},OBJECTID",
         "outSR": 4326,
         "f": "geojson",
         # REQUIRED for correct pagination. ArcGIS resultOffset/resultRecordCount
@@ -342,7 +403,7 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
         # Sort by OBJECTID_1 - the layer's real system OID field. NOTE: the
         # plain "OBJECTID" column on this WNC_Mosaic layer is NOT unique (many
         # rows share a value), so it must NOT be used for paging or as a key.
-        "orderByFields": "OBJECTID_1",
+        "orderByFields": PATHWAY_KEY_FIELD,
         # Server-side spatial filter to WNC bbox
         "geometry": bbox_str,
         "geometryType": "esriGeometryEnvelope",
@@ -362,10 +423,14 @@ def fetch_debris_flows(force_refresh: bool = False) -> gpd.GeoDataFrame:
     )
 
     if not all_features:
-        return gpd.GeoDataFrame({"OBJECTID": []}, geometry=[], crs=DISPLAY_CRS)
+        return gpd.GeoDataFrame(
+            {PATHWAY_KEY_FIELD: [], "OBJECTID": []}, geometry=[], crs=DISPLAY_CRS
+        )
 
     gdf = gpd.GeoDataFrame.from_features(all_features, crs=DISPLAY_CRS)
     print(f"  -> {len(gdf):,} debris flow polygons within WNC bbox")
+    _require_unique_pathway_keys(gdf)
+    gdf[DEBRIS_VERSION_FIELD] = layer_version
 
     # Augment with administrative boundaries (county + HUC12 watershed)
     gdf = _augment_with_admin_boundaries(gdf)
